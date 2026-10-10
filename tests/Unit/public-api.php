@@ -129,29 +129,14 @@ it('renders with a parser chosen for the dialect', function () {
     expect($render('withAllExtensions'))->toContain("\u{2612} done")->not->toContain('[^1]');
 });
 
-it('reads front matter when a YAML implementation is there, and says so when none is', function () {
-    // There are two ways this can work, and which one is in play depends on the
-    // machine rather than on anything here: the `yaml` PHP extension, or the
-    // symfony/yaml package. A continuous integration runner has the first by
-    // default, a checkout usually has neither. So the test asserts the outcome
-    // rather than the mechanism — front matter parses if anything can parse it,
-    // and the failure names the package when nothing can.
-    $canParseYaml = function_exists('yaml_parse')
-        || class_exists(\Symfony\Component\Yaml\Yaml::class);
+it('reads front matter on a machine that has no YAML extension at all', function () {
+    // The parser is named rather than discovered, so a runner carrying `ext-yaml`
+    // and a checkout carrying neither read the block the same way. What is left to
+    // assert is the outcome, that the block parses into the document — there being
+    // no longer a second implementation for the answer to depend on.
+    $document = CommonMarkParser::withAllExtensions()->parse("---\ntitle: Report\n---\n\n# Heading\n");
 
-    $frontMatter = "---\ntitle: Report\n---\n\n# Heading\n";
-    $parse = static fn () => CommonMarkParser::withAllExtensions()->parse($frontMatter);
-
-    if ($canParseYaml) {
-        expect($parse())->toBeInstanceOf(League\CommonMark\Node\Block\Document::class);
-
-        return;
-    }
-
-    // Neither is present, and the message names the package to install rather
-    // than failing with something about front matter.
-    expect($parse)
-        ->toThrow(League\CommonMark\Exception\MissingDependencyException::class, 'symfony/yaml');
+    expect($document)->toBeInstanceOf(League\CommonMark\Node\Block\Document::class);
 });
 
 // StyleResolver

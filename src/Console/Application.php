@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Console;
 
+use League\CommonMark\Extension\FrontMatter\FrontMatterExtension;
 use MarkdownWord\Configuration;
 use MarkdownWord\Converter;
 use MarkdownWord\Console\CommandLine;
 use MarkdownWord\Console\Command\Command;
 use MarkdownWord\Console\Command\ToDocx;
 use MarkdownWord\Console\Command\ToMarkdown;
+use MarkdownWord\Console\Command\ToOdt;
+use MarkdownWord\Console\Command\ToRtf;
+use MarkdownWord\Exception\InvalidInput;
+use MarkdownWord\Format;
 use MarkdownWord\Input;
 use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Reverse\Options as ReverseOptions;
 use MarkdownWord\Template\MarkdownTemplate;
 use MarkdownWord\WordToMarkdown;
@@ -58,6 +64,8 @@ final class Application
      */
     private const COMMANDS = [
         'to-docx' => ToDocx::class,
+        'to-odt' => ToOdt::class,
+        'to-rtf' => ToRtf::class,
         'to-markdown' => ToMarkdown::class,
     ];
 
@@ -106,30 +114,37 @@ final class Application
     /**
      * The run itself, with the deprecation filter already in place.
      *
+     * Both of the first two catches are the same failure: something the caller handed
+     * in that they can hand in differently — a bad command line, a key in a
+     * frontmatter block that names nothing, an image that is in hand and unusable.
+     * Their messages are written for a person reading them. Anything else is a defect
+     * in this library, and is reported as one.
+     *
      * @param list<string> $argv
      */
     private function runQuietly(array $argv): int
     {
         try {
             return $this->dispatch($argv);
-        } catch (ConsoleException $e) {
+        } catch (ConsoleException|InvalidInput $e) {
             $this->error($e->getMessage());
 
-            foreach ($e->hints() as $hint) {
-                $this->error('  ' . $hint);
+            // Only a `ConsoleException` carries hints. An `InvalidInput`'s message is
+            // the whole of what it has to say, and it says it for a person reading it.
+            if ($e instanceof ConsoleException) {
+                foreach ($e->hints() as $hint) {
+                    $this->error('  ' . $hint);
+                }
             }
-
-            return self::FAILURE;
         } catch (Throwable $e) {
-            // A defect rather than a mistake, so it is reported in full: the type,
-            // the message and where it happened. No stack trace — the phar has no
-            // source paths that mean anything to the person reading it — and the
-            // type named is what tells a defect from a mistake.
+            // The type, the message and where it happened. No stack trace — the phar
+            // has no source paths that mean anything to the person reading it — and
+            // the type named is what tells a defect from a mistake.
             $this->error(sprintf('%s: %s', $e::class, $e->getMessage()));
             $this->error(sprintf('  at %s:%d', $e->getFile(), $e->getLine()));
-
-            return self::FAILURE;
         }
+
+        return self::FAILURE;
     }
 
     /**
@@ -192,10 +207,14 @@ final class Application
         } else {
             $direction = self::directionFor($forced);
 
-            if ($detected !== null && $detected !== $direction) {
+            // Compared by which way the run reads rather than by which command it
+            // ends up in: `.docx`, `.odt` and `.rtf` are three answers to the same
+            // question, and a file of Markdown is Markdown whichever of them is
+            // going to be written.
+            if ($detected !== null && self::readsMarkdown($detected) !== self::readsMarkdown($direction)) {
                 throw new ConsoleException(
                     sprintf('--to %s does not match "%s".', $forced, $input),
-                    [sprintf('That file is %s.', $detected === 'to-docx' ? 'Markdown' : 'a Word document')],
+                    [sprintf('That file is %s.', self::readsMarkdown($detected) ? 'Markdown' : 'a Word document')],
                 );
             }
         }
@@ -209,12 +228,23 @@ final class Application
     {
         return match (strtolower($asked)) {
             'docx', 'word' => 'to-docx',
+            'odt', 'opendocument' => 'to-odt',
+            'rtf', 'rich text' => 'to-rtf',
             'markdown', 'md' => 'to-markdown',
             default => throw new ConsoleException(
                 sprintf('Unknown format "%s".', $asked),
-                ['Use docx or markdown.'],
+                ['Use docx, odt, rtf or markdown.'],
             ),
         };
+    }
+
+    /**
+     * Whether a command takes Markdown in, for the one comparison that must not
+     * care which of the three word formats is meant.
+     */
+    private static function readsMarkdown(string $command): bool
+    {
+        return $command !== 'to-markdown';
     }
 
     /**
@@ -331,14 +361,21 @@ final class Application
             'USAGE',
             '  ' . self::NAME . ' <file>            # the direction is worked out from the file',
             '  ' . self::NAME . ' to-docx     [<markdown>] [options]',
+            '  ' . self::NAME . ' to-odt      [<markdown>] [options]',
+            '  ' . self::NAME . ' to-rtf      [<markdown>] [options]',
             '  ' . self::NAME . ' to-markdown [<docx>]    [options]',
             '  ' . self::NAME . ' help',
             '  ' . self::NAME . ' --version',
             '',
             'A Word document is a zip archive and Markdown is text, so the file says',
             'which way it has to go. Naming the command anyway is allowed and is what',
-            'a script should do; `--to docx` or `--to markdown` says it in one word',
-            'and is the only way to be explicit when reading from standard input.',
+            'a script should do; `--to docx`, `--to odt`, `--to rtf` or `--to markdown`',
+            'says it in one word and is the only way to be explicit when reading from',
+            'standard input.',
+            '',
+            'to-docx, to-odt and to-rtf are one conversion in three formats, and .docx',
+            'is the default of all three. What the other two cannot carry is set out in',
+            'the README, and a run that loses any of it says so on standard error.',
             '',
             'The input is read from standard input when no file is named. The result is',
             'written to standard output when the output is "-", or when there is no input',
@@ -358,9 +395,11 @@ final class Application
         $lines[] = '  ' . self::NAME . ' README.md                    # -> README.docx';
         $lines[] = '  ' . self::NAME . ' README.docx                  # -> README.md';
         $lines[] = '  ' . self::NAME . ' to-docx README.md -o README.docx';
+        $lines[] = '  ' . self::NAME . ' to-odt README.md';
         $lines[] = '  ' . self::NAME . ' to-docx notes.md --template report.docx --region body --define customer=Northwind';
         $lines[] = '  ' . self::NAME . ' to-markdown report.docx --media assets -o report.md';
-        $lines[] = '  cat notes.md | ' . self::NAME . ' to-docx - -o - | pbcopy';
+        $lines[] = '  ' . self::NAME . ' README.md --to rtf';
+        $lines[] = '  ' . self::NAME . ' cat notes.md | ' . self::NAME . ' to-docx - -o - | pbcopy';
 
         return implode(PHP_EOL, $lines) . PHP_EOL;
     }
@@ -560,12 +599,39 @@ final class Application
     }
 
     /**
+     * The dialect the command line reads Markdown with.
+ *
+     * Frontmatter is on here and not in the library's default parser, and that is
+     * the difference between a document that carries its own configuration and one
+     * that does not: without the extension a leading `---` is a thematic break and
+     * the rest of the block arrives as paragraphs of text at the top of the document.
+     *
+     * It is on because the precedence the README gives has a row for the frontmatter
+     * sitting below the command line, and that row means nothing from a terminal
+     * unless the terminal reads the block at all.
+     */
+    public static function parser(): CommonMarkParser
+    {
+        return new CommonMarkParser([...CommonMarkParser::FLAVOURS['gfm'], FrontMatterExtension::class]);
+    }
+
+    /**
      * Typed as the interface rather than the class, so a caller holding one of the
      * two directions cannot tell them apart by accident.
+     *
+     * `$overrides` is what the command line itself said, and it sits *above* the
+     * frontmatter rather than with the configuration the file names — see
+     * {@see \MarkdownWord\Document\ConfigurationMerger} for the order. It is a
+     * separate argument rather than merged into `$config` because the two are
+     * different claims: the configuration is the base a document is rendered from,
+     * and an override is one that outranks what the document says about itself.
      */
-    public function converter(Configuration $config, ?string $source = null): Converter
-    {
-        return new MarkdownToWord($source, $config);
+    public function converter(
+        Configuration $config,
+        ?string $source = null,
+        Configuration|array|null $overrides = null,
+    ): Converter {
+        return new MarkdownToWord($source, $config, self::parser(), $overrides);
     }
 
     /**
@@ -578,9 +644,56 @@ final class Application
         return new WordToMarkdown($source, $options);
     }
 
-    public function template(string $path, Configuration $config, array $values): MarkdownTemplate
+    public function template(string $path, Configuration $config, array $values, Configuration|array|null $overrides = null): MarkdownTemplate
     {
-        return new MarkdownTemplate($path, $config, $values);
+        return new MarkdownTemplate($path, $config, $values, self::parser(), $overrides);
+    }
+
+    /**
+     * Say what had to be decoded on the way into the document.
+     *
+     * A `.webp` is embedded rather than dropped, but it is re-encoded on the way in
+     * and a PNG of a photograph is several times the size of the WebP it came from.
+     * That is a trade the run made on the reader's behalf, so it goes to standard
+     * error with the rest of the progress rather than into the document.
+     *
+     * Typed as the interface, because {@see self::reader()} returns one too and only
+     * the Markdown direction has images to convert.
+     */
+    public function reportImageConversions(Converter $converter): void
+    {
+        if (!$converter instanceof MarkdownToWord) {
+            return;
+        }
+
+        foreach ($converter->pendingImageConversions() as $conversion) {
+            $this->progress(sprintf(
+                'converted %s (%s) to %s for embedding',
+                $conversion['source'],
+                $conversion['format'],
+                $conversion['embeddedAs'],
+            ));
+        }
+    }
+
+    /**
+     * Say what the format asked for dropped, on standard error with the rest of the
+     * progress rather than into the document.
+     *
+     * `.docx` drops nothing and is the baseline the others are measured against, so
+     * a run that lost nothing says nothing here either — the alternative is a line on
+     * every conversion telling a reader of a perfect `.docx` that the document is
+     * what it always was.
+     */
+    public function reportLosses(Converter $converter, Format $format): void
+    {
+        if (!$converter instanceof MarkdownToWord) {
+            return;
+        }
+
+        foreach ($converter->pendingLosses() as $loss) {
+            $this->progress(sprintf('%s cannot carry %s: %s', $format->value, $loss->feature, $loss->message));
+        }
     }
 
     /**

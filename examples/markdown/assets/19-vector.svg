@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    A diagram, for `19-vector.md`.
+
+    Kept as text rather than a binary so that what the example demonstrates can be
+    read: the shapes are the point, and a screenshot of them would prove nothing about
+    whether the vector survived.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="180" viewBox="0 0 480 180">
+  <rect width="480" height="180" rx="8" fill="#f4f6f8"/>
+
+  <rect x="24" y="34" width="150" height="112" rx="6" fill="#1b3a5c"/>
+  <text x="99" y="82" font-family="Georgia, serif" font-size="19" fill="#ffffff"
+        text-anchor="middle">Markdown</text>
+  <text x="99" y="108" font-family="Georgia, serif" font-size="15" fill="#a8c4dd"
+        text-anchor="middle">in</text>
+  <text x="99" y="130" font-family="Georgia, serif" font-size="19" fill="#ffffff"
+        text-anchor="middle">.docx</text>
+
+  <path d="M186 90 h44" stroke="#5b6b7c" stroke-width="2.5" fill="none"
+        marker-end="url(#tip)"/>
+
+  <rect x="242" y="34" width="214" height="112" rx="6" fill="#ffffff"
+        stroke="#c8d0d8" stroke-width="1.5"/>
+  <text x="349" y="70" font-family="Georgia, serif" font-size="15" fill="#5b6b7c"
+        text-anchor="middle">two parts in one file:</text>
+
+  <rect x="262" y="84" width="82" height="44" rx="4" fill="#e3f0e8"
+        stroke="#2e7d4f" stroke-width="1.5"/>
+  <text x="303" y="111" font-family="Georgia, serif" font-size="13" fill="#2e7d4f"
+        text-anchor="middle">a PNG</text>
+
+  <rect x="354" y="84" width="82" height="44" rx="4" fill="#eaf0fa"
+        stroke="#1b3a5c" stroke-width="1.5"/>
+  <text x="395" y="111" font-family="Georgia, serif" font-size="13" fill="#1b3a5c"
+        text-anchor="middle">an SVG</text>
+
+  <defs>
+    <marker id="tip" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5b6b7c"/>
+    </marker>
+  </defs>
+</svg>

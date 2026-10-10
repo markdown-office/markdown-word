@@ -23,6 +23,7 @@ use League\CommonMark\Node\Block\Paragraph;
 use League\CommonMark\Node\Inline\Text;
 use League\CommonMark\Node\Node;
 use MarkdownWord\Configuration;
+use MarkdownWord\Configuration\LookAndFeel;
 use MarkdownWord\Configuration\Options;
 use MarkdownWord\Configuration\Styles;
 use PhpOffice\PhpWord\Element\AbstractContainer;
@@ -241,7 +242,7 @@ final class DocumentRenderer
             return;
         }
 
-        $paragraphStyle = $this->blockStyle(Styles::CODE_BLOCK, $context) ?? $this->codeBlockStyle();
+        $paragraphStyle = $this->codeBlockStyle($context);
 
         // A code block's own font slot wins over the code span font, so a
         // configured `codeBlock` style can change the typeface of the block.
@@ -257,20 +258,34 @@ final class DocumentRenderer
     }
 
     /**
+     * The code block's slot with the built-in background layered on top of it.
+     *
+     * The background is not in the default slot, because `codeBlockShading` is the
+     * switch that decides whether a code block has one at all, and a slot that
+     * brings its own keeps it: the option says whether, not which colour.
+     *
      * @return array<string, mixed>|string|null
      */
-    private function codeBlockStyle(): array|string|null
+    private function codeBlockStyle(RenderContext $context): array|string|null
     {
-        $style = ParagraphStyle::paragraphPart($this->styles->slot(Styles::CODE_BLOCK));
+        $style = $this->blockStyle(Styles::CODE_BLOCK, $context);
 
-        if ($this->config->getOptions()->codeBlockShading) {
-            $style = ParagraphStyle::merge($style, [
-                'shading' => ['fill' => 'F2F2F2'],
-                'space' => ['before' => 0, 'after' => 0],
-            ]);
+        if (!$this->config->getOptions()->codeBlockShading || $this->hasShading($style)) {
+            return $style;
         }
 
-        return $style;
+        return ParagraphStyle::merge($style, [
+            'shading' => ['fill' => LookAndFeel::CODE_BACKGROUND],
+            'space' => ['before' => 0, 'after' => 0],
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed>|string|null $style
+     */
+    private function hasShading(array|string|null $style): bool
+    {
+        return is_array($style) && ($style['shading']['fill'] ?? '') !== '';
     }
 
     private function renderList(ListBlock $node, AbstractContainer $target, RenderContext $context): void
@@ -352,7 +367,10 @@ final class DocumentRenderer
      * A list inside a block quote belongs to the quote, so it is indented by the
      * quote's depth. The quote's own named style cannot simply be reused: Word
      * resolves a named style wholesale, while a list item needs an indentation of
-     * its own for the list level, so the offset goes on as an inline style.
+     * its own for the list level, so the offset goes on as an inline style. The
+     * name goes alongside it, because the item's runs already carry the quote's
+     * character formatting and a paragraph that does not say where that came from
+     * reads back as emphasis the author typed.
      *
      * @return string|array|WordParagraph|null
      */
@@ -368,7 +386,8 @@ final class DocumentRenderer
             return $style;
         }
 
-        $offset = ['indentation' => ['left' => self::QUOTE_INDENT * $context->quoteDepth]];
+        $offset = ['indentation' => ['left' => self::QUOTE_INDENT * $context->quoteDepth]]
+            + ParagraphStyle::styleNameOf($this->styles->slot(Styles::BLOCK_QUOTE));
 
         return is_string($style) ? $offset : ParagraphStyle::merge($style, $offset);
     }

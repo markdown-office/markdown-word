@@ -99,8 +99,10 @@ final class DocumentReader
      */
     private function readParagraph(DOMXPath $xpath, DOMElement $paragraph): ?Block
     {
-        $inlines = $this->readInlines($xpath, $paragraph);
+        // The style first: it says what every run in the paragraph already looks
+        // like, which is not emphasis the author typed.
         $properties = $this->paragraphProperties($xpath, $paragraph);
+        $inlines = $this->readInlines($xpath, $paragraph, $this->inheritedEmphasis($properties['style']));
 
         if ($this->isRule($xpath, $paragraph, $inlines)) {
             // The indentation rides along so that a rule inside a block quote is
@@ -308,9 +310,22 @@ final class DocumentReader
     }
 
     /**
+     * What the paragraph's own style already makes every run in it look like.
+     *
+     * @return array{bold: bool, italic: bool, strike: bool}
+     */
+    private function inheritedEmphasis(string $style): array
+    {
+        return $style === ''
+            ? ['bold' => false, 'italic' => false, 'strike' => false]
+            : $this->styles->emphasisOf($style);
+    }
+
+    /**
+     * @param array{bold: bool, italic: bool, strike: bool} $inherited
      * @return list<Inline>
      */
-    private function readInlines(DOMXPath $xpath, DOMElement $paragraph): array
+    private function readInlines(DOMXPath $xpath, DOMElement $paragraph, array $inherited = []): array
     {
         $inlines = [];
 
@@ -321,12 +336,12 @@ final class DocumentReader
 
             switch ($child->localName) {
                 case 'hyperlink':
-                    $inlines = array_merge($inlines, $this->readHyperlink($xpath, $child));
+                    $inlines = array_merge($inlines, $this->readHyperlink($xpath, $child, $inherited));
 
                     break;
 
                 case 'r':
-                    $inlines = array_merge($inlines, $this->readRun($xpath, $child));
+                    $inlines = array_merge($inlines, $this->readRun($xpath, $child, $inherited));
 
                     break;
 
@@ -365,9 +380,10 @@ final class DocumentReader
     }
 
     /**
+     * @param array{bold: bool, italic: bool, strike: bool} $inherited
      * @return list<Inline>
      */
-    private function readHyperlink(DOMXPath $xpath, DOMElement $hyperlink): array
+    private function readHyperlink(DOMXPath $xpath, DOMElement $hyperlink, array $inherited = []): array
     {
         $id = $hyperlink->getAttributeNS(self::R_NS, 'id');
         $url = $this->relationships[$id] ?? '';
@@ -377,13 +393,13 @@ final class DocumentReader
 
         // A link with no resolvable destination is not a link, as on the way in.
         if ($url === '') {
-            return $this->readChildren($xpath, $hyperlink);
+            return $this->readChildren($xpath, $hyperlink, $inherited);
         }
 
         $label = [];
         foreach ($hyperlink->childNodes as $child) {
             if ($child instanceof DOMElement && $child->localName === 'r') {
-                $label = array_merge($label, $this->readRun($xpath, $child));
+                $label = array_merge($label, $this->readRun($xpath, $child, $inherited));
             }
         }
 
@@ -391,15 +407,16 @@ final class DocumentReader
     }
 
     /**
+     * @param array{bold: bool, italic: bool, strike: bool} $inherited
      * @return list<Inline>
      */
-    private function readChildren(DOMXPath $xpath, DOMElement $parent): array
+    private function readChildren(DOMXPath $xpath, DOMElement $parent, array $inherited = []): array
     {
         $inlines = [];
 
         foreach ($parent->childNodes as $child) {
             if ($child instanceof DOMElement && $child->localName === 'r') {
-                $inlines = array_merge($inlines, $this->readRun($xpath, $child));
+                $inlines = array_merge($inlines, $this->readRun($xpath, $child, $inherited));
             }
         }
 
@@ -407,9 +424,14 @@ final class DocumentReader
     }
 
     /**
+     * Emphasis is what the run adds to the style it sits in, not what the run
+     * carries: Word writes the paragraph style's own weight onto the runs too, and
+     * reading that as `**` makes every bold heading come back as `# **Heading**`.
+     *
+     * @param array{bold: bool, italic: bool, strike: bool} $inherited
      * @return list<Inline>
      */
-    private function readRun(DOMXPath $xpath, DOMElement $run): array
+    private function readRun(DOMXPath $xpath, DOMElement $run, array $inherited = []): array
     {
         $bold = false;
         $italic = false;
@@ -418,9 +440,9 @@ final class DocumentReader
 
         $properties = $xpath->query('./w:rPr', $run)?->item(0);
         if ($properties instanceof DOMElement) {
-            $bold = $this->isOn($xpath, $properties, 'w:b');
-            $italic = $this->isOn($xpath, $properties, 'w:i');
-            $strike = $this->isOn($xpath, $properties, 'w:strike');
+            $bold = $this->isOn($xpath, $properties, 'w:b') && !($inherited['bold'] ?? false);
+            $italic = $this->isOn($xpath, $properties, 'w:i') && !($inherited['italic'] ?? false);
+            $strike = $this->isOn($xpath, $properties, 'w:strike') && !($inherited['strike'] ?? false);
             $code = $this->isMonospace($xpath, $properties);
         }
 

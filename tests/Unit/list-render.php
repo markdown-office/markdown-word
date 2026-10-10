@@ -91,8 +91,8 @@ it('tight lists have no extra spacing', function () {
 
     expect($tight['space']['before'] ?? null)->toBe(0);
     expect($tight['space']['after'] ?? null)->toBe(0);
-    // A loose list keeps Word's own spacing rather than being flattened.
-    expect($loose)->toBeNull();
+    // A loose list keeps the list slot's own spacing rather than being flattened.
+    expect($loose['space']['after'] ?? null)->toBe(60);
 });
 
 it('empty list item still renders a bullet', function () {

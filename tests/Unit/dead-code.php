@@ -38,7 +38,7 @@ function sourcesWithClaim(string $claim): array
     $found = [];
     $root = dirname(__DIR__, 2);
 
-    // `tests/` and `tools/` as well as `src/`: AGENTS.md applies the same rules
+    // `tests/` and `tools/` as well as `src/`: the policy applies the same rules
     // to all three, and the dividers it banned were mostly in the two that were
     // outside the first pass's scope.
     foreach (['src', 'tests', 'tools'] as $area) {
@@ -58,7 +58,7 @@ function sourcesWithClaim(string $claim): array
                 continue;
             }
 
-            $source = (string) file_get_contents($file->getPathname());
+            $source = spelledOut((string) file_get_contents($file->getPathname()));
 
             if (str_contains($source, $claim)) {
                 $found[] = $area . '/' . $file->getFilename();
@@ -70,13 +70,34 @@ function sourcesWithClaim(string $claim): array
     // about Composer that was false, and nothing else in the repository reads it.
     $attributes = $root . '/.gitattributes';
 
-    if (str_contains((string) file_get_contents($attributes), $claim)) {
+    if (str_contains(spelledOut((string) file_get_contents($attributes)), $claim)) {
         $found[] = basename($attributes);
     }
 
     sort($found);
 
     return $found;
+}
+
+/**
+ * A source with its comment markers and line breaks flattened away.
+ *
+ * A phrase to ban is written here as the claim reads, not as it happens to be
+ * wrapped: "inherits only the spacing" is one clause of a sentence that a
+ * `//` comment puts on two lines, and matching the raw bytes for it finds
+ * nothing — so the guard passes against the very words it was added to forbid.
+ * Taking the markers out first and the wrapping out second makes a case
+ * survive an editor that rewraps the comment around it.
+ */
+function spelledOut(string $source): string
+{
+    $lines = [];
+
+    foreach (preg_split('/\R/', $source) ?: [] as $line) {
+        $lines[] = trim((string) preg_replace('~^\s*(?://+|\*+|\#+)\s?~', '', $line));
+    }
+
+    return (string) preg_replace('/\s+/', ' ', implode(' ', $lines));
 }
 
 it('does not claim again what the code does not do', function (string $claim) {
@@ -89,17 +110,29 @@ it('does not claim again what the code does not do', function (string $claim) {
     'a link wrapping a bare image is marked by a flag nothing read' => 'imageLabel',
     'the version is written down in only one place' => 'The one place the version is written down',
     'shipping the lock file makes an install reproducible' => 'a reproducible install is worth',
+    'one list of style keys covers every slot' => 'The keys a style slot\'s array form understands',
+    'a default heading is body text in an .odt or an .rtf' => 'headings are body text',
+    'the built-in look is a no-op because it matches the default' => 'currently re-applies what is already the default',
+    'a built-in style id carries an outline level by itself' => 'only the built-in ids carry an outline level',
+    "the RTF font table is filled from the section's elements" => 'only walks section-level',
+    'a named style keeps its spacing in an .odt' => 'inherits only the spacing',
+    'a style name makes a heading a heading' => 'the reason a heading is still a heading',
+    'a style name is what makes a .docx heading a Heading 1' => 'heading a `Heading 1` rather than',
+    'an .odt root leaves the style and fo prefixes undeclared' => 'but not `style` and `fo`',
+    'which YAML implementation reads the block is the machine\'s choice' => 'which one is in play depends on the',
 ]);
 
 it('has no decorative dividers in it', function () {
     // A rule of dashes above a run of methods says what the method names below it
-    // already say, in seventy characters, on every read of the file. There were
-    // fifty-nine: none left in `src/` after the first pass, and all of the rest
-    // in the two directories that pass did not cover. AGENTS.md bans them; this is
-    // what makes that a rule rather than a note.
+    // already say, in seventy characters, on every read of the file. The policy bans
+    // them; this is what makes that a rule rather than a note.
+    //
+    // `examples/` is scanned for the same reason `tests/` and `tools/` are: the
+    // eleven banners in `build.php` sat outside every directory this test looked
+    // at, so they were there the whole time the rule was said to hold.
     $dividers = [];
 
-    foreach (['src', 'tests', 'tools'] as $area) {
+    foreach (['src', 'tests', 'tools', 'examples'] as $area) {
         $files = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator(dirname(__DIR__, 2) . '/' . $area, FilesystemIterator::SKIP_DOTS)
         );
@@ -111,7 +144,7 @@ it('has no decorative dividers in it', function () {
 
             foreach (file($file->getPathname()) as $number => $line) {
                 if (preg_match('#^\s*//\s*[-=*_]{4,}#', $line) === 1) {
-                    $dividers[] = $file->getFilename() . ':' . ($number + 1) . ' ' . trim($line);
+                    $dividers[] = $area . '/' . $file->getFilename() . ':' . ($number + 1) . ' ' . trim($line);
                 }
             }
         }
@@ -210,8 +243,8 @@ it('clamps a heading level to the six there are styles for', function () {
     // rather than nothing.
     $styles = new Styles();
 
-    expect($styles->heading(9))->toBe('Heading6')
-        ->and($styles->heading(0))->toBe('Heading1');
+    expect($styles->heading(9))->toBe($styles->get(Styles::HEADING_6))
+        ->and($styles->heading(0))->toBe($styles->get(Styles::HEADING_1));
 });
 
 it('reports a template that is not there as the caller\'s mistake', function () {

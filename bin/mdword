@@ -41,7 +41,7 @@ use MarkdownWord\Console\Application;
         'mdword: the dependencies are not installed.' . PHP_EOL
         . 'Run `composer install` in the project directory, or download the phar from'
         . PHP_EOL
-        . 'https://github.com/fabeat/markdown-word/releases' . PHP_EOL,
+        . 'https://github.com/markdown-office/markdown-word/releases' . PHP_EOL,
     );
 
     exit(1);

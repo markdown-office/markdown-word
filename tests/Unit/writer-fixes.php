@@ -9,8 +9,8 @@ use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\WordToMarkdown;
-use MarkdownWord\Writer\DocxWriter;
 use MarkdownWord\Writer\NumberingMerger;
+use MarkdownWord\Writer\Staging;
 use PhpOffice\PhpWord\PhpWord;
 
 /*
@@ -93,7 +93,7 @@ it('reports a document it could not put in place as a failure of its own', funct
 });
 
 it('does not hand the archive to anyone while it is in flight', function () {
-    $staged = writerFixesCall(DocxWriter::class, 'stage', convertTo('# In flight'), null, null);
+    $staged = writerFixesCall(Staging::class, 'stage', convertTo('# In flight'), 'Word2007', null);
 
     try {
         // PHPWord's `save()` leaves the file at the process umask, which is 0644
@@ -140,7 +140,7 @@ it('puts the archive in place when it cannot be renamed into it', function () {
     // first.
     expect(@rename($staging . '/probe', $staging . '/probe-moved'))->toBeFalse();
 
-    writerFixesCall(DocxWriter::class, 'move', $staged, $destination);
+    writerFixesCall(Staging::class, 'move', $staged, $destination);
 
     expect(file_get_contents($destination))->toBe('STAGED');
 
@@ -153,12 +153,12 @@ it('puts the archive in place when it cannot be renamed into it', function () {
 });
 
 it('moves the archive into place rather than copying it', function () {
-    $staged = writerFixesCall(DocxWriter::class, 'stage', convertTo('# Moved'), null, null);
+    $staged = writerFixesCall(Staging::class, 'stage', convertTo('# Moved'), 'Word2007', null);
     $destination = Scratch::path('moved');
 
     $inode = fileinode($staged);
 
-    writerFixesCall(DocxWriter::class, 'move', $staged, $destination);
+    writerFixesCall(Staging::class, 'move', $staged, $destination);
 
     clearstatcache();
 

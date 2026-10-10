@@ -8,6 +8,7 @@ use MarkdownWord\Configuration;
 use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Exception\TemplateNotFound;
+use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Writer\DocxWriter;
 use MarkdownWord\Writer\OutputEscaping;
 use MarkdownWord\Writer\NumberingMerger;
@@ -57,12 +58,22 @@ final class MarkdownTemplate
 
     /**
      * @param array<string, string|int|float> $values Values substituted into single-line `${name}` placeholders.
+     * @param MarkdownParserInterface|null $parser The dialect the Markdown inside the template is read with. Null keeps
+     *        the default, which has no frontmatter extension — so a `---` at the top of a
+     *        Markdown region is a thematic break rather than configuration. Pass one with
+     *        `FrontMatterExtension` to read it as frontmatter.
+     * @param Configuration|array|null $overrides The layer above the frontmatter of the
+     *        Markdown being inserted. An array is the form to prefer here: a
+     *        `Configuration` names every setting there is and would put all of them,
+     *        defaults included, on top.
      * @throws TemplateNotFound when the template is not a file.
      */
     public function __construct(
         string $template,
         private readonly Configuration $config = new Configuration(),
         array $values = [],
+        ?MarkdownParserInterface $parser = null,
+        Configuration|array|null $overrides = null,
     ) {
         if (!is_file($template)) {
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));
@@ -76,6 +87,8 @@ final class MarkdownTemplate
         $this->converter = new MarkdownToWord(
             null,
             $config->withOptions(['deferredHyperlinks' => true]),
+            $parser,
+            $overrides,
         );
 
         // Every insert is rendered into one shared scratch document, so the list

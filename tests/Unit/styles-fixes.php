@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Render\ParagraphStyle;
 
 /*
  * The heading slot.
@@ -46,18 +47,20 @@ it('resolves every heading level to the slot its constant names', function (int 
     $constant = 'HEADING_' . $level;
 
     // The level resolves through the constant the rest of the library uses, and
-    // through the name `heading()` composes from the number.
-    expect($styles->get(Styles::{$constant}))->toBe('Heading' . $level)
+    // through the name `heading()` composes from the number. A default slot is a
+    // definition rather than a bare styleId — that is what the Look & Feel is —
+    // so the style id named inside it is what the two sides agree on.
+    expect(ParagraphStyle::styleNameOf($styles->get(Styles::{$constant})))->toBe(['styleName' => 'Heading' . $level])
         ->and($styles->heading($level))->toBe($styles->get(Styles::{$constant}));
 })->with([1, 2, 3, 4, 5, 6]);
 
 it('clamps a level outside one to six into the range it has slots for', function () {
     $styles = new Styles();
 
-    expect($styles->heading(0))->toBe('Heading1')
-        ->and($styles->heading(-3))->toBe('Heading1')
-        ->and($styles->heading(7))->toBe('Heading6')
-        ->and($styles->heading(99))->toBe('Heading6');
+    expect($styles->heading(0))->toBe($styles->get(Styles::HEADING_1))
+        ->and($styles->heading(-3))->toBe($styles->get(Styles::HEADING_1))
+        ->and($styles->heading(7))->toBe($styles->get(Styles::HEADING_6))
+        ->and($styles->heading(99))->toBe($styles->get(Styles::HEADING_6));
 });
 
 it('falls back to the paragraph style for a level that was left unstyled', function () {
@@ -77,23 +80,23 @@ it('falls back to the paragraph style for a level that was left unstyled', funct
     expect($styles->heading(3))->toBe('Body')
         // The levels that were given a value keep it, mentioned or not.
         ->and($styles->heading(1))->toBe('Title')
-        ->and($styles->heading(2))->toBe('Heading2')
-        ->and($styles->heading(6))->toBe('Heading6');
+        ->and($styles->heading(2))->toBe($styles->get(Styles::HEADING_2))
+        ->and($styles->heading(6))->toBe($styles->get(Styles::HEADING_6));
 });
 
 it('reports no style at all when neither the level nor the paragraph has one', function () {
     $styles = new Styles([Styles::HEADING_4 => null, Styles::PARAGRAPH => null]);
 
     expect($styles->heading(4))->toBeNull()
-        ->and($styles->heading(1))->toBe('Heading1');
+        ->and($styles->heading(1))->toBe($styles->get(Styles::HEADING_1));
 });
 
 it('finds a heading level that was overridden after the defaults', function () {
     $styles = (new Styles())->with(Styles::HEADING_2, 'Corp Section');
 
     expect($styles->heading(2))->toBe('Corp Section')
-        ->and($styles->heading(1))->toBe('Heading1')
-        ->and($styles->heading(3))->toBe('Heading3');
+        ->and($styles->heading(1))->toBe($styles->get(Styles::HEADING_1))
+        ->and($styles->heading(3))->toBe($styles->get(Styles::HEADING_3));
 });
 
 it('reads an inline heading style as readily as a style id', function () {
@@ -122,10 +125,14 @@ it('keeps the slots a heading lookup is built from', function () {
 
 it('keeps the other slots when one heading level is changed', function () {
     $styles = (new Styles())->with(Styles::HEADING_1, 'Title');
+    $defaults = (new Styles())->toArray();
 
-    expect($styles->get(Styles::HEADING_2))->toBe('Heading2')
+    // Set every other property away from its default first would be the usual
+    // advice; here the default *is* the thing under test, so each untouched slot
+    // is compared with a fresh instance rather than with a literal.
+    expect($styles->get(Styles::HEADING_2))->toBe($defaults[Styles::HEADING_2])
         ->and($styles->get(Styles::CODE_FONT))->toBe(['name' => 'Consolas', 'size' => 9, 'color' => 'A31515'])
-        ->and($styles->get(Styles::BLOCK_QUOTE))->toBe('IntenseQuote');
+        ->and($styles->get(Styles::BLOCK_QUOTE))->toBe($defaults[Styles::BLOCK_QUOTE]);
 });
 
 it('merges withAll over the current slots', function () {
@@ -136,7 +143,7 @@ it('merges withAll over the current slots', function () {
 
     expect($styles->get(Styles::HEADING_1))->toBe('Title')
         ->and($styles->get(Styles::CODE_FONT))->toBe(['name' => 'Fira Code'])
-        ->and($styles->get(Styles::HEADING_6))->toBe('Heading6');
+        ->and($styles->get(Styles::HEADING_6))->toBe((new Styles())->get(Styles::HEADING_6));
 });
 
 it('leaves the receiver of a slot change alone', function () {
@@ -147,7 +154,7 @@ it('leaves the receiver of a slot change alone', function () {
     $styles->withAll([Styles::HEADING_2 => 'Section']);
 
     expect($styles->toArray())->toBe($before)
-        ->and($styles->get(Styles::HEADING_1))->toBe('Heading1');
+        ->and($styles->get(Styles::HEADING_1))->toBe($before[Styles::HEADING_1]);
 });
 
 it('round trips through the array form', function () {

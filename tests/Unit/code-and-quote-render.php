@@ -120,7 +120,7 @@ it('a nested quote steps in further', function () {
     $elements = renderElements("> outer\n>\n> > inner\n");
 
     // The outer level uses the configured style, which carries its own indent.
-    expect(paragraphStyleOf($elements[0]))->toBe('IntenseQuote');
+    expect(paragraphStyleOf($elements[0])['styleName'])->toBe('IntenseQuote');
 
     expect(paragraphStyleOf($elements[1])['indentation']['left'] ?? null)->toBe(1440);
 });

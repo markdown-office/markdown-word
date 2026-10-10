@@ -10,7 +10,7 @@ it('atx heading uses the matching heading style', function () {
 
     expect($elements)->toHaveCount(1);
     expect($elements[0])->toBeInstanceOf(TextRun::class);
-    expect(paragraphStyleOf($elements[0]))->toBe('Heading1');
+    expect(paragraphStyleOf($elements[0])['styleName'])->toBe('Heading1');
     expect(elementTextOf($elements[0]))->toBe('Title');
 });
 
@@ -19,13 +19,13 @@ it('each heading level has its own style', function () {
         $elements = renderElements(str_repeat('#', $level) . " Title\n");
 
         expect($elements)->toHaveCount(1);
-        expect(paragraphStyleOf($elements[0]))->toBe('Heading' . $level);
+        expect(paragraphStyleOf($elements[0])['styleName'])->toBe('Heading' . $level);
     }
 });
 
 it('setext headings become headings', function () {
-    expect(renderElements("Title\n=====\n")[0]->getParagraphStyle())->toBe('Heading1');
-    expect(renderElements("Title\n-----\n")[0]->getParagraphStyle())->toBe('Heading2');
+    expect(paragraphStyleOf(renderElements("Title\n=====\n")[0])['styleName'])->toBe('Heading1');
+    expect(paragraphStyleOf(renderElements("Title\n-----\n")[0])['styleName'])->toBe('Heading2');
 });
 
 it('closing sequences are not part of the heading', function () {
@@ -41,15 +41,17 @@ it('heading style is configurable', function () {
 it('headings deeper than the configured maximum become paragraphs', function () {
     $config = \MarkdownWord\Configuration::create()->withOptions(['maxHeadingLevel' => 2]);
 
-    expect(paragraphStyleOf(renderElements("## Two\n", $config)[0]))->toBe('Heading2');
-    expect(paragraphStyleOf(renderElements("### Three\n", $config)[0]))->toBeNull();
+    expect(paragraphStyleOf(renderElements("## Two\n", $config)[0])['styleName'])->toBe('Heading2');
+    expect(paragraphStyleOf(renderElements("### Three\n", $config)[0])['styleName'] ?? null)->toBeNull();
 });
 
-it('plain paragraph has no style by default', function () {
+it('a plain paragraph carries the body spacing and no style name', function () {
     $elements = renderElements("Just a paragraph.\n");
 
+    // Direct formatting, so the name is absent where a heading has one — which is
+    // what makes this a body paragraph rather than a heading with no style.
     expect($elements)->toHaveCount(1);
-    expect(paragraphStyleOf($elements[0]))->toBeNull();
+    expect(paragraphStyleOf($elements[0]))->toBe(['space' => ['after' => 120]]);
     expect(elementTextOf($elements[0]))->toBe('Just a paragraph.');
 });
 

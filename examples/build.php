@@ -14,9 +14,11 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use League\CommonMark\Extension\FrontMatter\FrontMatterExtension;
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Options;
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\WordToMarkdown;
@@ -37,7 +39,7 @@ logo($assets . '/logo.png');
 
 $built = [];
 
-// --- The Markdown sources, rendered with the default configuration -----------
+// The Markdown sources, rendered with the default configuration
 
 $default = new Configuration();
 
@@ -63,7 +65,7 @@ foreach ([
     $built[] = [$name, $description, $path];
 }
 
-// --- The same source, without any decoration --------------------------------
+// The same source, without any decoration
 //
 // Shows what the configuration controls, side by side with the default.
 
@@ -74,7 +76,7 @@ $path = $out . '/07-no-decoration.docx';
 ))->save($path);
 $built[] = ['07-no-decoration', 'The kitchen sink with every default switched off.', $path];
 
-// --- A house style, defined in code ------------------------------------------
+// A house style, defined in code
 
 $path = $out . '/08-house-style.docx';
 (new MarkdownToWord(
@@ -83,7 +85,7 @@ $path = $out . '/08-house-style.docx';
 ))->save($path);
 $built[] = ['08-house-style', 'The kitchen sink in a custom house style.', $path];
 
-// --- The same source, with the extras a README tends to use ------------------
+// The same source, with the extras a README tends to use
 
 $path = $out . '/09-extended-parser.docx';
 (new MarkdownToWord(
@@ -97,7 +99,7 @@ $path = $out . '/09-extended-parser.docx';
 ))->save($path);
 $built[] = ['09-extended-parser', 'Footnotes and description lists.', $path];
 
-// --- A Word template ---------------------------------------------------------
+// A Word template
 
 $templatePath = $out . '/template-invoice.docx';
 $outputPath = $out . '/10-template.docx';
@@ -116,19 +118,175 @@ buildInvoiceTemplate($templatePath);
 
 $built[] = ['10-template', 'Markdown rendered into a Word template.', $outputPath];
 
-// --- The way back ------------------------------------------------------------
+// Frontmatter
+//
+// Three files, so the block can be seen doing something and seen losing.
+//
+// The parser matters as much as the block: frontmatter is read by the
+// `FrontMatterExtension`, which the default dialect does not carry. Without it a
+// leading `---` is a thematic break and the rest of the block is content, so the
+// document would come out with the configuration printed at the top of it.
+
+// The GFM flavour plus frontmatter. Naming only `FrontMatterExtension` would *replace*
+// the default rather than add to it, and the tables in these examples would come out as
+// paragraphs of pipes.
+$frontmatterParser = new CommonMarkParser([
+    ...CommonMarkParser::FLAVOURS['gfm'],
+    FrontMatterExtension::class,
+]);
+
+// 11 — the block is read, and it configures the render.
+$path = $out . '/11-frontmatter.docx';
+(new MarkdownToWord(
+    (string) file_get_contents($root . '/markdown/11-frontmatter.md'),
+    Configuration::create(),
+    $frontmatterParser,
+))->save($path);
+$built[] = ['11-frontmatter', 'Frontmatter configuring the conversion.', $path];
+
+// 12 — the same Markdown with no block, for the pair.
+$path = $out . '/12-frontmatter-none.docx';
+(new MarkdownToWord(
+    (string) file_get_contents($root . '/markdown/12-frontmatter-none.md'),
+    Configuration::create(),
+    $frontmatterParser,
+))->save($path);
+$built[] = ['12-frontmatter-none', 'The same Markdown with no frontmatter.', $path];
+
+// 13 — the block is outranked by the configuration passed in code.
+$path = $out . '/13-frontmatter-override.docx';
+(new MarkdownToWord(
+    (string) file_get_contents($root . '/markdown/13-frontmatter-override.md'),
+    // Deliberately the opposite of the block: no borders, no heading cap, a plain
+    // grey Arial H1 with no air around it. Where the two disagree, this wins.
+    Configuration::create()->withOptions([
+        'maxHeadingLevel' => 6,
+        'tableBorders' => false,
+    ])->withStyles([
+        Styles::HEADING_1 => [
+            'name' => 'Arial',
+            'size' => 12,
+            'bold' => false,
+            'color' => '808080',
+            'space' => ['before' => 0, 'after' => 0],
+        ],
+    ]),
+    $frontmatterParser,
+))->save($path);
+$built[] = ['13-frontmatter-override', 'Frontmatter outranked by the configuration.', $path];
+
+// 14 is `markdown/14-rejected.md`, which is deliberately not built: converting it is
+// the failure it exists to demonstrate.
+
+// Images
+//
+// One source, three documents. `images` is a single setting and a document cannot
+// hold three of it, so the modes are shown side by side rather than in one file.
+//
+// `imageBasePath` is the other half of the example and it cannot come from the block:
+// it is an absolute directory and the source is committed, so it is passed here and
+// resolves `assets/logo.png` against `examples/markdown`.
+
+$images = (string) file_get_contents($root . '/markdown/15-images.md');
+
+foreach ([
+    'embed' => Options::IMAGE_EMBED,
+    'placeholder' => Options::IMAGE_PLACEHOLDER,
+    'skip' => Options::IMAGE_SKIP,
+] as $mode => $value) {
+    $path = $out . '/15-images-' . $mode . '.docx';
+    (new MarkdownToWord(
+        $images,
+        Configuration::create()->withOptions([
+            'images' => $value,
+            'imageBasePath' => $root . '/markdown',
+        ]),
+        $frontmatterParser,
+    ))->save($path);
+
+    $built[] = ['15-images-' . $mode, 'Images in ' . $mode . ' mode.', $path];
+}
+
+// Tables
+
+foreach ([
+    '16-styled-tables' => 'Table style slots from the frontmatter.',
+    '17-borderless-tables' => 'The table options, with no style slot.',
+] as $name => $description) {
+    $path = $out . '/' . $name . '.docx';
+    (new MarkdownToWord(
+        (string) file_get_contents($root . '/markdown/' . $name . '.md'),
+        Configuration::create(),
+        $frontmatterParser,
+    ))->save($path);
+
+    $built[] = [$name, $description, $path];
+}
+
+// 19 — a vector, which is a different kind of thing in a Word file from a picture.
+//
+// Guarded rather than built unconditionally: the conversion needs `ext-imagick`,
+// and an example that cannot be built on somebody's machine is worse than one that
+// says why it was skipped.
+if (\extension_loaded('imagick')) {
+    $path = $out . '/19-vector.docx';
+    // The same base path the other examples get: without it a relative source path
+    // resolves against the working directory and the picture is not found, which
+    // falls back to the alt text and produces a document with no picture in it.
+    (new MarkdownToWord(
+        (string) file_get_contents($root . '/markdown/19-vector.md'),
+        Configuration::create()->withOptions([
+            'images' => Options::IMAGE_EMBED,
+            'imageBasePath' => $root . '/markdown',
+        ]),
+        $frontmatterParser,
+    ))->save($path);
+    $built[] = ['19-vector', 'An SVG, embedded as a vector beside its raster.', $path];
+} else {
+    echo "\nSkipped 19-vector: ext-imagick is not loaded, so an SVG cannot be embedded.\n";
+}
+
+// The way back
 
 
 $roundTripped = (new WordToMarkdown($out . '/01-kitchen-sink.docx'))->convert();
-file_put_contents($out . '/11-round-trip.md', $roundTripped);
+file_put_contents($out . '/18-round-trip.md', $roundTripped);
 
 $built[] = [
-    '11-round-trip',
+    '18-round-trip',
     'The kitchen sink read back out of 01-kitchen-sink.docx.',
-    $out . '/11-round-trip.md',
+    $out . '/18-round-trip.md',
 ];
 
-// --- Report ------------------------------------------------------------------
+// The other two output formats
+//
+// One source, three documents. The page carries everything the three formats are
+// asked about, so the differences between them can be looked at rather than taken
+// on trust: the `.rtf` has no list in it, the `.odt` has bullets where the
+// numbers should be, and neither has a rule under the `---`.
+//
+// `.docx` is built here too, so the three are the same conversion and not three
+// documents that happen to share a heading.
+
+$formats = (string) file_get_contents($root . '/markdown/20-formats.md');
+
+foreach (Format::cases() as $format) {
+    $path = $out . '/20-formats' . $format->extension();
+    $converter = new MarkdownToWord($formats, Configuration::create()->withOptions([
+        'images' => Options::IMAGE_EMBED,
+        'imageBasePath' => $root . '/markdown',
+    ]), $frontmatterParser);
+
+    $converter->convertTo($format, $path);
+
+    $built[] = [
+        '20-formats' . $format->extension(),
+        sprintf('The format comparison page as %s %s.', $format->value === 'rtf' ? 'an' : 'a', $format->value),
+        $path,
+    ];
+}
+
+// Report
 
 echo "\nBuilt:\n\n";
 
@@ -232,25 +390,36 @@ function renderPreviews(array $built): void
         return;
     }
 
+    // Every format the examples write, so the comparison page can be looked at as
+    // well as read. The round trip is Markdown and has no first page to look at.
+    $documents = ['docx', 'odt', 'rtf'];
     $rendered = 0;
 
     foreach ($built as [, , $path]) {
-        // Only a document has a first page to look at; the round-trip example is
-        // written as Markdown.
-        if (!str_ends_with($path, '.docx')) {
+        $extension = pathinfo($path, PATHINFO_EXTENSION);
+
+        if (!in_array($extension, $documents, true)) {
             continue;
         }
 
-        $command = sprintf(
+        // Into a directory of its own, because LibreOffice names its output after
+        // the file it was given: three documents sharing a stem would otherwise
+        // each overwrite the last one's preview, and the one left standing would
+        // stand for all three — the opposite of what the comparison page is for.
+        $scratch = sys_get_temp_dir() . '/mdword-preview-' . bin2hex(random_bytes(6));
+
+        if (!is_dir($scratch) && !mkdir($scratch, 0o777, true) && !is_dir($scratch)) {
+            continue;
+        }
+
+        exec(sprintf(
             '%s --headless --convert-to png --outdir %s %s 2>/dev/null',
             escapeshellcmd($soffice),
-            escapeshellarg(dirname($path)),
+            escapeshellarg($scratch),
             escapeshellarg($path),
-        );
+        ), $output, $status);
 
-        exec($command, $output, $status);
-
-        if ($status === 0 && is_file(preg_replace('/\.docx$/', '.png', $path))) {
+        if ($status === 0 && movePreview($scratch, $path, $extension)) {
             $rendered++;
         }
 
@@ -258,6 +427,27 @@ function renderPreviews(array $built): void
     }
 
     printf("Rendered %d preview image(s) next to the documents.\n", $rendered);
+}
+
+/**
+ * Put a document's preview image beside it, under a name of its own.
+ *
+ * The format goes into the name wherever it is not the default, so the `.docx` is
+ * `20-formats.png` and its two siblings are `20-formats.odt.png` and
+ * `20-formats.rtf.png`.
+ */
+function movePreview(string $scratch, string $path, string $extension): bool
+{
+    $stem = (string) preg_replace('/\.[^.]+$/', '', $path);
+    $produced = $scratch . '/' . basename($stem) . '.png';
+
+    if (!is_file($produced)) {
+        return false;
+    }
+
+    $wanted = $extension === 'docx' ? $stem . '.png' : $stem . '.' . $extension . '.png';
+
+    return rename($produced, $wanted);
 }
 
 function locateLibreOffice(): ?string
