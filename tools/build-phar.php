@@ -290,7 +290,7 @@ function resolveEpoch(string $root): int
 
     $inputs = ['composer.json', 'composer.lock', 'README.md', 'LICENSE', 'tools/build-phar.php'];
 
-    foreach (['src', 'bin'] as $directory) {
+    foreach (['src', 'bin', 'themes'] as $directory) {
         $files = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($root . '/' . $directory, FilesystemIterator::SKIP_DOTS),
         );
@@ -371,8 +371,8 @@ function dataStart(string $raw): int
  * The manifest comes before the file contents, which follow it in manifest
  * order, and its first four bytes are the length of the rest of it. So the length
  * is both how the end is found and the check that the walk below read it
- * correctly: entries that do not add up to it mean this PHP wrote a layout this
- * does not understand, and the build stops rather than guess.
+ * correctly: a length the entries do not account for means this PHP wrote a
+ * layout this does not understand, and the build stops rather than guess.
  *
  * @return array{timestamps: list<array{offset: int, name: string}>, end: int, metadata: string}
  */
@@ -405,12 +405,25 @@ function readManifest(string $raw): array
         $offset += readUint32($raw, $offset); // per-file metadata
     }
 
-    if ($offset !== $end) {
+    $walked = $offset - $start;
+
+    // PHP pads the manifest with one byte, and counts that byte in the length it
+    // wrote, whenever that length ends in `\r` or `\n` — a reader that took either
+    // for the end of a manifest string would stop early (php-src bug #65028,
+    // `phar_flush_ex()`). The byte it pads with is the first byte of the buffer
+    // the metadata length was written from, which nothing writes over again
+    // before the padding goes out, so it is the low byte of that length. The byte
+    // is checked as well as the arithmetic because a spare byte at the end is also
+    // what a walk that read the layout wrongly would leave behind, and this is
+    // the one place that tells the two apart.
+    $padding = in_array($walked & 0xFF, [0x0A, 0x0D], true) ? chr(strlen($metadata) & 0xFF) : '';
+
+    if ($walked + strlen($padding) !== $length || substr($raw, $offset, strlen($padding)) !== $padding) {
         throw new RuntimeException(sprintf(
             'the manifest says it is %d bytes and reading it consumed %d, so this build does not'
             . ' recognise the archive layout this PHP wrote and will not rewrite it',
             $length,
-            $offset - $start,
+            $walked,
         ));
     }
 
@@ -603,6 +616,13 @@ fwrite(STDOUT, "\n  Application\n");
 
 copyInto($root . '/src', $app);
 copyInto($root . '/bin', $app);
+
+// The themes ship in the archive because that is the only place a theme can be
+// found from inside one: `ThemeResolver` looks in `dirname(__DIR__, 2) . '/themes'`,
+// which from `app/src/Theme/` is `app/themes` in the archive and the project's own
+// `themes/` in a checkout, so the staging directory has to hold them under that
+// exact name.
+copyInto($root . '/themes', $app);
 copyInto($deps . '/vendor', $app);
 
 foreach (['LICENSE.md', 'LICENSE', 'README.md'] as $document) {
