@@ -107,8 +107,7 @@ final class Styles
      * Every slot override as it was written, merged together across every `with*()` call.
      *
      * Not {@see self::toArray()}, which reports the state of every slot whether anybody
-     * touched it or not, and not {@see self::explicit()}, which reports only *which*
-     * slots were touched. What a theme has to be able to do is put back exactly what the
+     * touched it or not. What a theme has to be able to do is put back exactly what the
      * caller wrote and nothing else: re-applying the merged value would carry the built-in
      * look's size and spacing over the theme's, which is the theme being overwritten by
      * the thing it was supposed to be underneath.
@@ -157,13 +156,15 @@ final class Styles
             self::THEMATIC_BREAK => null,
             self::HTML_FALLBACK => null,
 
-            // Numbering style names, created on demand by the renderer. The name reaches
-    // PHPWord but not the document: its numbering writer emits `w:abstractNumId`
-    // and never a `w:name`, so naming a different one here changes which definition is
-    // registered rather than what the document shows. A bullet character is not
-    // configurable through this slot — see the README.
-    self::BULLET_LIST => 'MarkdownWord-Bullet',
-    self::ORDERED_LIST => 'MarkdownWord-Ordered',
+            // Numbering style names, created on demand by the renderer. What the name buys
+            // depends on the format: an `.odt` writes it as the `text:list-style` its lists
+            // refer to, so naming a different one there is readable in the file. A `.docx`
+            // does not carry it — PHPWord's Word writer emits `w:abstractNum` and
+            // `w:abstractNumId` and never a `w:name`, so the numbering is reached by id.
+            // Either way it is a label: a bullet character is not configurable through this
+            // slot — see the README.
+            self::BULLET_LIST => 'MarkdownWord-Bullet',
+            self::ORDERED_LIST => 'MarkdownWord-Ordered',
 
             self::TABLE => null,
             self::TABLE_HEADER_ROW => null,

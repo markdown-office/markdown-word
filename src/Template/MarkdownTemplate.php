@@ -291,7 +291,7 @@ final class MarkdownTemplate
     }
 
     /**
-     * Deliberately the shape of {@see \MarkdownWord\Writer\DocxWriter::move()}
+     * Deliberately the shape of {@see \MarkdownWord\Writer\Staging::move()}
      * rather than a second one: a symlink is followed instead of replaced, a
      * `rename()` that fails because the two paths are on different filesystems
      * falls back to a copy, and a copy that fails part way does not leave a

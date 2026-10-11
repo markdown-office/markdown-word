@@ -139,6 +139,18 @@ it('does not claim again what the code does not do', function (string $claim) {
     // as the `text:list-style` its lists refer to. Stated once as the .docx
     // writer's behaviour it was read as a claim about both formats.
     'the numbering style name is dropped on its way into the document' => 'the name does not reach the',
+    // The same error in the wording the source used, one commit after the two
+    // documents above were corrected for it: an .odt carries the name in both
+    // `content.xml` and `styles.xml`, so "reaches PHPWord but not the document"
+    // described the .docx case as the only one.
+    'the numbering style name reaches PHPWord and stops there' => 'The name reaches PHPWord but not the document',
+    // `written()` was contrasted against a method that has never been on the
+    // class — `git log -S 'function explicit'` over `Styles.php` is empty — so
+    // the reference sent a reader looking for an API to compare against.
+    'the slots that were written are readable apart from the state' => '{@see self::explicit()}',
+    // `move()` is on `Staging`; `DocxWriter` has no such method and no parent
+    // that has one. The claim that the template's move copies the writer's held.
+    'the template move is a copy of the writer move' => '{@see \MarkdownWord\Writer\DocxWriter::move()}',
 ]);
 
 it('has no decorative dividers in it', function () {

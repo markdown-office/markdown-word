@@ -32,10 +32,9 @@ final class ValueShape
      * block is described by its keys rather than reproduced: the point is to let
      * someone recognise what they wrote, not to echo it.
      *
-     * One dispatch rather than four guards, because every `if` here is final: there
-     * is nothing after the first `return` for a chain to fall through to, so the
-     * chain reads as a sequence of steps where there is one choice between four
-     * spellings.
+     * One dispatch rather than a chain of guards, because every `if` here is final:
+     * there is nothing after the first `return` for a chain to fall through to, so the
+     * choice reads as one rather than as a series of tests.
      */
     public static function show(mixed $value): string
     {

@@ -14,8 +14,9 @@ use ZipArchive;
 /**
  * Puts the vector back behind the raster Word is able to draw.
  *
- * An SVG reaches a document as a PNG of itself, because {@see SvgRasteriser} has to
- * produce one and PHPWord has no way to say otherwise. Word is not fooled by that: a
+ * An SVG reaches a document as a PNG of itself, because
+ * {@see \MarkdownWord\Render\SvgRasteriser} has to produce one and PHPWord has no way to
+ * say otherwise. Word is not fooled by that: a
  * picture that carries only a raster *is* a raster, and it will keep being one at every
  * zoom level. So the original SVG is added as a part of its own, given a
  * relationship, and referenced from an extension on the picture element.
