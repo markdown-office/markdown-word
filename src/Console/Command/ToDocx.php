@@ -10,6 +10,7 @@ use MarkdownWord\Console\Application;
 use MarkdownWord\Console\CommandLine;
 use MarkdownWord\Console\ConsoleException;
 use MarkdownWord\Format;
+use MarkdownWord\WordPackage;
 use ZipArchive;
 
 /**
@@ -86,11 +87,15 @@ class ToDocx extends BaseCommand
     }
 
     /**
-     * A template is a `.docx`, and the renderer fills one in through PHPWord's own
-     * template processor, which only reads that package. So this is not a limitation
-     * of the two newer writers that could be worked around later; it is the shape of
-     * the feature, and saying so is better than writing a document that was never
-     * rendered into anything.
+     * A template is a `.docx` or a `.dotx`, and the renderer fills one in through
+     * PHPWord's own template processor, which reads nothing else. So this is not a
+     * limitation of the two newer writers that could be worked around later; it is
+     * the shape of the feature, and saying so is better than writing a document that
+     * was never rendered into anything.
+     *
+     * A `.dotx` is the same package as a `.docx` with its body declared as a
+     * template's, and the renderer settles that on the way in — so the result is a
+     * document whichever of the two it was rendered into.
      *
      * Which file the caller named is deliberately not part of the answer: whether a
      * template can be filled in at all is a fact about the format, and
@@ -104,7 +109,7 @@ class ToDocx extends BaseCommand
 
         throw new ConsoleException(
             sprintf('A template cannot be filled in for %s.', $this->format()->value),
-            ['A template is a .docx, and only `mdword to-docx` renders into one.'],
+            ['A template is a .docx or .dotx, and only `mdword to-docx` renders into one.'],
         );
     }
 
@@ -368,12 +373,13 @@ class ToDocx extends BaseCommand
         if ($zip->open($path) !== true) {
             throw new ConsoleException(
                 sprintf('The template "%s" could not be opened.', $path),
-                ['A Word template is a .docx file, which is a zip archive.'],
+                ['A Word template is a .docx or .dotx file, which is a zip archive.'],
             );
         }
 
         try {
-            $document = $zip->getFromName('word/document.xml');
+            $body = WordPackage::bodyPart($zip);
+            $document = $zip->getFromName($body);
         } finally {
             $zip->close();
         }
@@ -427,7 +433,7 @@ class ToDocx extends BaseCommand
             ['-o, --output <file>', 'where the result goes; "-" for standard output'],
             ['-c, --config <file.php>', 'a file returning the styles and options to use'],
             ['--theme <name>', 'a named look to draw in; a styles: block still wins over it'],
-            ['-t, --template <file.docx>', 'render into a Word template rather than a new document'],
+            ['-t, --template <file.docx|.dotx>', 'render into a Word template rather than a new document'],
             ['--region <name>', 'the template region to fill in (default: body)'],
             ['--define <name=value>', 'a value for a single-line placeholder; repeatable'],
             ['--images <mode>', 'embed, placeholder or skip'],
