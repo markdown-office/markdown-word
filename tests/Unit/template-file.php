@@ -253,7 +253,10 @@ describe('resolving a template a document named', function () {
         // way a path that reads harmlessly becomes a read of the wrong file.
         $link = $root . '/looks-fine.dotx';
         if (!@symlink($elsewhere . '/secret.dotx', $link)) {
-            $this->markTestSkipped('symlinks are not available here');
+            // `test()` rather than `$this`: Pest types the latter as a
+            // `PendingCalls`, where `markTestSkipped()` is not a method, so this is
+            // the one call in the file static analysis cannot see.
+            test()->markTestSkipped('symlinks are not available here');
         }
 
         try {

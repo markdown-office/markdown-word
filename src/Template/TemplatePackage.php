@@ -38,13 +38,11 @@ final class TemplatePackage
     /**
      * @param string $template The file to hand to the template processor: the
      *        caller's own file, or a normalised copy of it.
-     * @param string $mainPart The part holding the body, as a path inside the archive.
      * @param string|null $temporary The copy to delete, or null when the caller's own
      *        file was passed through and there is nothing of ours to remove.
      */
     private function __construct(
         private readonly string $template,
-        private readonly string $mainPart,
         private readonly ?string $temporary,
     ) {
     }
@@ -70,7 +68,6 @@ final class TemplatePackage
         }
 
         try {
-            $mainPart = WordPackage::bodyPart($zip);
             $isTemplate = WordPackage::isTemplate($zip);
             $declared = WordPackage::contentTypesOf($zip);
         } finally {
@@ -78,36 +75,16 @@ final class TemplatePackage
         }
 
         if (!$isTemplate) {
-            return new self($template, $mainPart, null);
+            return new self($template, null);
         }
 
-        return new self($rewritten = self::rewrite($template, $declared), $mainPart, $rewritten);
-    }
-
-    /**
-     * The part holding the body of a template, without copying it.
-     *
-     * For the callers that only need to know where to read — the command line
-     * checking that a region is in the template — and so must not be handed a copy
-     * they would then have to clean up.
-     *
-     * @see WordPackage::mainPartOf()
-     */
-    public static function mainPartOf(string $template): string
-    {
-        return WordPackage::mainPartOf($template);
+        return new self($rewritten = self::rewrite($template, $declared), $rewritten);
     }
 
     /** The file to render into: the caller's own, or a normalised copy of it. */
     public function path(): string
     {
         return $this->template;
-    }
-
-    /** The part holding the body, as a path inside the archive. */
-    public function mainPart(): string
-    {
-        return $this->mainPart;
     }
 
     /** Whether the template given was a `.dotx`, and so was normalised. */

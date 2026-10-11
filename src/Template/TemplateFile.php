@@ -28,8 +28,8 @@ final class TemplateFile
     private readonly array $roots;
 
     /**
-     * @param string $directory The directory the document was read from, which a
-     *   relative name is written from. Null for a document handed in as a string:
+     * @param string|null $directory The directory the document was read from, which
+     *   a relative name is written from. Null for a document handed in as a string:
      *   there is no file beside it, so a relative name has nowhere to resolve from
      *   and is reported rather than guessed at.
      * @param list<string> $roots Further directories a document may name a template

@@ -126,19 +126,6 @@ final class MarkdownTemplate
     }
 
     /**
-     * The part of the finished document holding its body.
-     *
-     * Almost always `word/document.xml`, and not always: the name comes from the
-     * template's own declarations, because a package is free to call it something
-     * else and PHPWord's own lookup for it only recognises one spelling of the
-     * content type.
-     */
-    public function mainPart(): string
-    {
-        return $this->package->mainPart();
-    }
-
-    /**
      * Substitute a single-line value.
      *
      * @throws FileNotWritable when the document cannot be written, which the
