@@ -50,6 +50,8 @@ final class MarkdownTemplate
 
     private readonly TemplateProcessor $processor;
 
+    private readonly TemplatePackage $package;
+
     private readonly MarkdownToWord $converter;
 
     private readonly PhpWord $scratch;
@@ -80,7 +82,11 @@ final class MarkdownTemplate
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));
         }
 
-        $this->processor = new TemplateProcessor($template);
+        // Settled before the processor is handed the file: a `.dotx` is normalised to
+        // a document's package here, so the processor reads the body of whichever part
+        // the declarations name and writes the finished document back out as one.
+        $this->package = TemplatePackage::of($template);
+        $this->processor = new TemplateProcessor($this->package->path());
 
         // The elements rendered below are copied into a different document, so
         // hyperlinks are written as placeholders and resolved once the output
@@ -117,6 +123,19 @@ final class MarkdownTemplate
     public function processor(): TemplateProcessor
     {
         return $this->processor;
+    }
+
+    /**
+     * The part of the finished document holding its body.
+     *
+     * Almost always `word/document.xml`, and not always: the name comes from the
+     * template's own declarations, because a package is free to call it something
+     * else and PHPWord's own lookup for it only recognises one spelling of the
+     * content type.
+     */
+    public function mainPart(): string
+    {
+        return $this->package->mainPart();
     }
 
     /**

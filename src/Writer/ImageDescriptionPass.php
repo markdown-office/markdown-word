@@ -9,6 +9,7 @@ use DOMElement;
 use DOMXPath;
 use MarkdownWord\Exception\MalformedDocument;
 use MarkdownWord\Exception\UnreadableDocument;
+use MarkdownWord\WordPackage;
 use MarkdownWord\Xml;
 use ZipArchive;
 
@@ -32,8 +33,6 @@ final class ImageDescriptionPass
     private const O_NS = 'urn:schemas-microsoft-com:office:office';
     private const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 
-    private const DOCUMENT_PATH = 'word/document.xml';
-
     /**
      * @param list<string> $descriptions The alt text of each image, in the order
      *        they were added.
@@ -43,11 +42,11 @@ final class ImageDescriptionPass
     }
 
     /**
-     * An archive with no `word/document.xml` is left as it is rather than
-     * reported, where {@see HyperlinkPass} treats the same absence as a failure.
+     * An archive with no body part is left as it is rather than reported, where
+     * {@see HyperlinkPass} treats the same absence as a failure.
      *
      * @throws UnreadableDocument When the archive cannot be opened.
-     * @throws MalformedDocument When `word/document.xml` is not XML.
+     * @throws MalformedDocument When the body part is not XML.
      */
     public function applyTo(string $docxPath): void
     {
@@ -58,16 +57,17 @@ final class ImageDescriptionPass
         }
 
         try {
-            $document = $zip->getFromName(self::DOCUMENT_PATH);
+            $body = WordPackage::bodyPart($zip);
+            $document = $zip->getFromName($body);
 
             if ($document === false) {
                 return;
             }
 
-            $updated = $this->transform($document);
+            $updated = $this->transform($document, $body);
 
-            $zip->deleteName(self::DOCUMENT_PATH);
-            $zip->addFromString(self::DOCUMENT_PATH, $updated);
+            $zip->deleteName($body);
+            $zip->addFromString($body, $updated);
         } finally {
             $zip->close();
         }
@@ -76,13 +76,13 @@ final class ImageDescriptionPass
     /**
      * @throws MalformedDocument When the document part is not XML.
      */
-    private function transform(string $documentXml): string
+    private function transform(string $documentXml, string $body): string
     {
         if ($this->descriptions === []) {
             return $documentXml;
         }
 
-        $dom = Xml::parseOrFail($documentXml, 'word/document.xml is not valid XML.');
+        $dom = Xml::parseOrFail($documentXml, sprintf('%s is not valid XML.', $body));
 
         $xpath = new DOMXPath($dom);
         $xpath->registerNamespace('v', self::V_NS);
