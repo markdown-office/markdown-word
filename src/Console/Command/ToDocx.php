@@ -60,7 +60,7 @@ class ToDocx extends BaseCommand
             $this->convert($settings, $markdown, $input, $output, $overrides, $theme);
         } else {
             $this->assertTemplateIsSupported();
-            $this->intoTemplate($markdown, $template, $command, $settings, $input, $output, $overrides, $theme);
+            $this->intoTemplate($markdown, $template, $command, $settings, $input, $output);
         }
 
         $this->report($input, $output);
@@ -316,9 +316,13 @@ class ToDocx extends BaseCommand
         Configuration $config,
         ?string $input,
         string $output,
-        ?array $overrides,
-        ?string $theme = null,
     ): void {
+        // Everything the run was *told* comes off the command line here rather than being
+        // handed in alongside it: `--define` and `--region` are already read this way in
+        // this method, and `--theme` and the typed overrides are as much a function of the
+        // command line as either of those are. Passing them separately made the list say
+        // they had been arrived at somewhere else.
+        $overrides = $this->typedConfiguration($command);
         $values = [];
 
         foreach ($command->repeated('define') as $pair) {
@@ -330,7 +334,7 @@ class ToDocx extends BaseCommand
 
         self::assertRegionExists($path, $region);
 
-        $template = $this->application->template($path, $config, $values, $overrides, $theme);
+        $template = $this->application->template($path, $config, $values, $overrides, $command->value('theme'));
         $template->insert($region, $markdown);
 
         // The second guard: filling the region is the slow part of a run.

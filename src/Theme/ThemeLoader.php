@@ -164,7 +164,7 @@ final class ThemeLoader
             return array_map(self::normalise(...), $value);
         }
 
-        return is_int($value) && preg_match('/\A[0-9]{6}\z/', (string) $value) === 1
+        return is_int($value) && preg_match('/\A\d{6}\z/', (string) $value) === 1
             ? (string) $value
             : $value;
     }
