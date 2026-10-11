@@ -7,15 +7,21 @@ use MarkdownWord\Configuration\Options;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
+use MarkdownWord\Render\ParagraphStyle;
 use MarkdownWord\Text\TextExtractor;
 use League\CommonMark\Node\Block\Document;
 
 it('defaults are sensible', function () {
     $styles = Configuration::create()->getStyles();
+    $defaults = Styles::defaults();
 
-    expect($styles->get(Styles::HEADING_1))->toBe('Heading1');
-    expect($styles->get(Styles::HEADING_6))->toBe('Heading6');
-    expect($styles->get(Styles::PARAGRAPH))->toBeNull();
+    // The default slots are the Look & Feel: properties, with the Word style id
+    // named inside them so a `.docx` heading is still a `Heading 1`.
+    expect($styles->get(Styles::HEADING_1))->toBe($defaults[Styles::HEADING_1]);
+    expect(ParagraphStyle::styleNameOf($styles->get(Styles::HEADING_1)))->toBe(['styleName' => 'Heading1']);
+    expect(ParagraphStyle::styleNameOf($styles->get(Styles::HEADING_6)))->toBe(['styleName' => 'Heading6']);
+    expect($styles->get(Styles::HEADING_1)['bold'])->toBeTrue();
+    expect($styles->get(Styles::HEADING_1)['size'])->toBe(16);
     expect(Configuration::create()->getOptions()->softBreak)->toBe(Options::SOFT_BREAK_SPACE);
 });
 
@@ -23,7 +29,7 @@ it('styles are overridden without touching the rest', function () {
     $config = Configuration::create()->withStyles([Styles::HEADING_1 => 'Report Title']);
 
     expect($config->getStyles()->get(Styles::HEADING_1))->toBe('Report Title');
-    expect($config->getStyles()->get(Styles::HEADING_2))->toBe('Heading2');
+    expect($config->getStyles()->get(Styles::HEADING_2))->toBe(Styles::defaults()[Styles::HEADING_2]);
 });
 
 it('options are overridden without touching the rest', function () {
@@ -37,7 +43,7 @@ it('configuration is immutable', function () {
     $original = Configuration::create();
     $modified = $original->withStyles([Styles::HEADING_1 => 'X']);
 
-    expect($original->getStyles()->get(Styles::HEADING_1))->toBe('Heading1');
+    expect($original->getStyles()->get(Styles::HEADING_1))->toBe(Styles::defaults()[Styles::HEADING_1]);
     expect($modified->getStyles()->get(Styles::HEADING_1))->toBe('X');
 });
 
@@ -47,7 +53,10 @@ it('it can be built from a plain array', function () {
         'options' => ['maxHeadingLevel' => 3, 'tableBorders' => false],
     ]);
 
-    expect($config->getStyles()->get(Styles::CODE_FONT))->toBe(['name' => 'Fira Code']);
+    // The font slot merges rather than replaces: naming the face a reader wants must not
+    // cost the code its size and its colour, which is what the built-in look sets.
+    expect($config->getStyles()->get(Styles::CODE_FONT))
+        ->toBe(['name' => 'Fira Code', 'size' => 9, 'color' => 'A31515']);
     expect($config->getOptions()->maxHeadingLevel)->toBe(3);
     expect($config->getOptions()->tableBorders)->toBeFalse();
 });
@@ -86,6 +95,10 @@ it('decoration can be switched off entirely', function () {
 
     expect($config->getStyles()->get(Styles::CODE_FONT))->toBeNull();
     expect($config->getStyles()->get(Styles::BLOCK_QUOTE))->toBeNull();
+    // The body and list spacing is decoration too, and `--plain` reads this method
+    // rather than its own list, so leaving it on would leave the flag half true.
+    expect($config->getStyles()->get(Styles::PARAGRAPH))->toBeNull();
+    expect($config->getStyles()->get(Styles::LIST_PARAGRAPH))->toBeNull();
     expect($config->getOptions()->tableBorders)->toBeFalse();
 });
 

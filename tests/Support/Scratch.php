@@ -122,4 +122,34 @@ final class Scratch
 
         return $path;
     }
+
+    /**
+     * A WebP fixture, skipped where GD was built without the format.
+     *
+     * There is no way to make this one on a machine that cannot: it exists to prove
+     * the conversion path, and a build without WebP has no WebP to prove it with.
+     */
+    public static function webp(string $name = 'fixture.webp'): ?string
+    {
+        if (!function_exists('imagewebp') || (imagetypes() & IMG_WEBP) === 0) {
+            return null;
+        }
+
+        $path = self::remember(self::directory() . '/' . $name);
+
+        if (is_file($path)) {
+            return $path;
+        }
+
+        $size = 24;
+        $image = imagecreatetruecolor($size, $size);
+        $background = imagecolorallocate($image, 0x1B, 0x5E, 0x20);
+        $ink = imagecolorallocate($image, 0xFF, 0xFF, 0xFF);
+
+        imagefilledrectangle($image, 0, 0, $size, $size, $background);
+        imagefilledellipse($image, $size / 2, $size / 2, 14, 14, $ink);
+        imagewebp($image, $path);
+
+        return $path;
+    }
 }

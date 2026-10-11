@@ -143,4 +143,21 @@ final class ParagraphStyle
 
         return array_diff_key($style, array_flip(self::FONT_KEYS));
     }
+
+    /**
+     * The one key that turns a definition into a reference to a named style, and an
+     * empty array for one that names nothing.
+     *
+     * A paragraph that names a style says where its look comes from, which is what
+     * {@see \MarkdownWord\Reverse\StyleTable} reads to tell formatting the author
+     * typed from formatting the style already had.
+     *
+     * @return array{styleName?: string}
+     */
+    public static function styleNameOf(array|string|null $style): array
+    {
+        $name = is_array($style) ? ($style['styleName'] ?? null) : null;
+
+        return is_string($name) ? ['styleName' => $name] : [];
+    }
 }

@@ -59,6 +59,18 @@ decorative image:
 
 ![](assets/logo.png)
 
+## Images in a format Word has to be given a hand with
+
+The same renderer, on a `.webp`. Word cannot embed one and PHPWord has never added
+support, so this file is decoded with GD and written into the document as PNG. The
+conversion is reported rather than performed quietly — `mdword` prints a line for it,
+and `MarkdownToWord::pendingImageConversions()` has it afterwards.
+
+![A photograph, converted on the way in](assets/test_landscape.webp)
+
+An image this size embedded as PNG is several megabytes, which is the trade being
+made: the picture is there, and the file is bigger than the one that went in.
+
 ## Images that cannot be found
 
 The file does not exist, so rather than emitting a broken reference the renderer
@@ -70,3 +82,7 @@ The same happens for a remote URL, which cannot be fetched without a network
 client:
 
 ![A remote image](https://example.com/not-fetched.png)
+
+A file that *is* there and cannot be used is a different case: an SVG, or a truncated
+download. That one raises `Exception\UnsupportedImageFormat` rather than quietly
+replacing the picture with its caption — see `15-images.md`.

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Reverse;
 
+use DOMElement;
+
 /**
  * Resolves a paragraph's style name to the properties that style implies.
  *
@@ -11,6 +13,11 @@ namespace MarkdownWord\Reverse;
  * indentation lives in the style it references. Block quotes are the case that
  * matters: the outermost level inherits a half-inch indent from the style, so
  * without resolving it the nesting depth cannot be recovered at all.
+ *
+ * The character half is resolved for the same reason. A bold heading is bold
+ * because its style says so, and a run that repeats the style's own weight is not
+ * emphasis the author typed — reading it as `**` turns every heading of a document
+ * written by this library into `# **Heading**` on the way back.
  *
  * Properties are inherited through `w:basedOn`, and a paragraph's own direct
  * formatting wins over both, which is the precedence Word applies.
@@ -26,7 +33,7 @@ final class StyleTable
      */
     private array $styles = [];
 
-    /** @var array<string, array{indent: int, alignment: string}> */
+    /** @var array<string, array{indent: int, alignment: string, bold: bool, italic: bool, strike: bool}> */
     private array $resolved = [];
 
     /**
@@ -85,11 +92,36 @@ final class StyleTable
     }
 
     /**
+     * The weight, slant and strike-through a style contributes to every run in it.
+     *
+     * @return array{bold: bool, italic: bool, strike: bool}
+     */
+    public function emphasisOf(string $id): array
+    {
+        $resolved = $this->resolve($id);
+
+        return [
+            'bold' => $resolved['bold'],
+            'italic' => $resolved['italic'],
+            'strike' => $resolved['strike'],
+        ];
+    }
+
+    /** What a style contributes when it contributes nothing at all. */
+    private const NOTHING = [
+        'indent' => 0,
+        'alignment' => '',
+        'bold' => false,
+        'italic' => false,
+        'strike' => false,
+    ];
+
+    /**
      * The properties a style contributes, its own taking precedence over the ones
      * it inherits.
      *
      * @param int $depth How many styles of the chain have already contributed.
-     * @return array{indent: int, alignment: string}
+     * @return array{indent: int, alignment: string, bold: bool, italic: bool, strike: bool}
      */
     private function resolve(string $id, int $depth = 0): array
     {
@@ -110,7 +142,7 @@ final class StyleTable
             || $depth >= $this->maxStyleDepth
             || !isset($this->styles[$id])
         ) {
-            return ['indent' => 0, 'alignment' => ''];
+            return self::NOTHING;
         }
 
         $this->resolving[$id] = true;
@@ -121,15 +153,26 @@ final class StyleTable
             $xpath->registerNamespace('w', self::W_NS);
 
             $parent = $style->getElementsByTagNameNS(self::W_NS, 'basedOn')->item(0);
-            $inherited = $parent instanceof \DOMElement
-                ? $this->resolve($parent->getAttributeNS(self::W_NS, 'val'), $depth + 1)
-                : ['indent' => 0, 'alignment' => ''];
+            $parentId = $parent instanceof \DOMElement
+                ? $parent->getAttributeNS(self::W_NS, 'val')
+                : '';
+
+            // A style that names itself as its own parent keeps its own properties
+            // and takes nothing from the chain. `Writer\Word2007\Part\Styles` writes
+            // a Paragraph's own style name as the `w:basedOn` of the style it is
+            // building, so that is what documents this library wrote contain.
+            $inherited = $parentId === '' || $parentId === $id
+                ? self::NOTHING
+                : $this->resolve($parentId, $depth + 1);
 
             $own = $this->ownProperties($xpath, $style);
 
             return $this->resolved[$id] = [
                 'indent' => $own['indent'] ?? $inherited['indent'],
                 'alignment' => $own['alignment'] ?? $inherited['alignment'],
+                'bold' => $own['bold'] ?? $inherited['bold'],
+                'italic' => $own['italic'] ?? $inherited['italic'],
+                'strike' => $own['strike'] ?? $inherited['strike'],
             ];
         } finally {
             // The guard is about the path being walked, not about the style, so a
@@ -141,7 +184,7 @@ final class StyleTable
     }
 
     /**
-     * @return array{indent?: int, alignment?: string}
+     * @return array{indent?: int, alignment?: string, bold?: bool, italic?: bool, strike?: bool}
      */
     private function ownProperties(\DOMXPath $xpath, \DOMElement $style): array
     {
@@ -156,6 +199,20 @@ final class StyleTable
         $alignment = $xpath->query('./w:pPr/w:jc', $style)?->item(0);
         if ($alignment instanceof \DOMElement) {
             $properties['alignment'] = $alignment->getAttributeNS(self::W_NS, 'val');
+        }
+
+        // A toggle written as off is a decision, so it is recorded as one. One that
+        // is absent leaves the key out, and the inherited value stands.
+        foreach (['bold' => 'w:b', 'italic' => 'w:i', 'strike' => 'w:strike'] as $property => $name) {
+            $toggle = $xpath->query('./w:rPr/' . $name, $style)?->item(0);
+
+            if ($toggle instanceof DOMElement) {
+                $properties[$property] = !in_array(
+                    strtolower($toggle->getAttributeNS(self::W_NS, 'val')),
+                    ['0', 'false', 'off'],
+                    true,
+                );
+            }
         }
 
         return $properties;

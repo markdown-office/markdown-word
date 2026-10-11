@@ -40,4 +40,23 @@ final class ImageDescriptionCollector
 
         return $batch;
     }
+
+    /**
+     * Whether any image has been given alt text at all.
+     *
+     * A separate question from {@see self::take()}, which would consume the batch
+     * the description pass is about to be given. An image with no alt text in the
+     * Markdown has none to lose either, so a document of nothing but `![](x.png)`
+     * must not be reported as losing its alternative text.
+     */
+    public function anyDescribed(): bool
+    {
+        foreach ($this->descriptions as $description) {
+            if (trim($description) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

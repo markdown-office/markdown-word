@@ -90,9 +90,10 @@ it('headings become word heading styles', function () {
 it('headings reference word built in style ids', function () {
     $xml = TemplateFactory::xmlOf(reportDocument());
 
-    // Word resolves a `w:pStyle` against a styleId, not the display name, and
-    // only the built-in ids carry an outline level. Referring to "Heading 1"
-    // would leave the text unstyled and out of the navigation pane.
+    // Word resolves a `w:pStyle` against a styleId, not the display name, so the
+    // id is what goes in and the display name would leave the reference dangling.
+    // It is also the hook any index of the document reads; see the Note in
+    // `tests/Unit/look-and-feel.php` for what that does and does not amount to.
     expect($xml)->toContain('<w:pStyle w:val="Heading1"/>');
     expect($xml)->toContain('<w:pStyle w:val="Heading2"/>');
     expect($xml)->not->toContain('w:val="Heading 1"');

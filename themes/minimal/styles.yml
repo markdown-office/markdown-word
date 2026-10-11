@@ -1,0 +1,80 @@
+# Headings carry no colour and no weight of their own: the size and the space are the
+# only things separating one from the body, which is what a specification wants.
+#
+# What this file cannot say is "not this" — a slot merges into the built-in look rather
+# than replacing it, so `IntenseQuote` and the lower headings' bold are still underneath
+# what is written here, and a style id or an explicit `null` are the only ways to drop a
+# slot whole. The quote's colour and indent are therefore this theme's, on top of Word's
+# quote style rather than instead of it.
+#
+# `codeBlock: {shading: {fill: …}}` is what moves code off its grey panel; the built-in
+# look sets that panel from the `codeBlockShading` option, not from the slot.
+
+heading.1:
+  bold: false
+  size: 17
+  color: "000000"
+  space: { before: 320, after: 140 }
+  keepNext: true
+
+heading.2:
+  bold: false
+  size: 14
+  color: "000000"
+  space: { before: 260, after: 100 }
+  keepNext: true
+
+heading.3:
+  bold: false
+  size: 12
+  color: "000000"
+  space: { before: 200, after: 80 }
+  keepNext: true
+
+heading.4:
+  italic: true
+  size: 11
+  color: "000000"
+  space: { before: 160, after: 60 }
+  keepNext: true
+
+heading.5:
+  italic: true
+  size: 11
+  color: "000000"
+  space: { before: 140, after: 60 }
+  keepNext: true
+
+heading.6:
+  italic: true
+  size: 11
+  color: "000000"
+  space: { before: 140, after: 60 }
+  keepNext: true
+
+paragraph:
+  space: { after: 160 }
+  lineHeight: 1.3
+
+blockQuote:
+  italic: true
+  color: "3F3F3F"
+  indentation: { left: 480, right: 480 }
+  space: { before: 160, after: 160 }
+
+codeBlock:
+  indentation: { left: 0 }
+  space: { before: 0, after: 0 }
+  shading: { fill: FFFFFF }
+
+listParagraph:
+  space: { after: 80 }
+
+codeFont:
+  name: Consolas
+  size: 9
+  color: "000000"
+
+linkFont:
+  color: "000000"
+  underline: single

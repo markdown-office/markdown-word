@@ -1,5 +1,5 @@
 {
-    "name": "fabeat/markdown-word",
+    "name": "markdown-office/markdown-word",
     "description": "Pure PHP Markdown to Word (DOCX) generator and back, built on PHPWord. Full CommonMark and GitHub-Flavored Markdown support, configurable styling, Word template rendering, and a command line utility.",
     "type": "library",
     "keywords": [
@@ -18,21 +18,25 @@
     "license": "MIT",
     "authors": [
         {
-            "name": "Fabian Graßl",
+            "name": "Fabian Gra\u00dfl",
             "email": "mail@fabiangrassl.de"
         }
     ],
     "require": {
         "php": "^8.2",
-        "ext-zip": "*",
         "ext-dom": "*",
-        "ext-mbstring": "*",
         "ext-gd": "*",
+        "ext-mbstring": "*",
+        "ext-zip": "*",
+        "league/commonmark": "^2.10",
         "phpoffice/phpword": "^1.4",
-        "league/commonmark": "^2.10"
+        "symfony/yaml": "^7.4 || ^8.1"
     },
     "require-dev": {
         "pestphp/pest": "^5.0"
+    },
+    "suggest": {
+        "ext-imagick": "Embeds SVG as a vector. Word holds an SVG only beside a raster of it, so something has to draw the raster; without this an SVG raises instead of going in."
     },
     "autoload": {
         "psr-4": {
@@ -73,8 +77,5 @@
     },
     "bin": [
         "bin/mdword"
-    ],
-    "suggest": {
-        "symfony/yaml": "Lets CommonMarkParser::withAllExtensions() read YAML front matter. The `yaml` PHP extension does the same."
-    }
+    ]
 }

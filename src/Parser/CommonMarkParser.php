@@ -13,6 +13,7 @@ use League\CommonMark\Extension\DescriptionList\DescriptionListExtension;
 use League\CommonMark\Extension\DisallowedRawHtml\DisallowedRawHtmlExtension;
 use League\CommonMark\Extension\ExternalLink\ExternalLinkExtension;
 use League\CommonMark\Extension\Footnote\FootnoteExtension;
+use League\CommonMark\Extension\FrontMatter\Data\SymfonyYamlFrontMatterParser;
 use League\CommonMark\Extension\FrontMatter\FrontMatterExtension;
 use League\CommonMark\Extension\GithubFlavoredMarkdownExtension;
 use League\CommonMark\Extension\HeadingPermalink\HeadingPermalinkExtension;
@@ -119,9 +120,26 @@ final class CommonMarkParser implements MarkdownParserInterface
         $environment->addExtension(new CommonMarkCoreExtension());
 
         foreach ($this->extensions as $extension) {
-            $environment->addExtension(new $extension());
+            $environment->addExtension($extension === FrontMatterExtension::class
+                ? self::frontMatter()
+                : new $extension());
         }
 
         return (new MarkdownParser($environment))->parse($markdown);
+    }
+
+    /**
+     * Front matter, read by symfony/yaml.
+     *
+     * Given no parser, `FrontMatterExtension` takes libyaml wherever `ext-yaml`
+     * is loaded and falls back to symfony/yaml only where it is not, so the same
+     * block reads differently on a CI runner and on a checkout. The two disagree
+     * about values and not merely about types: `color: 000000` is the string
+     * `000000` under symfony/yaml and the integer `0` under libyaml, which is the
+     * difference between a black heading and a document refused as malformed.
+     */
+    private static function frontMatter(): FrontMatterExtension
+    {
+        return new FrontMatterExtension(new SymfonyYamlFrontMatterParser());
     }
 }

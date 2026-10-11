@@ -169,6 +169,32 @@ const PRUNED_FILE_EXCEPTIONS = [
 ];
 
 /**
+ * Matched on a file's own name, at any depth below the staged `app/` tree.
+ *
+ * These are the ones a developer's machine leaves in a working copy and `cp -R`
+ * copies verbatim, so the archive depends on whose machine built it: `.DS_Store`
+ * records the directory's contents and Finder rewrites it as they change, and a
+ * zip is only reproducible while its members are. None of them is ours, so
+ * nothing can depend on one being there.
+ */
+const STRAY_FILES = [
+    '.DS_Store',
+    'Thumbs.db',
+    'desktop.ini',
+];
+
+/**
+ * Matched on a directory's own name, at any depth below the staged `app/` tree.
+ *
+ * Separate from {@see STRAY_FILES} because a name list cannot reach them: what a
+ * zip tool writes into `__MACOSX` is a copy of each file under a name of its own
+ * choosing, so nothing about the file says where it belongs.
+ */
+const STRAY_DIRECTORIES = [
+    '__MACOSX',
+];
+
+/**
  * Reports what it removed rather than what it was asked to remove, because a
  * pattern that quietly matched something a package needed at runtime would
  * otherwise show up as a broken archive — or, worse, not at all.
@@ -290,13 +316,16 @@ function resolveEpoch(string $root): int
 
     $inputs = ['composer.json', 'composer.lock', 'README.md', 'LICENSE', 'tools/build-phar.php'];
 
-    foreach (['src', 'bin'] as $directory) {
+    foreach (['src', 'bin', 'themes'] as $directory) {
         $files = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($root . '/' . $directory, FilesystemIterator::SKIP_DOTS),
         );
 
         foreach ($files as $file) {
-            if ($file->isFile()) {
+            $stray = in_array($file->getFilename(), STRAY_FILES, true)
+                || ($file->isDir() && in_array($file->getFilename(), STRAY_DIRECTORIES, true));
+
+            if ($file->isFile() && !$stray) {
                 $inputs[] = substr((string) $file->getPathname(), strlen($root) + 1);
             }
         }
@@ -371,8 +400,8 @@ function dataStart(string $raw): int
  * The manifest comes before the file contents, which follow it in manifest
  * order, and its first four bytes are the length of the rest of it. So the length
  * is both how the end is found and the check that the walk below read it
- * correctly: entries that do not add up to it mean this PHP wrote a layout this
- * does not understand, and the build stops rather than guess.
+ * correctly: a length the entries do not account for means this PHP wrote a
+ * layout this does not understand, and the build stops rather than guess.
  *
  * @return array{timestamps: list<array{offset: int, name: string}>, end: int, metadata: string}
  */
@@ -405,12 +434,25 @@ function readManifest(string $raw): array
         $offset += readUint32($raw, $offset); // per-file metadata
     }
 
-    if ($offset !== $end) {
+    $walked = $offset - $start;
+
+    // PHP pads the manifest with one byte, and counts that byte in the length it
+    // wrote, whenever that length ends in `\r` or `\n` — a reader that took either
+    // for the end of a manifest string would stop early (php-src bug #65028,
+    // `phar_flush_ex()`). The byte it pads with is the first byte of the buffer
+    // the metadata length was written from, which nothing writes over again
+    // before the padding goes out, so it is the low byte of that length. The byte
+    // is checked as well as the arithmetic because a spare byte at the end is also
+    // what a walk that read the layout wrongly would leave behind, and this is
+    // the one place that tells the two apart.
+    $padding = in_array($walked & 0xFF, [0x0A, 0x0D], true) ? chr(strlen($metadata) & 0xFF) : '';
+
+    if ($walked + strlen($padding) !== $length || substr($raw, $offset, strlen($padding)) !== $padding) {
         throw new RuntimeException(sprintf(
             'the manifest says it is %d bytes and reading it consumed %d, so this build does not'
             . ' recognise the archive layout this PHP wrote and will not rewrite it',
             $length,
-            $offset - $start,
+            $walked,
         ));
     }
 
@@ -603,7 +645,60 @@ fwrite(STDOUT, "\n  Application\n");
 
 copyInto($root . '/src', $app);
 copyInto($root . '/bin', $app);
+
+// The themes ship in the archive because that is the only place a theme can be
+// found from inside one: `ThemeResolver` looks in `dirname(__DIR__, 2) . '/themes'`,
+// which from `app/src/Theme/` is `app/themes` in the archive and the project's own
+// `themes/` in a checkout, so the staging directory has to hold them under that
+// exact name.
+copyInto($root . '/themes', $app);
 copyInto($deps . '/vendor', $app);
+
+// Across everything copied above rather than beside each `copyInto`: `cp -R` is
+// what brings them in, so the filter belongs where the tree is complete, and a
+// later copy cannot reintroduce one the first pass removed.
+$strays = [];
+
+foreach (
+    new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($app, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST,
+    ) as $file
+) {
+    $relative = substr((string) $file->getPathname(), strlen($app) + 1);
+
+    if ($file->isDir() && in_array($file->getFilename(), STRAY_DIRECTORIES, true)) {
+        $strays[] = $relative . '/';
+
+        continue;
+    }
+
+    if ($file->isFile() && in_array($file->getFilename(), STRAY_FILES, true)) {
+        $strays[] = $relative;
+    }
+}
+
+// Removed once the walk is over rather than as each one is found: the iterator
+// descends into a directory it has already yielded, so removing one there
+// fails the walk on the directory that is already gone.
+foreach ($strays as $stray) {
+    $path = $app . '/' . $stray;
+
+    if (str_ends_with($stray, '/')) {
+        exec(sprintf('rm -rf %s', escapeshellarg($path)));
+    } elseif (is_file($path)) {
+        unlink($path);
+    }
+}
+
+if ($strays !== []) {
+    fwrite(STDOUT, sprintf(
+        "  %-44s%d (%s)\n",
+        'dropping files a machine left behind',
+        count($strays),
+        implode(', ', $strays),
+    ));
+}
 
 foreach (['LICENSE.md', 'LICENSE', 'README.md'] as $document) {
     if (is_file($root . '/' . $document)) {

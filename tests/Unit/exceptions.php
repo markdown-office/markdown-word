@@ -15,8 +15,10 @@ use MarkdownWord\Reverse\Package;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\WordToMarkdown;
+use MarkdownWord\Writer\HyperlinkPass;
 use MarkdownWord\Writer\ImageDescriptionPass;
 use MarkdownWord\Writer\NumberingMerger;
+use MarkdownWord\Writer\OdfHyperlinkPass;
 use PhpOffice\PhpWord\Element\AbstractElement;
 use PhpOffice\PhpWord\PhpWord;
 
@@ -151,6 +153,47 @@ it('reports a document the image pass cannot parse', function () {
 
     expect(fn () => $pass->applyTo(documentWithBrokenXml('image-broken.docx')))
         ->toThrow(MalformedDocument::class, 'is not valid XML');
+});
+
+it('reports an archive the ODF link pass cannot open', function () {
+    // The two ODT passes and the two OOXML passes were written together, and only
+    // the ODT link one was left throwing a bare RuntimeException — so a caller
+    // catching the type every other one of them raises caught nothing here.
+    expect(fn () => (new OdfHyperlinkPass([]))->applyTo(notAnArchive('not.odt')))
+        ->toThrow(UnreadableDocument::class, 'as a zip archive');
+});
+
+it('reports an ODF document with no content.xml in it', function () {
+    // Opens, and the part this pass exists to rewrite is not in it. A caller
+    // catching `UnreadableDocument` for both gets this one through it, and has to
+    // be able to read which of the two happened from the message.
+    expect(fn () => (new OdfHyperlinkPass([]))->applyTo(archiveWithoutADocument('empty.odt')))
+        ->toThrow(MalformedDocument::class, 'missing content.xml');
+});
+
+it('tells the two failures apart the same way for a .docx as for an .odt', function () {
+    // The docx pass is the older of the two and answered both with a bare
+    // RuntimeException, which is no type a caller can catch: it is not an
+    // `MarkdownWord\Exception\Exception`, so `catch (Exception $e)` around a
+    // conversion missed it. Both are still `RuntimeException`s, so anything
+    // catching that keeps working.
+    $expectations = [
+        fn () => (new HyperlinkPass([]))->applyTo(notAnArchive('not-links.docx')),
+        fn () => (new OdfHyperlinkPass([]))->applyTo(notAnArchive('not-links.odt')),
+    ];
+
+    foreach ($expectations as $apply) {
+        expect($apply)->toThrow(UnreadableDocument::class, 'as a zip archive');
+    }
+
+    $expectations = [
+        fn () => (new HyperlinkPass([]))->applyTo(archiveWithoutADocument('no-parts.docx')),
+        fn () => (new OdfHyperlinkPass([]))->applyTo(archiveWithoutADocument('no-parts.odt')),
+    ];
+
+    foreach ($expectations as $apply) {
+        expect($apply)->toThrow(MalformedDocument::class, 'The document is missing');
+    }
 });
 
 it('reports an element the dependency has no writer for', function () {

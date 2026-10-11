@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Writer;
 
+use MarkdownWord\Exception\MalformedDocument;
+use MarkdownWord\Exception\UnreadableDocument;
 use MarkdownWord\Xml;
 
 use MarkdownWord\Render\LinkPlaceholder;
@@ -16,6 +18,11 @@ use ZipArchive;
  *
  * The rewrite goes through `DOMDocument` rather than string replacement, so
  * document content that happens to look like a placeholder cannot confuse it.
+ *
+ * The two failures are told apart the way {@see UnreadableDocument} and
+ * {@see MalformedDocument} are: a file that is not a zip is not a document at all,
+ * and one that opens without the parts a document must have is a broken one.
+ * {@see OdfHyperlinkPass} answers the same two questions the same way.
  */
 final class HyperlinkPass
 {
@@ -37,7 +44,7 @@ final class HyperlinkPass
         $zip = new ZipArchive();
 
         if ($zip->open($docxPath) !== true) {
-            throw new \RuntimeException(sprintf('Unable to open "%s" as a zip archive.', $docxPath));
+            throw new UnreadableDocument(sprintf('Unable to open "%s" as a zip archive.', $docxPath));
         }
 
         try {
@@ -45,7 +52,7 @@ final class HyperlinkPass
             $rels = $zip->getFromName(self::RELS_PATH);
 
             if ($document === false || $rels === false) {
-                throw new \RuntimeException('The document is missing word/document.xml or its relationship part.');
+                throw new MalformedDocument('The document is missing word/document.xml or its relationship part.');
             }
 
             $nextId = $this->nextRelationshipId($rels);

@@ -284,6 +284,39 @@ it('renders into a template region and substitutes values', function () {
     expect($text)->not->toContain('${slot}');
 });
 
+it('draws a template in the theme the command line named', function () {
+    $markdown = "## Overview\n\nRevenue **grew**.\n";
+    $argv = ['to-docx', '-', '--template', TemplateFactory::report(), '--region', 'summary'];
+
+    $themed = Scratch::path('with-theme');
+    expect(runCli([...$argv, '--theme', 'minimal', '-o', $themed], $markdown)['code'])->toBe(0);
+
+    $plain = Scratch::path('without-theme');
+    expect(runCli([...$argv, '-o', $plain], $markdown)['code'])->toBe(0);
+
+    // `minimal` is about headings carrying no colour and no weight of their own, so the
+    // markup it produces has to differ from the built-in look. A theme name that never
+    // reached the template would render both documents identically and still exit zero.
+    expect(TemplateFactory::xmlOf($themed))->not->toBe(TemplateFactory::xmlOf($plain));
+    expect(TemplateFactory::textOf($themed))->toContain('Overview');
+});
+
+it('resolves the named theme on the template path, and says so when it cannot', function () {
+    $run = runCli([
+        'to-docx', '-',
+        '--template', TemplateFactory::report(),
+        '--region', 'summary',
+        '--theme', 'no-such-theme',
+        '-o', Scratch::path('never'),
+    ], '# X');
+
+    // `--theme` resolving on the plain path but not on the template one would make the
+    // flag quietly do nothing for anyone using `--template`, which no amount of passing
+    // the name along would show.
+    expect($run['code'])->toBe(Application::FAILURE);
+    expect($run['err'])->toContain('no-such-theme');
+});
+
 it('says which regions a template does have when the named one is missing', function () {
     $run = runCli([
         'to-docx', '-',

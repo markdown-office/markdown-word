@@ -103,6 +103,24 @@ it('table can use a named word table style', function () {
     expect($table->getStyle())->toBe('Grid Table 4 - Accent 1');
 });
 
+it('keeps the ruled table when a definition names only the border colour', function () {
+    // Found by rendering the shipped themes, not by reading the markup: a theme saying
+    // `table: {borderColor: …}` is saying "the usual table, in another colour", and
+    // `borderColor` sets the colour of rules that have to be asked for separately. Handed
+    // to PHPWord on its own it produced a table with no rules at all, because the
+    // definition replaced the default rather than merging over it.
+    $config = Configuration::create()->withStyles([
+        Styles::TABLE => ['borderColor' => '2E5395'],
+    ]);
+
+    $table = renderElements(SIMPLE . "\n", $config)[0];
+    $style = $table->getStyle();
+
+    expect($style->getBorderColor())->toBe(array_fill(0, 6, '2E5395'))
+        ->and($style->getBorderSize())->toBe(array_fill(0, 6, 6))
+        ->and($style->getCellMargin())->toBe(array_fill(0, 4, 80));
+});
+
 it('cell style applies to every cell', function () {
     $config = Configuration::create()->withStyles([
         Styles::TABLE_CELL => ['alignment' => ['horizontal' => 'center']],

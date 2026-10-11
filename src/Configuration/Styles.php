@@ -10,10 +10,12 @@ namespace MarkdownWord\Configuration;
  * `bulletList`), which holds either a **styleId**, an inline style definition as
  * an array, or `null` for no styling.
  *
- * A styleId has no spaces even though the style's display name in the Word UI
- * does: the built-in heading styles are `Heading1`…`Heading6`, not
- * `Heading 1`. Because the slots are plain names, pointing the renderer at the
- * styleIds of a template of your own is a configuration change rather than a
+ * The defaults are {@see LookAndFeel}'s: properties rather than styleIds, so a
+ * document that configures nothing is written with direct formatting and looks the
+ * same whichever writer writes it. A styleId has no spaces even though the style's
+ * display name in the Word UI does — the built-in heading styles are `Heading1`…`Heading6`,
+ * not `Heading 1` — and because the slots are plain names, pointing the renderer at
+ * the styleIds of a template of your own is a configuration change rather than a
  * change to the code.
  */
 final class Styles
@@ -49,11 +51,98 @@ final class Styles
     private array $slots;
 
     /**
+     * @var list<string> The slots a caller wrote, in the order they wrote them.
+     */
+    private array $written = [];
+
+    /**
+     * The keys a *font or paragraph* slot's array form understands.
+     *
+     * {@see \MarkdownWord\Render\StyleRegistrar} maps each of these onto a `set<Key>()`
+     * on PHPWord's font and paragraph styles and ignores anything else, so this is the
+     * list of names that can be written rather than the list of names that are read.
+     * Both live here because a key added to one and not the other is a key that is
+     * silently dropped.
+     *
+     * The table slots are not on this list and never were: `table`, `tableCell` and
+     * `tableHeaderRow` are handed a `Table`, a `Cell` and a `Row`, each with names of
+     * its own — `borderColor`, `vAlign`, `tblHeader`. {@see \MarkdownWord\Configuration\Validator}
+     * reads those three sets off the classes, which is where the two kinds of slot are
+     * told apart.
+     */
+    public const FONT_KEYS = ['name', 'size', 'color', 'bold', 'italic', 'strikethrough', 'underline'];
+
+    /**
+     * `styleName` and `lineHeight` are here because {@see LookAndFeel} writes with
+     * them: a heading's `styleName` is what a template's own `Heading1` has to be
+     * called for the template's look to apply, and PHPWord dispatches it to the
+     * same `setStyleName()` as anything else in the array. A body's `lineHeight`
+     * reaches `w:spacing w:line`, `fo:line-height` and `\sl`, which are the three
+     * ways of saying it.
+     */
+    public const PARAGRAPH_KEYS = ['indentation', 'space', 'shading', 'keepNext', 'alignment', 'styleName', 'lineHeight'];
+
+    /**
+     * Slot overrides, merged over {@see self::defaults()}.
+     *
+     * A slot whose new value is an array is merged into the array already there rather than
+     * replacing it, which is what makes `heading.1: {color: 8B0000}` mean "that heading, in
+     * that colour" rather than "a heading that is nothing but that colour": naming the one
+     * property a reader wants changed must not cost the heading its Word style, its size,
+     * its weight and its spacing, because a `.docx` heading that has lost `Heading1` is
+     * body text that happens to be large.
+     *
+     * A string style id and a `null` are whole-slot statements and replace whatever was
+     * there — naming a style id means "use that style", and `null` means "no styling".
+     *
      * @param array<string, mixed> $slots Slot overrides merged over the defaults.
      */
     public function __construct(array $slots = [])
     {
-        $this->slots = array_merge(self::defaults(), $slots);
+        $this->slots = array_replace_recursive(self::defaults(), $slots);
+        $this->written = $slots;
+    }
+
+    /**
+     * Every slot override as it was written, merged together across every `with*()` call.
+     *
+     * Not {@see self::toArray()}, which reports the state of every slot whether anybody
+     * touched it or not. What a theme has to be able to do is put back exactly what the
+     * caller wrote and nothing else: re-applying the merged value would carry the built-in
+     * look's size and spacing over the theme's, which is the theme being overwritten by
+     * the thing it was supposed to be underneath.
+     *
+     * Not preserved by {@see self::toArray()}, which reports values and not provenance: a
+     * round trip through an array says every slot was written, because a plain array has
+     * nowhere to record that one of them was not.
+     *
+     * @return array<string, mixed>
+     */
+    public function written(): array
+    {
+        return $this->written;
+    }
+
+    /**
+     * These values, but recorded as what the caller wrote rather than as what this
+     * {@see self} was built from.
+     *
+     * The distinction exists for {@see \MarkdownWord\Configuration::withTheme()}, which
+     * lays a theme down underneath and has to keep the caller's own slots recorded as the
+     * caller's. Without it a theme's slots would be indistinguishable from the caller's,
+     * and a second `withTheme()` would re-apply the first theme over the second — a
+     * splice of the two rather than a replacement.
+     *
+     * @param array<string, mixed> $written
+     *
+     * @return self
+     */
+    public function withProvenance(array $written): self
+    {
+        $merged = clone $this;
+        $merged->written = $written;
+
+        return $merged;
     }
 
     /**
@@ -62,33 +151,18 @@ final class Styles
     public static function defaults(): array
     {
         return [
-            // The styleIds of the built-in Word styles, which is what Word
-            // resolves a `w:pStyle` against. Using the display names ("Heading
-            // 1") would leave the text unstyled.
-            self::HEADING_1 => 'Heading1',
-            self::HEADING_2 => 'Heading2',
-            self::HEADING_3 => 'Heading3',
-            self::HEADING_4 => 'Heading4',
-            self::HEADING_5 => 'Heading5',
-            self::HEADING_6 => 'Heading6',
-            self::PARAGRAPH => null,
-            self::BLOCK_QUOTE => 'IntenseQuote',
-            self::CODE_BLOCK => null,
+            ...LookAndFeel::slots(),
+
             self::THEMATIC_BREAK => null,
             self::HTML_FALLBACK => null,
-            self::LIST_PARAGRAPH => null,
 
-            self::CODE_FONT => [
-                'name' => 'Consolas',
-                'size' => 9,
-                'color' => 'A31515',
-            ],
-            self::LINK_FONT => [
-                'color' => '0563C1',
-                'underline' => 'single',
-            ],
-
-            // Numbering style names, created on demand by the renderer.
+            // Numbering style names, created on demand by the renderer. What the name buys
+            // depends on the format: an `.odt` writes it as the `text:list-style` its lists
+            // refer to, so naming a different one there is readable in the file. A `.docx`
+            // does not carry it — PHPWord's Word writer emits `w:abstractNum` and
+            // `w:abstractNumId` and never a `w:name`, so the numbering is reached by id.
+            // Either way it is a label: a bullet character is not configurable through this
+            // slot — see the README.
             self::BULLET_LIST => 'MarkdownWord-Bullet',
             self::ORDERED_LIST => 'MarkdownWord-Ordered',
 
@@ -132,15 +206,26 @@ final class Styles
 
     public function with(string $slot, mixed $style): self
     {
-        return new self([$slot => $style] + $this->slots);
+        return $this->withAll([$slot => $style]);
     }
 
     /**
+     * Slot overrides merged into the ones already here.
+     *
+     * A copy rather than a new {@see self} over the defaults, because the defaults are not
+     * what is being merged into: {@see $this} may already hold a theme's styles or a config
+     * file's, and re-merging those over the defaults would drop the layer they came from
+     * wherever a slot names something other than an array.
+     *
      * @param array<string, mixed> $slots
      */
     public function withAll(array $slots): self
     {
-        return new self($slots + $this->slots);
+        $merged = clone $this;
+        $merged->slots = array_replace_recursive($this->slots, $slots);
+        $merged->written = array_replace_recursive($this->written, $slots);
+
+        return $merged;
     }
 
     /**

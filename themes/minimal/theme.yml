@@ -1,0 +1,9 @@
+# One ink and as little furniture as a document can carry and still be readable:
+# headings in the body's own colour, code on the page rather than in a panel, and the
+# quote told apart by its indent and its italic.
+#
+# For a document whose content is the point, where anything that reads as decoration
+# costs the reader.
+name: Minimal
+description: Monochrome and quiet. Headings in the ink, code on the page, no colour anywhere.
+author: markdown-office

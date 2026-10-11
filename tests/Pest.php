@@ -101,6 +101,7 @@ function paragraphStyleOf(AbstractElement $element): array|string|null
     $set = [];
 
     foreach ([
+        'styleName' => 'getStyleName',
         'alignment' => 'getAlignment',
         'indentation' => 'getIndentation',
         'shading' => 'getShading',
