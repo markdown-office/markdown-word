@@ -169,6 +169,32 @@ const PRUNED_FILE_EXCEPTIONS = [
 ];
 
 /**
+ * Matched on a file's own name, at any depth below the staged `app/` tree.
+ *
+ * These are the ones a developer's machine leaves in a working copy and `cp -R`
+ * copies verbatim, so the archive depends on whose machine built it: `.DS_Store`
+ * records the directory's contents and Finder rewrites it as they change, and a
+ * zip is only reproducible while its members are. None of them is ours, so
+ * nothing can depend on one being there.
+ */
+const STRAY_FILES = [
+    '.DS_Store',
+    'Thumbs.db',
+    'desktop.ini',
+];
+
+/**
+ * Matched on a directory's own name, at any depth below the staged `app/` tree.
+ *
+ * Separate from {@see STRAY_FILES} because a name list cannot reach them: what a
+ * zip tool writes into `__MACOSX` is a copy of each file under a name of its own
+ * choosing, so nothing about the file says where it belongs.
+ */
+const STRAY_DIRECTORIES = [
+    '__MACOSX',
+];
+
+/**
  * Reports what it removed rather than what it was asked to remove, because a
  * pattern that quietly matched something a package needed at runtime would
  * otherwise show up as a broken archive — or, worse, not at all.
@@ -296,7 +322,10 @@ function resolveEpoch(string $root): int
         );
 
         foreach ($files as $file) {
-            if ($file->isFile()) {
+            $stray = in_array($file->getFilename(), STRAY_FILES, true)
+                || ($file->isDir() && in_array($file->getFilename(), STRAY_DIRECTORIES, true));
+
+            if ($file->isFile() && !$stray) {
                 $inputs[] = substr((string) $file->getPathname(), strlen($root) + 1);
             }
         }
@@ -624,6 +653,52 @@ copyInto($root . '/bin', $app);
 // exact name.
 copyInto($root . '/themes', $app);
 copyInto($deps . '/vendor', $app);
+
+// Across everything copied above rather than beside each `copyInto`: `cp -R` is
+// what brings them in, so the filter belongs where the tree is complete, and a
+// later copy cannot reintroduce one the first pass removed.
+$strays = [];
+
+foreach (
+    new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($app, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST,
+    ) as $file
+) {
+    $relative = substr((string) $file->getPathname(), strlen($app) + 1);
+
+    if ($file->isDir() && in_array($file->getFilename(), STRAY_DIRECTORIES, true)) {
+        $strays[] = $relative . '/';
+
+        continue;
+    }
+
+    if ($file->isFile() && in_array($file->getFilename(), STRAY_FILES, true)) {
+        $strays[] = $relative;
+    }
+}
+
+// Removed once the walk is over rather than as each one is found: the iterator
+// descends into a directory it has already yielded, so removing one there
+// fails the walk on the directory that is already gone.
+foreach ($strays as $stray) {
+    $path = $app . '/' . $stray;
+
+    if (str_ends_with($stray, '/')) {
+        exec(sprintf('rm -rf %s', escapeshellarg($path)));
+    } elseif (is_file($path)) {
+        unlink($path);
+    }
+}
+
+if ($strays !== []) {
+    fwrite(STDOUT, sprintf(
+        "  %-44s%d (%s)\n",
+        'dropping files a machine left behind',
+        count($strays),
+        implode(', ', $strays),
+    ));
+}
 
 foreach (['LICENSE.md', 'LICENSE', 'README.md'] as $document) {
     if (is_file($root . '/' . $document)) {
