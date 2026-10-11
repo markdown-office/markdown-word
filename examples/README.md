@@ -27,6 +27,8 @@ it, the format goes into the preview's name as well.
 | `11-frontmatter.docx` | A `---` block read as configuration: the heading sizes, the code and link fonts and the table borders all come out of it. |
 | `12-frontmatter-none.docx` | The same Markdown with no block, for the pair. |
 | `13-frontmatter-override.docx` | The same block, outranked by the configuration passed in code. |
+| `21-dotx-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the template that is a template](#the-template-that-is-a-template). |
+| `21-dotx-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |
 | `15-images-embed.docx` | Images, embedded: relative paths resolved through `imageBasePath`, `imageMaxWidth`, a WebP converted into the document, and the alt-text fallback. |
 | `15-images-placeholder.docx` | The same source with `images: placeholder` — the alt text, then the path. |
 | `15-images-skip.docx` | The same source with `images: skip` — no pictures and no captions. |
@@ -326,6 +328,43 @@ macros keep their plain names — the renderer adds the `#1`, `#2` index.
 One trap if you build templates in code rather than in Word: PHPWord's second
 argument to `addText()` is a *character* style. A paragraph style goes in the
 third, or Word will ignore it.
+
+## The template that is a template
+
+`build.php` also builds `out/template-report.dotx` and renders the same Markdown
+into it twice — once through the `.dotx`, once through an identical `.docx`:
+
+| | |
+| --- | --- |
+| `21-dotx-report.docx` | rendered through `template-report.dotx` |
+| `21-dotx-report.docx-template.docx` | rendered through `template-report.docx` |
+
+Open them side by side. The words, the styles and the layout are identical,
+because which kind of template it is makes no difference to the result. What it
+does change is what the result *is*: both are documents. A `.dotx` and a `.docx`
+differ by one line of `[Content_Types].xml`, and Word opens a package typed as a
+template by creating a *new* document from it — so a filled-in template that kept
+its own type is not a document, whatever it was saved as.
+
+It is a report for a fictional consultancy, because a template that drives the
+body is only visible when there is a body worth looking at. The template defines
+`MrdHeading1`…`MrdHeading3`, `MrdBody`, `MrdQuote`, `MrdCode` and `MrdCodeBlock`,
+and the configuration points the Markdown slots at those names — so the Georgia
+and the navy are the template's, not the renderer's.
+
+Two more traps in it, both found by rendering the page and looking at it:
+
+- **`addParagraphStyle()` and `addFontStyle()` each write half a paragraph
+  style.** The first carries the run properties and drops the paragraph ones, the
+  second does the reverse, and a style defined with only one of them resolves to
+  almost nothing. `addFontStyle($id, $fontProperties, $paragraphProperties)`
+  writes both — and the third argument has to be an *array*. A built
+  `new Paragraph([...])` is accepted and quietly applies none of it.
+- **PHPWord will not write a paragraph border into a style at all**, in any
+  spelling, and `Configuration\Styles` has no border among the paragraph
+  properties it understands. `ruleStyles()` writes the `<w:pBdr>` itself, in the
+  place inside `<w:pPr>` that OOXML's sequence requires — `w:pBdr` comes before
+  `w:spacing` and `w:ind`, and Word refuses a part that is out of order.
 
 ## The house style
 

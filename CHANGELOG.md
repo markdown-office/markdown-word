@@ -43,6 +43,21 @@ All notable changes to this project are documented here. The format follows
   where it was written from — a document in `docs/` naming a template one directory
   up is inside the working directory and is a template, not an escape.
 
+### Fixed
+
+- **A `codeFont` given as a style *name* never reached a code block.** A template
+  supplies its typeface as a name — `codeFont: CorpCode` — and PHPWord puts a
+  string style on a run as an `rStyle` reference, which is the only way a name
+  reaches a run at all. An inline code span took the name straight through and
+  worked. A code block merged it with the font half of its own `codeBlock` slot,
+  and merging required an array: casting the name gave `['CorpCode']`, whose key
+  `0` is not a property, so PHPWord wrote an empty `<w:rPr/>` and dropped it.
+
+  Every code block rendered through a template came out in the body typeface,
+  which is the one thing a template is asked to change. Found by rendering
+  `examples/out/21-dotx-report.png` and looking at it — no text-level assertion
+  could have seen it, because the words were exactly where they should be.
+
 ### Changed
 
 - **A built-in Look & Feel, written as direct formatting.** Every style slot now
