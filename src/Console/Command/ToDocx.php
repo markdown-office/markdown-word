@@ -9,7 +9,10 @@ use MarkdownWord\Configuration\Options;
 use MarkdownWord\Console\Application;
 use MarkdownWord\Console\CommandLine;
 use MarkdownWord\Console\ConsoleException;
+use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Format;
+use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Template\TemplateFile;
 use MarkdownWord\WordPackage;
 use ZipArchive;
 
@@ -52,7 +55,12 @@ class ToDocx extends BaseCommand
 
         $overrides = $this->typedConfiguration($command);
 
-        $template = $command->value('template');
+        // `--template` outranks the document's own `template_file:`, in the order the
+        // precedence table gives: the file is what the author wrote, the flag is them
+        // saying it louder. Read only when the flag is absent, so naming a template
+        // that cannot be read is a mistake of the flag's rather than the block's.
+        $template = $command->value('template')
+            ?? $this->templateFromFrontmatter($markdown, $input);
 
         $theme = $command->value('theme');
 
@@ -290,6 +298,37 @@ class ToDocx extends BaseCommand
         }
 
         return (int) $width;
+    }
+
+    /**
+     * The template a document names in its own `---` block, resolved, or null.
+ *
+ * Read from the Markdown rather than from the block's text, so there is one YAML
+ * parser in the process and a block that fails to parse fails in one place. The
+ * block is stripped by the extension either way, so the Markdown that reaches the
+ * template carries no frontmatter — the same contract as every other run.
+ *
+ * A `template_file:` is a path a document writes, so it is held to
+ * {@see \MarkdownWord\Filesystem\PathScope} for the same reason a `theme:` is: the
+ * document did not have to be trying, and one written by a model from a file it was
+ * given is enough.
+ *
+ * @throws \MarkdownWord\Exception\TemplateNotFound when the name is not a template
+ *         this run may read.
+ */
+private function templateFromFrontmatter(string $markdown, ?string $input): ?string
+    {
+        $document = CommonMarkParser::withAllExtensions()->parse($markdown);
+        $written = Frontmatter::fromDocument($document, $markdown)->templateFile();
+
+        if ($written === null) {
+            return null;
+        }
+
+        return (new TemplateFile(
+            Application::directoryOf($input),
+            workingDirectory: getcwd() ?: '.',
+        ))->resolve($written);
     }
 
     private function rejectWithoutTemplate(CommandLine $command): void

@@ -132,10 +132,17 @@ final class TemplateFactory
      * @param string $mainPart The name the body part is given inside the archive.
      *        `document22.xml` is what documents from Word Online carry, and it is the
      *        case a lookup that assumes `document.xml` gets wrong.
+     * @param string $source The template to convert; the default is the plain
+     *        `${body}` region, and {@see self::report()} is the one carrying text of
+     *        its own — which is what lets a test tell a document rendered into a
+     *        template from the same Markdown rendered into nothing.
      */
-    public static function dotx(string $mainPart = 'document.xml', string $name = 'dotx'): string
-    {
-        $source = self::placeholder();
+    public static function dotx(
+        string $mainPart = 'document.xml',
+        string $name = 'dotx',
+        ?string $source = null,
+    ): string {
+        $source ??= self::placeholder();
         $path = Scratch::path($name . '-' . $mainPart . '.dotx');
 
         $zip = new ZipArchive();
