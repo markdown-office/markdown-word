@@ -6,7 +6,6 @@ namespace MarkdownWord\Template;
 
 use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\WordPackage;
-use Throwable;
 use ZipArchive;
 
 /**
@@ -143,33 +142,34 @@ final class TemplatePackage
             ));
         }
 
-        try {
-            if (!copy($template, $temporary)) {
-                throw new FileNotWritable(sprintf('Unable to copy the template "%s".', $template));
-            }
-
-            $zip = new ZipArchive();
-
-            if ($zip->open($temporary) !== true) {
-                throw new FileNotWritable(sprintf(
-                    'The template "%s" could not be opened. A Word template is a zip archive.',
-                    $template,
-                ));
-            }
-
-            try {
-                $zip->deleteName(WordPackage::CONTENT_TYPES);
-                $zip->addFromString(
-                    WordPackage::CONTENT_TYPES,
-                    str_replace(WordPackage::TEMPLATE_MAIN, WordPackage::DOCUMENT_MAIN, $declared),
-                );
-            } finally {
-                $zip->close();
-            }
-        } catch (Throwable $failure) {
+        // Each step that can fail removes the file it made before saying so, rather
+        // than leaving a half-written copy of somebody else's template in the
+        // temporary directory for something to find later.
+        if (!copy($template, $temporary)) {
             @unlink($temporary);
 
-            throw $failure;
+            throw new FileNotWritable(sprintf('Unable to copy the template "%s".', $template));
+        }
+
+        $zip = new ZipArchive();
+
+        if ($zip->open($temporary) !== true) {
+            @unlink($temporary);
+
+            throw new FileNotWritable(sprintf(
+                'The template "%s" could not be opened. A Word template is a zip archive.',
+                $template,
+            ));
+        }
+
+        try {
+            $zip->deleteName(WordPackage::CONTENT_TYPES);
+            $zip->addFromString(
+                WordPackage::CONTENT_TYPES,
+                str_replace(WordPackage::TEMPLATE_MAIN, WordPackage::DOCUMENT_MAIN, $declared),
+            );
+        } finally {
+            $zip->close();
         }
 
         return $temporary;

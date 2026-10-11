@@ -155,6 +155,29 @@ describe('the body part of a package', function () {
 
         expect(WordPackage::mainPartOf($path))->toBe(WordPackage::FALLBACK_MAIN);
     });
+
+    it('falls back on declarations that are not XML', function () {
+        $path = Scratch::path('broken-declarations.docx');
+        copy(TemplateFactory::placeholder(), $path);
+
+        $zip = new ZipArchive();
+        $zip->open($path);
+        $zip->deleteName('[Content_Types].xml');
+        $zip->addFromString('[Content_Types].xml', '<Types>this never closes');
+        $zip->close();
+
+        // A package whose declarations are damaged is still a package; where its body
+        // is cannot be read out of a file that does not parse, so the fallback is the
+        // answer rather than an error about a part nobody asked for.
+        expect(WordPackage::mainPartOf($path))->toBe(WordPackage::FALLBACK_MAIN);
+    });
+
+    it('falls back on a file that is not an archive at all', function () {
+        $path = Scratch::path('not-an-archive.docx');
+        file_put_contents($path, "# Markdown wearing the wrong extension\n");
+
+        expect(WordPackage::mainPartOf($path))->toBe(WordPackage::FALLBACK_MAIN);
+    });
 });
 
 describe('a template package', function () {
