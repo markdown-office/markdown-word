@@ -58,6 +58,34 @@ final class Configuration
     }
 
     /**
+     * This configuration, drawn in a theme, with everything this one said still said.
+     *
+     * The theme goes down first and {@see Styles::written()} goes back on top, which is
+     * what makes a theme a starting point rather than a decision. A caller who wrote
+     * `heading.1: {color: …}` keeps that colour; a caller who wrote nothing gets the theme
+     * as it is, and the caller who wrote only a colour gets the theme's size and spacing
+     * rather than the built-in look's.
+     *
+     * Composes. The caller's overrides stay recorded as the caller's across the call, so a
+     * second `withTheme()` lays that theme underneath and re-applies what was written
+     * rather than what the first theme wrote — which would splice the two and leave
+     * neither applied.
+     *
+     * The options are carried through untouched: a theme is a set of style slots and has
+     * no opinion on whether an image is embedded or how wide a table is, so there is
+     * nothing here for one to override.
+     */
+    public function withTheme(Styles $theme): self
+    {
+        $written = $this->styles->written();
+
+        return new self(
+            $theme->withAll($written)->withProvenance($written),
+            $this->options,
+        );
+    }
+
+    /**
      * Merge a batch of configuration over this one.
      *
      * Both sub-objects are merged rather than replaced, and the merge reads a missing

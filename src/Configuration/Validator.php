@@ -531,7 +531,13 @@ final class Validator
             'indentation' => ValueShape::mapping($given, 'left:, right:, firstLine: or hanging:'),
             // Colours rather than numbers: `fill` is a hex triplet, and `space` and
             // `indentation` are the two that are measured.
-            'shading' => ValueShape::colourMap($given, 'fill:'),
+            //
+            // `tableCell` is the exception among the three table slots: PHPWord's `Cell`
+            // takes the colour itself where `Table` takes a mapping, so the mapping a
+            // `table` slot wants is a TypeError here rather than a dropped property.
+            'shading' => $slot === Styles::TABLE_CELL
+                ? ValueShape::colour($given)
+                : ValueShape::colourMap($given, 'fill:'),
             default => null,
         };
     }

@@ -1,0 +1,87 @@
+# The body is Georgia at 11pt on a 1.5 leading — a reading measure rather than a
+# screen one. The headings are Calibri and small, because on a page that is mostly
+# body text a large heading is a shout rather than a heading.
+
+paragraph:
+  name: Georgia
+  size: 11
+  space: { after: 240 }
+  lineHeight: 1.5
+
+heading.1:
+  name: Calibri
+  bold: true
+  size: 18
+  color: "1A1A1A"
+  space: { before: 480, after: 200 }
+  keepNext: true
+
+heading.2:
+  name: Calibri
+  bold: true
+  size: 14
+  color: "1A1A1A"
+  space: { before: 360, after: 140 }
+  keepNext: true
+
+heading.3:
+  name: Calibri
+  bold: true
+  size: 12
+  color: "333333"
+  space: { before: 280, after: 120 }
+  keepNext: true
+
+heading.4:
+  bold: true
+  size: 11
+  color: "333333"
+  space: { before: 240, after: 100 }
+  keepNext: true
+
+heading.5:
+  italic: true
+  size: 11
+  color: "333333"
+  space: { before: 200, after: 80 }
+  keepNext: true
+
+heading.6:
+  italic: true
+  size: 11
+  color: "333333"
+  space: { before: 200, after: 80 }
+  keepNext: true
+
+blockQuote:
+  styleName: IntenseQuote
+  italic: true
+  color: "4A4A4A"
+  indentation: { left: 720, right: 720 }
+  space: { before: 200, after: 200 }
+
+codeBlock:
+  indentation: { left: 360 }
+  space: { before: 0, after: 0 }
+  shading: { fill: F4F2ED }
+
+listParagraph:
+  space: { after: 100 }
+
+codeFont:
+  name: Consolas
+  size: 9
+  color: "4A4A4A"
+
+linkFont:
+  color: "1A1A1A"
+  underline: single
+
+table:
+  borderColor: CCCCCC
+
+# Every cell is shaded rather than only the header: PHPWord's `Row` takes no shading, so
+# a `tableHeaderRow` naming one would be a property nothing reads, and `tableCell` is the
+# slot left. A `Cell` takes a bare colour where a `Table` takes a mapping with a `fill`.
+tableCell:
+  shading: "F4F2ED"

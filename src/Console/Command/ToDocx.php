@@ -53,12 +53,14 @@ class ToDocx extends BaseCommand
 
         $template = $command->value('template');
 
+        $theme = $command->value('theme');
+
         if ($template === null) {
             $this->rejectWithoutTemplate($command);
-            $this->convert($settings, $markdown, $input, $output, $overrides);
+            $this->convert($settings, $markdown, $input, $output, $overrides, $theme);
         } else {
             $this->assertTemplateIsSupported();
-            $this->intoTemplate($markdown, $template, $command, $settings, $input, $output, $overrides);
+            $this->intoTemplate($markdown, $template, $command, $settings, $input, $output, $overrides, $theme);
         }
 
         $this->report($input, $output);
@@ -120,11 +122,12 @@ class ToDocx extends BaseCommand
         ?string $input,
         string $output,
         ?array $overrides,
+        ?string $theme = null,
     ): void {
         $this->guardAgainstOverwrite($input, $output);
 
         $format = $this->format();
-        $converter = $this->application->converter($config, $markdown, $overrides);
+        $converter = $this->application->converter($config, $markdown, $overrides, $theme);
 
         if ($output === '-') {
             $this->application->writeResult($output, $converter->convertTo($format));
@@ -314,6 +317,7 @@ class ToDocx extends BaseCommand
         ?string $input,
         string $output,
         ?array $overrides,
+        ?string $theme = null,
     ): void {
         $values = [];
 
@@ -326,7 +330,7 @@ class ToDocx extends BaseCommand
 
         self::assertRegionExists($path, $region);
 
-        $template = $this->application->template($path, $config, $values, $overrides);
+        $template = $this->application->template($path, $config, $values, $overrides, $theme);
         $template->insert($region, $markdown);
 
         // The second guard: filling the region is the slow part of a run.
@@ -403,7 +407,7 @@ class ToDocx extends BaseCommand
     public static function spec(): array
     {
         return [
-            'values' => ['output', 'config', 'template', 'region', 'images', 'image-base', 'table-width', 'to'],
+            'values' => ['output', 'config', 'template', 'theme', 'region', 'images', 'image-base', 'table-width', 'to'],
             'flags' => ['help', 'no-images', 'plain'],
             'repeated' => ['define'],
             'aliases' => ['o' => 'output', 't' => 'template', 'c' => 'config', 'h' => 'help'],
@@ -418,6 +422,7 @@ class ToDocx extends BaseCommand
         return [
             ['-o, --output <file>', 'where the result goes; "-" for standard output'],
             ['-c, --config <file.php>', 'a file returning the styles and options to use'],
+            ['--theme <name>', 'a named look to draw in; a styles: block still wins over it'],
             ['-t, --template <file.docx>', 'render into a Word template rather than a new document'],
             ['--region <name>', 'the template region to fill in (default: body)'],
             ['--define <name=value>', 'a value for a single-line placeholder; repeatable'],

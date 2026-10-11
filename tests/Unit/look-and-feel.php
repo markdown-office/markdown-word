@@ -186,15 +186,17 @@ it('leaves a slot that names a style exactly as it was written', function () {
     expect(paragraphStyleOf(renderElements("# Title\n", $config)[0]))->toBe('CorpTitle')
         ->and(renderRuns(renderElements("# Title\n", $config)[0])[0]['font'])->toBeNull();
 
-    // A definition is the other half of the same rule: it replaces, it does not
-    // merge with, so the built-in colour and spacing are not there under it. The
-    // quote's own indentation is not part of the definition and stays.
+    // A definition is the other half of the same rule about what a named style promises:
+    // it merges, because an array is a partial description and naming one property is a
+    // request to change that one. The quote keeps its own Word style, its own colour and
+    // its own spacing under the italic.
     $quote = paragraphStyleOf(renderElements("> Quoted.\n", $config)[0]);
 
-    expect($quote)->not->toHaveKey('styleName')
-        ->and($quote)->not->toHaveKey('space')
+    expect($quote)->toHaveKey('styleName', 'IntenseQuote')
+        ->and($quote)->toHaveKey('space')
         ->and($quote['indentation']['left'] ?? null)->toBe(720)
-        ->and(renderRuns(renderElements("> Quoted.\n", $config)[0])[0]['font'])->toBe(['italic' => true]);
+        ->and(renderRuns(renderElements("> Quoted.\n", $config)[0])[0]['font'])
+        ->toBe(['italic' => true, 'color' => '404040']);
 
     // And the override is one slot, not the configuration: the levels nobody named
     // still come out of the built-in look, which is what a styles block means.

@@ -244,9 +244,9 @@ it('raises a value problem as its own type and a key problem as the old one', fu
 });
 
 it('still writes the document for a block it cannot fault', function () {
-    // The check is on the block, not on the document: a block naming a template and
-    // a theme is metadata, and none of it is an option.
-    $markdown = "---\ntitle: Quarterly\nauthor: Fabi\ntheme: corporate-dark\n"
+    // The check is on the block, not on the document: a block naming a template is
+    // metadata, and none of it is an option.
+    $markdown = "---\ntitle: Quarterly\nauthor: Fabi\n"
         . "template_file: report.dotx\noptions:\n  maxHeadingLevel: 3\n  images: skip\n---\n\n# One\n";
 
     expect((new MarkdownToWord($markdown, Configuration::create(), new CommonMarkParser([

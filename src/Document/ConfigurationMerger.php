@@ -29,6 +29,13 @@ use MarkdownWord\Configuration;
  * is their intent, and the command line is them saying it louder. It is the same order
  * {@see \MarkdownWord\Configuration\Options::withAll()} already implies for a chain of
  * `with*()` calls, so a value behaves the same whether it arrived from a file or an array.
+ *
+ * A theme is *not* a layer here, and that is deliberate. It belongs underneath the
+ * defaults rather than among the sources, because it is a starting point rather than a
+ * statement about this document — so {@see \MarkdownWord\Configuration::withTheme()} folds
+ * it into a {@see \MarkdownWord\Configuration} that is then handed over as `$defaults`, and
+ * the slots that configuration names are re-applied on top of it. Naming a theme restyles
+ * the document; naming a slot as well still wins.
  */
 final class ConfigurationMerger
 {

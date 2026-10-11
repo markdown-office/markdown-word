@@ -507,6 +507,7 @@ The options both directions share:
 | Option | Meaning |
 | --- | --- |
 | `-c, --config <file.php>` | a file returning the styles and options to use |
+| `--theme <name>` | a named look to draw in; a `styles:` block still wins over it |
 | `-t, --template <file.docx>` | render into a Word template rather than a new document |
 | `--region <name>` | the template region to fill in, `body` by default |
 | `--define <name=value>` | a value for a single-line placeholder; repeatable |
@@ -720,6 +721,26 @@ styles:
       after: 480
 ```
 
+A slot given as a mapping is **merged** into the built-in one rather than
+replacing it, at every level: the two properties above change the size and the
+colour and leave the weight and the space-after alone, and `space: {before: 0}`
+moves the gap without deleting the one at the other end. This is what makes the
+example above mean what it looks like. A heading that lost the Word style name
+underneath it would stop being a Word heading — it would come out of the document
+as large body text, absent from the navigation pane and from any table of
+contents — and that is too much to lose to a colour.
+
+Two things still replace a slot whole, because each is a statement about the slot
+rather than about one of its properties:
+
+| Written | Means |
+| --- | --- |
+| a style id — `heading.1: Title` | use that style; nothing of the built-in look is layered over it |
+| `null` — `blockQuote: null` | no styling at all |
+
+`Configuration::withoutDecoration()` is the named way to ask for the second over a
+set of slots at once, and `withBuiltInHeadingStyles()` for the first.
+
 A heading also keeps the Word style name underneath it — `Heading1` through
 `Heading6`, `IntenseQuote` for the quote — and the definition of each is written
 into the document, so a `.docx` heading is a real `Heading 1` and a template's
@@ -775,9 +796,9 @@ styles:
 
 The block never reaches the document — it is configuration, not content — and
 `options:` and `styles:` mean exactly what they mean in a config file. `template_file`
-and `theme_file` name a template and are read separately, because neither means
-anything to a Word conversion and putting them in `Options` would add keys that no
-renderer looks at.
+names a template and is read separately, because it means nothing to a Word conversion
+and putting it in `Options` would add a key no renderer looks at. `theme:` is read too,
+by the [theme resolver](#themes) rather than by the validator.
 
 Read the block off a parsed document and merge it with whatever else is in play:
 
@@ -889,8 +910,9 @@ and `InvalidConfigurationValue` for the rest. Both extend it, and both extend
 `Exception\InvalidInput`.
 
 Only the `options:` and `styles:` sub-keys are checked. The rest of the block is
-metadata — `title`, `author`, `theme`, `template_file` — which is open-ended by
-nature and would fail every deck that carries one.
+metadata — `title`, `author`, `template_file` — which is open-ended by
+nature and would fail every deck that carries one. `theme:` is read too, but
+by the theme resolver rather than by the validator.
 
 The check is *not* in `Options::fromArray()` or `Styles::withAll()`, which keep
 discarding what they do not know and casting what they are handed: a config file has
@@ -904,6 +926,79 @@ use MarkdownWord\Configuration\Validator;
 Validator::problems($config->toArray());   // a list of messages
 Validator::assertValid($config->toArray()); // throws, listing all of them
 ```
+
+### Themes
+
+A theme is a directory holding a `theme.yml` and, usually, a `styles.yml`. Four ship
+with the library:
+
+```sh
+$ mdword to-docx --theme corporate notes.md
+```
+
+| Theme | What it is for |
+| --- | --- |
+| `default` | the built-in look, written out; naming it changes nothing |
+| `minimal` | monochrome and quiet — headings in the ink, code on the page |
+| `corporate` | serif headings in navy, wide spacing, ruled tables |
+| `report` | serif body on an open leading, for something meant to be read to the end |
+
+A document names one for itself, so it travels on its own:
+
+```yaml
+---
+theme: report
+---
+```
+
+Or in code:
+
+```php
+(new MarkdownToWord($markdown))->withTheme('corporate');
+```
+
+**A theme is a starting point, not a decision.** Everything a person wrote for one
+document outranks it — a `styles:` block, a `-c` config file, a flag — and naming one
+slot on top of a theme is the normal case rather than a conflict:
+
+```yaml
+---
+theme: report
+styles:
+  heading.1:
+    color: 8B0000   # the report's heading, in dark red
+---
+```
+
+A name is resolved in `./themes/<name>` beside the working directory first, then among
+the themes that ship with the package, and anything with a `/` in it is read as a path
+instead. A name that does not resolve is an error naming the ones that do — never a
+silent fallback to `default`, which would be a document in the wrong colours with nothing
+in the output to say so. A path is resolved with `realpath()` and held to the working
+directory and the built-in themes, because `theme:` is a path a document writes.
+
+`styles.yml` takes the slot names from `Styles::defaults()` and nothing else, and is
+checked the way a `styles:` block is: an unknown slot, an unknown property inside one, a
+colour written with a leading `#` and a size holding a word are all errors at load time,
+next to the file that has them. A slot written as a mapping merges over the built-in look
+exactly as a `styles:` block does, so a theme that names one property leaves the rest
+alone — including properties it would rather drop, which it cannot: a slot merges, so
+removing something the built-in look set means naming a style id or `null` for the whole
+slot.
+
+**Quote a colour that YAML would read as something else.** `2E5395` is a valid hex colour
+and also scientific notation, and YAML resolves it to infinity before the theme is read.
+Quoted, it is a colour; unquoted, it is a load-time error rather than a document drawn in
+the wrong ink.
+
+A theme works with `--template` too. The template keeps its own style definitions, and the
+theme is written onto the text as direct formatting over them — so `--theme` reaches the
+document there as it does anywhere else, and a flag beats a `theme:` in the document's own
+block.
+
+`bulletList` and `orderedList` name a numbering style, but the name does not reach the
+document: PHPWord's numbering writer emits `w:abstractNumId` and never a `w:name`. Bullet
+characters are not configurable through those slots.
 
 #### Images
 

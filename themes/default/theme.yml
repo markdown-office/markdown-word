@@ -1,0 +1,9 @@
+# The built-in look, written out.
+#
+# This is what a document that configures nothing is drawn in, spelled as a theme so
+# that the other three have something to be different from. Naming it changes nothing:
+# every value below is the value `LookAndFeel` already sets. It is here because a
+# theme you can see the source of is a theme you can copy, and this is the one to copy.
+name: Default
+description: The built-in look — blue headings, Consolas code on a light grey panel.
+author: markdown-office

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord;
 
 use League\CommonMark\Node\Block\Document;
+use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\NothingToConvert;
@@ -21,6 +22,7 @@ use MarkdownWord\Render\LinkPayloadCollector;
 use MarkdownWord\Render\NumberingRegistry;
 use MarkdownWord\Render\StyleRegistrar;
 use MarkdownWord\Render\StyleResolver;
+use MarkdownWord\Theme\ThemeResolver;
 use MarkdownWord\Writer\DocxWriter;
 use MarkdownWord\Writer\OdtWriter;
 use MarkdownWord\Writer\RtfWriter;
@@ -59,15 +61,19 @@ final class MarkdownToWord implements Converter
      */
     private string $lastMarkdown = '';
 
+    /** The theme named by {@see self::withTheme()} or the command line, if either named one. */
+    private ?string $theme = null;
+
     /**
      * @param string|null $source A path, or the Markdown itself; {@see Input}
      *        says which a string is. Null leaves the subject to
      *        {@see self::toDocx()}.
      * @param Configuration|array|null $overrides The layer above the frontmatter. The
      *        array form is the one to reach for: it is sparse, so a key nobody
-     *        mentioned leaves the document's own setting standing, where a
-     *        `Configuration` names every setting there is and would put the defaults
-     *        above the frontmatter along with everything else.
+     *        mentioned leaves the document's own setting standing. A `Configuration`
+     *        names every setting there is, so it puts the built-in look above the
+     *        frontmatter along with everything else — and, for the same reason, above a
+     *        theme as well. See {@see \MarkdownWord\Configuration::withTheme()}.
      */
     public function __construct(
         private readonly ?string $source = null,
@@ -75,6 +81,34 @@ final class MarkdownToWord implements Converter
         private readonly ?MarkdownParserInterface $parser = null,
         private readonly Configuration|array|null $overrides = null,
     ) {
+    }
+
+    /**
+     * A theme to draw this converter's documents in, unless a document names one itself.
+     *
+     * The same argument a `theme:` in a `---` block takes and the same thing `--theme`
+     * passes, so all three resolve the same way. Null — the default — reads the
+     * frontmatter and nothing else.
+     *
+     * Mutating rather than returning a new converter: the receiver holds the Markdown and
+     * the parser, and there is no value in a copy that differs in a theme.
+     *
+     * @throws Exception\ThemeNotFound when the theme is not one that resolves. Checked
+     *         here so a typo is reported before the document is read rather than partway
+     *         through writing it.
+     * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
+     * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception\Exception when one of the theme's files cannot be read or parsed
+     */
+    public function withTheme(?string $name): self
+    {
+        if ($name !== null) {
+            $this->themes()->resolve($name);
+        }
+
+        $this->theme = $name;
+
+        return $this;
     }
 
     /**
@@ -103,6 +137,11 @@ final class MarkdownToWord implements Converter
      *
      * @throws Exception\InvalidConfiguration when the block names nothing, or gives a
      *         value that is not what it is used as.
+     * @throws Exception\ThemeNotFound when the document's or the caller's `theme:` does
+     *         not resolve. Deliberately not swallowed: see {@see self::themeFor()}.
+     * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
+     * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception\Exception when one of the theme's files cannot be read or parsed
      */
     public function configurationFor(Document $document, ?string $markdown = null): Configuration
     {
@@ -113,13 +152,43 @@ final class MarkdownToWord implements Converter
         // whole set of them arrives at once instead of one per run.
         $frontmatter->assertValid();
 
+        $theme = $this->themeFor($frontmatter);
+
+        // The constructor's configuration is the base rather than a layer over a default
+        // one, because it is the only layer that knows which slots were *chosen*: passed
+        // through `toArray()` it would name every slot there is and would therefore bury a
+        // theme underneath all of it. See {@see Configuration::withTheme()}.
         return ConfigurationMerger::resolve(
             commandLine: is_array($this->overrides) ? $this->overrides : $this->overrides?->toArray(),
             frontmatter: $frontmatter,
-            // `toArray()` is lossless, so applying it over the defaults rebuilds the
-            // constructor's configuration exactly rather than half of it.
-            configFile: $this->config->toArray(),
+            defaults: $theme === null ? $this->config : $this->config->withTheme($theme),
         );
+    }
+
+    /**
+     * The theme this document is drawn in, or null when it names none.
+     *
+     * A theme named in code answers for the document, so the frontmatter is not read —
+     * which is also why a document naming a theme that does not resolve is not reported
+     * here: the name was overridden, and a caller that passed a theme of its own asked for
+     * that one. This is the only source that is *silently* ignored, and it is ignored only
+     * because something louder replaced it.
+     *
+     * @throws Exception\ThemeNotFound when the theme in play is not one that resolves
+     * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
+     * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception\Exception when one of the theme's files cannot be read or parsed
+     */
+    private function themeFor(Frontmatter $frontmatter): ?Styles
+    {
+        $name = $this->theme ?? $frontmatter->themeName();
+
+        return $name === null ? null : $this->themes()->resolve($name)->styles();
+    }
+
+    private function themes(): ThemeResolver
+    {
+        return new ThemeResolver(workingDirectory: getcwd() ?: '.');
     }
 
     public function parse(string $markdown): Document
@@ -379,7 +448,10 @@ final class MarkdownToWord implements Converter
             $config,
             $styles,
             $inlines,
-            new NumberingRegistry($this->config, $phpWord),
+            // The merged configuration, not `$this->config`: `bulletList` and
+            // `orderedList` are style slots like any other, and a `styles:` block, a
+            // config file or a theme all name them.
+            new NumberingRegistry($config, $phpWord),
             $html,
         );
 

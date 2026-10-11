@@ -102,10 +102,35 @@ it('finds a heading level that was overridden after the defaults', function () {
 it('reads an inline heading style as readily as a style id', function () {
     // A slot is either an id or an inline definition, and `heading()` must not
     // quietly collapse the second into the first — the renderer reads the size
-    // and weight back out of it.
+    // and weight back out of it. The definition merges into the built-in one,
+    // so the Word style name and the colour are still on it.
     $styles = new Styles([Styles::HEADING_2 => ['size' => 20, 'bold' => true]]);
 
-    expect($styles->heading(2))->toBe(['size' => 20, 'bold' => true]);
+    expect($styles->heading(2))->toBe([
+        'styleName' => 'Heading2',
+        'bold' => true,
+        'size' => 20,
+        'color' => '2F5496',
+        'space' => ['before' => 200, 'after' => 100],
+        'keepNext' => true,
+    ]);
+});
+
+it('merges a nested property rather than dropping the ones beside it', function () {
+    // `space` is a mapping of its own. A caller who names one end of it has said where the
+    // gap starts, not that the gap stops existing on the other side.
+    $styles = new Styles([Styles::HEADING_1 => ['space' => ['before' => 0]]]);
+
+    expect($styles->get(Styles::HEADING_1)['space'])->toBe(['before' => 0, 'after' => 120]);
+});
+
+it('still drops the whole slot for a style id or an explicit null', function () {
+    // The merge is for arrays, because an array is a partial description of a look. A
+    // string names a style the template owns and a `null` gives the slot up, and both are
+    // statements about the slot as a whole, so nothing of the built-in look survives either.
+    // `Configuration::withoutDecoration()` is the named way to ask for the second.
+    expect((new Styles([Styles::HEADING_1 => 'CorpTitle']))->get(Styles::HEADING_1))->toBe('CorpTitle')
+        ->and((new Styles([Styles::HEADING_1 => null]))->get(Styles::HEADING_1))->toBeNull();
 });
 
 it('keeps the slots a heading lookup is built from', function () {
@@ -142,7 +167,7 @@ it('merges withAll over the current slots', function () {
     ]);
 
     expect($styles->get(Styles::HEADING_1))->toBe('Title')
-        ->and($styles->get(Styles::CODE_FONT))->toBe(['name' => 'Fira Code'])
+        ->and($styles->get(Styles::CODE_FONT))->toBe(['name' => 'Fira Code', 'size' => 9, 'color' => 'A31515'])
         ->and($styles->get(Styles::HEADING_6))->toBe((new Styles())->get(Styles::HEADING_6));
 });
 

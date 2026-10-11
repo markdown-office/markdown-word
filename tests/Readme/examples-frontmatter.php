@@ -138,9 +138,12 @@ it('writes the block as configuration rather than as content', function () {
     $xml = exampleXml('11-frontmatter');
 
     // The example's own prose mentions the keys, so their presence proves nothing. What
-    // must be absent is the block itself: the opening delimiter, and the YAML as a
-    // heading. The first paragraph is the document's first heading.
-    expect($xml)->not->toContain('w:val="Heading1"')
+    // must be absent is the block itself, and the line that tells it apart from the prose
+    // is the comment the block opens with. The first paragraph is the document's first
+    // heading — and still a real `Heading 1`, because `styles.heading.1` merges over the
+    // built-in look rather than discarding the Word style name underneath it.
+    expect($xml)->not->toContain('Frontmatter, read as configuration')
+        ->and($xml)->toContain('w:val="Heading1"')
         ->and(preg_match('/<w:body>.*?<w:t[^>]*>([^<]{0,40})/s', $xml, $first))
         ->toBe(1)
         ->and($first[1])->toStartWith('Frontmatter configures');

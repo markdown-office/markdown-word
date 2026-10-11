@@ -53,7 +53,10 @@ it('it can be built from a plain array', function () {
         'options' => ['maxHeadingLevel' => 3, 'tableBorders' => false],
     ]);
 
-    expect($config->getStyles()->get(Styles::CODE_FONT))->toBe(['name' => 'Fira Code']);
+    // The font slot merges rather than replaces: naming the face a reader wants must not
+    // cost the code its size and its colour, which is what the built-in look sets.
+    expect($config->getStyles()->get(Styles::CODE_FONT))
+        ->toBe(['name' => 'Fira Code', 'size' => 9, 'color' => 'A31515']);
     expect($config->getOptions()->maxHeadingLevel)->toBe(3);
     expect($config->getOptions()->tableBorders)->toBeFalse();
 });

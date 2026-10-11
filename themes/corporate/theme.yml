@@ -1,0 +1,11 @@
+# A document that goes out to people who will judge it: serif headings in navy over
+# a sans body, wider gaps between the levels, and rules around the tables so a figure
+# can be read from across a table.
+#
+# The heading levels are spaced far apart on purpose. In the built-in look the steps
+# are 16, 13 and 12 — close together, because a document is read on its own screen.
+# Here the steps are larger and the gaps are wider, because this is a document that
+# gets printed and handed to somebody who has not read it before.
+name: Corporate
+description: Serif headings in navy, wide spacing, ruled tables. For a document that is handed to somebody.
+author: markdown-office

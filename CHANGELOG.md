@@ -69,6 +69,68 @@ All notable changes to this project are documented here. The format follows
   file, so every `instanceof` in it was false and `indentOf()` and `alignmentOf()`
   always returned the default.
 
+- **A style slot written as a mapping now merges into the built-in look instead of
+  replacing it.** `new Styles(['heading.1' => ['color' => '8B0000']])` keeps the
+  heading's `Heading1` style name, its 16pt size, its weight, its spacing and its
+  `keepNext`, where it used to keep only the colour.
+
+  **This changes what an existing configuration renders.** Naming a slot with a
+  mapping — in a `styles:` block or in code — previously discarded every other
+  property of that slot, so a heading styled that way stopped being a Word heading
+  at all: it came out of the document as large body text, absent from the
+  navigation pane and from any table of contents. `space` merges per key too, so
+  `space: {before: 0}` moves the gap without deleting the one at the other end.
+  The README documented the merging behaviour all along; this makes the code match it.
+
+  A **style id** (`heading.1: Title`) and an explicit **`null`**
+  (`blockQuote: null`) are statements about the slot as a whole and still replace it
+  outright, as before. `Configuration::withoutDecoration()` is the named way to ask
+  for the second across several slots.
+
+- **A `table` slot written as a mapping keeps the table's rules.** Naming
+  `table: {borderColor: …}` used to produce a table with no borders at all, because
+  the definition replaced the computed default instead of merging over it and
+  `borderColor` only sets the colour of rules asked for separately. It now keeps the
+  weight and the cell margins. Found by rendering the shipped themes rather than by
+  reading the markup.
+
+- **Themes.** A theme is a directory holding a `theme.yml` and usually a
+  `styles.yml`, and `styles.yml` takes the slot names from `Styles::defaults()` and
+  nothing else.
+
+  ```sh
+  mdword to-docx --theme corporate notes.md
+  ```
+
+  ```yaml
+  ---
+  theme: report
+  styles:
+    heading.1:
+      color: 8B0000   # the report's heading, in dark red
+  ---
+  ```
+
+  ```php
+  (new MarkdownToWord($markdown))->withTheme('corporate');
+  ```
+
+  Four ship with the library — `default` (the built-in look, written out, so naming
+  it changes nothing), `minimal`, `corporate` and `report`. A theme is a **starting
+  point, not a decision**: everything a person wrote for one document outranks it, so
+  a `styles:` block, a `-c` file or a flag still wins, and naming one slot on top of
+  a theme is the normal case rather than a conflict. Applying a second theme replaces
+  the first rather than layering over it.
+
+  A name that does not resolve is an error naming the ones that do, never a silent
+  fallback to `default`. A theme works with `--template`: the template keeps its own
+  style definitions and the theme is written over them as direct formatting.
+
+  `styles.yml` is validated as a `styles:` block is — an unknown slot, an unknown
+  property inside one, a `#`-prefixed colour and a non-numeric size are all errors at
+  load time. Quote a colour YAML would read as something else: `2E5395` is scientific
+  notation, and YAML resolves it to infinity before the theme is read.
+
 ### Added
 
 - **OpenDocument Text and Rich Text output.** `MarkdownToWord` grows `toOdt()`,
@@ -120,9 +182,10 @@ All notable changes to this project are documented here. The format follows
 
 - **Frontmatter configures the conversion.** The YAML block at the top of a
   document is read as configuration rather than discarded. `options:` and
-  `styles:` mean what they mean in a config file; `template_file` and
-  `theme_file` are read as data, because neither means anything to a Word
-  conversion and both would otherwise become option keys nothing looks at.
+  `styles:` mean what they mean in a config file; `template_file` is read as
+  data, because it means nothing to a Word conversion and would otherwise become
+  an option key nothing looks at. `theme:` is read by the theme resolver rather
+  than by the validator.
   `Document\Frontmatter` reads the block off a parsed document.
 - **`Document\ConfigurationMerger`** resolves four sources — command line,
   frontmatter, config file, defaults — each outranking the one below it. A source
@@ -177,6 +240,31 @@ All notable changes to this project are documented here. The format follows
   `Application::reportImageConversions()`.
 
 ### Fixed
+
+- **`bulletList` and `orderedList` were silently ignored.** Both were read from the
+  converter's own constructor configuration rather than the merged one, so naming them
+  in a `styles:` block, a config file or a theme had no effect on the numbering
+  written. Pre-existing, and newly reachable from a theme's `styles.yml`.
+
+  The limit that remains: PHPWord's numbering writer emits `w:abstractNumId` and never
+  a `w:name`, so the style *name* still does not reach the document. Bullet characters
+  are not configurable through these slots.
+
+- **A theme's own files were not checked against the scope.** The directory was held to
+  the allowed roots and the two files inside it were not, so a `styles.yml` that was a
+  symlink pointing out of the scope was read, and its values reached the document as
+  direct formatting.
+
+- **`ThemeNotFound` no longer echoes a resolved path.** An error said where a
+  document-written name had landed — a path on this machine the document had no
+  business asking about — and three distinguishable messages gave it an existence
+  oracle over arbitrary directories. The allowed roots are still named, because an
+  author who has to move a theme out of them is entitled to know what they are.
+
+- **The filesystem root is no longer accepted as a directory a document may name.**
+  `/` is a prefix of every absolute path, so a working directory of `/` — a container
+  started with `WORKDIR /`, a service that has chdir'd to `/` — made every path on the
+  machine reachable. It is refused rather than kept, so the scope stays a scope.
 
 - **A named style loses its character half in an `.odt`.** ODF keeps a style's
   character half and its paragraph half in two families that do not see each

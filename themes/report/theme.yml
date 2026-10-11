@@ -1,0 +1,12 @@
+# A long read rather than a long document: the body is set in a serif at a
+# comfortable size on an open leading, the headings are the only sans on the page,
+# and the paragraphs carry no justification of their own because the renderer does
+# not offer one.
+#
+# This is the theme for something a person is meant to sit down and finish. The
+# built-in look is at its best on screen, where the 6pt gap under a paragraph is
+# enough; here that gap is nearly doubled, because a printed page rewards air that a
+# scrolling one does not.
+name: Report
+description: Serif body on an open leading, understated headings. For something meant to be read to the end.
+author: markdown-office

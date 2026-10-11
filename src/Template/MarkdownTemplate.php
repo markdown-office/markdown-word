@@ -74,6 +74,7 @@ final class MarkdownTemplate
         array $values = [],
         ?MarkdownParserInterface $parser = null,
         Configuration|array|null $overrides = null,
+        ?string $theme = null,
     ) {
         if (!is_file($template)) {
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));
@@ -90,6 +91,14 @@ final class MarkdownTemplate
             $parser,
             $overrides,
         );
+
+        // Applied here rather than by the caller, because this converter is built with a
+        // null source and renders each region separately: a theme named in code reaches
+        // the document through the converter, and this is the only converter the template
+        // has.
+        if ($theme !== null) {
+            $this->converter->withTheme($theme);
+        }
 
         // Every insert is rendered into one shared scratch document, so the list
         // definitions it accumulates are unique across the whole template.

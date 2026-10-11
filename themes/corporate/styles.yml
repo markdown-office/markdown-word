@@ -1,0 +1,87 @@
+# Georgia for the headings against Calibri for the body: the two are both almost
+# everywhere, which is what makes this safe to hand to somebody who has to open it on
+# a machine that is not this one.
+
+heading.1:
+  name: Georgia
+  bold: false
+  size: 22
+  color: "1F3864"
+  space: { before: 400, after: 200 }
+  keepNext: true
+
+heading.2:
+  name: Georgia
+  bold: false
+  size: 16
+  color: "2E5395"
+  space: { before: 320, after: 140 }
+  keepNext: true
+
+heading.3:
+  name: Georgia
+  bold: true
+  size: 13
+  color: "2E5395"
+  space: { before: 260, after: 120 }
+  keepNext: true
+
+heading.4:
+  bold: true
+  size: 12
+  color: "1F3864"
+  space: { before: 220, after: 100 }
+  keepNext: true
+
+heading.5:
+  bold: true
+  size: 11
+  color: "1F3864"
+  space: { before: 200, after: 80 }
+  keepNext: true
+
+heading.6:
+  italic: true
+  size: 11
+  color: "1F3864"
+  space: { before: 200, after: 80 }
+  keepNext: true
+
+paragraph:
+  name: Calibri
+  size: 11
+  space: { after: 160 }
+  lineHeight: 1.25
+
+blockQuote:
+  styleName: IntenseQuote
+  italic: true
+  color: "2E5395"
+  indentation: { left: 720, right: 720 }
+  space: { before: 160, after: 160 }
+
+codeBlock:
+  indentation: { left: 360 }
+  space: { before: 0, after: 0 }
+  shading: { fill: EEF1F7 }
+
+listParagraph:
+  space: { after: 80 }
+
+codeFont:
+  name: Consolas
+  size: 9
+  color: "1F3864"
+
+linkFont:
+  color: "2E5395"
+  underline: single
+
+table:
+  borderColor: 2E5395
+
+# Every cell is shaded rather than only the header: PHPWord's `Row` takes no shading, so
+# a `tableHeaderRow` naming one would be a property nothing reads, and `tableCell` is the
+# slot left. A `Cell` takes a bare colour where a `Table` takes a mapping with a `fill`.
+tableCell:
+  shading: "EEF1F7"

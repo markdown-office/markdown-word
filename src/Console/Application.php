@@ -630,8 +630,14 @@ final class Application
         Configuration $config,
         ?string $source = null,
         Configuration|array|null $overrides = null,
+        ?string $theme = null,
     ): Converter {
-        return new MarkdownToWord($source, $config, self::parser(), $overrides);
+        $converter = new MarkdownToWord($source, $config, self::parser(), $overrides);
+
+        // Only when the flag named one: with no flag the converter reads the `theme:` in
+        // the document's own block, which is a document travelling on its own rather than
+        // an override of anything said here.
+        return $theme === null ? $converter : $converter->withTheme($theme);
     }
 
     /**
@@ -644,9 +650,9 @@ final class Application
         return new WordToMarkdown($source, $options);
     }
 
-    public function template(string $path, Configuration $config, array $values, Configuration|array|null $overrides = null): MarkdownTemplate
+    public function template(string $path, Configuration $config, array $values, Configuration|array|null $overrides = null, ?string $theme = null): MarkdownTemplate
     {
-        return new MarkdownTemplate($path, $config, $values, self::parser(), $overrides);
+        return new MarkdownTemplate($path, $config, $values, self::parser(), $overrides, $theme);
     }
 
     /**

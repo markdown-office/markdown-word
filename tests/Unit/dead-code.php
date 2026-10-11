@@ -121,6 +121,11 @@ it('does not claim again what the code does not do', function (string $claim) {
     'an .odt root leaves the style and fo prefixes undeclared' => 'but not `style` and `fo`',
     'which YAML implementation reads the block is the machine\'s choice' => 'which one is in play depends on the',
     'a value list can be read off the upstream class at run time' => 'Read off the class rather than copied out',
+    'an inline style definition replaces the built-in look' => 'it replaces, it does not merge with',
+    'a theme file could exfiltrate through document metadata' => 'carried would be copied into `docProps/core.xml`',
+    'a path a document wrote was checked the same way an image path is' => 'the same question an image path asks',
+    'a theme the caller never overrode silently replaced an earlier one' => 'so the second theme is applied',
+    'an unquoted colour is an integer the loader has to turn back into a string' => '000000 arrives as `0`',
 ]);
 
 it('has no decorative dividers in it', function () {

@@ -402,10 +402,13 @@ final class DocumentRenderer
             // A named table style comes from the target document — typically a
             // Word built-in grid — and is used exactly as the template defines it.
             is_string($tableStyle) => $target->addTable($tableStyle),
-            // A custom definition still gets the configured width, so that
-            // styling a table does not quietly make it narrow again.
+            // A custom definition merges over the same default the `null` case builds,
+            // so naming the one thing a theme is about — a border colour — keeps the
+            // rules, their weight and the cell margins. Handing PHPWord the definition
+            // on its own produced a table with no borders at all, because `borderColor`
+            // sets the colour of rules that have to be asked for separately.
             default => $target->addTable(ParagraphStyle::table(
-                ParagraphStyle::merge($this->widthStyle($options), $tableStyle),
+                ParagraphStyle::merge($this->defaultTableStyle($options), $tableStyle),
             )),
         };
 

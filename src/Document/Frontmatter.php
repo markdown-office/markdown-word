@@ -140,6 +140,32 @@ final class Frontmatter
     }
 
     /**
+     * The name a document gives a theme in its `---` block, if it gives one.
+     *
+     * Read here rather than folded into {@see self::toConfigurationArray()} because a
+     * theme is a *name*, and resolving it is a filesystem operation that has to happen
+     * beside the other configuration sources rather than inside a getter — see
+     * {@see \MarkdownWord\Theme\ThemeResolver}. It is kept out of `styles:` and
+     * `options:` for the same reason those two are the only keys passed on: a theme name
+     * is not a slot value, and there is no `with*()` on {@see \MarkdownWord\Configuration}
+     * that would read one.
+     *
+     * Null when the block names no theme, which is the ordinary case and not a failure.
+     * The name is returned as written rather than validated here: the resolver says what
+     * would have worked instead, and it is the thing that knows the list.
+     */
+    public function themeName(): ?string
+    {
+        $value = $this->getString('theme');
+
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        return trim($value);
+    }
+
+    /**
      * The part of the block that configures the conversion.
      *
      * Only the two sub-keys {@see \MarkdownWord\Configuration} understands are passed

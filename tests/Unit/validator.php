@@ -102,10 +102,11 @@ it('accepts every key that does exist', function () {
 });
 
 it('accepts a frontmatter carrying keys that are not configuration', function () {
-    // The block at the top of a document also holds `title`, `author`, `theme` and
+    // The block at the top of a document also holds `title`, `author` and
     // `template_file`, none of which is an option. Validating those would fail every
-    // deck that has one, so only the two sub-keys are checked.
-    expect(rejection("title: Quarterly\nauthor: Fabi\ntheme: corporate-dark\ntemplate_file: x.dotx\n"))
+    // deck that has one, so only the two sub-keys are checked. `theme` is not in this
+    // list any more: it names a theme, and whether it resolves is the resolver's to say.
+    expect(rejection("title: Quarterly\nauthor: Fabi\ntemplate_file: x.dotx\n"))
         ->toBeNull();
 });
 
