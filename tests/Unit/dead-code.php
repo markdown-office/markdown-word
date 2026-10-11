@@ -66,6 +66,15 @@ function sourcesWithClaim(string $claim): array
         }
     }
 
+    // The two documents as well, and for the sharper reason: a false claim about
+    // what reaches the document is one a user reads and acts on, and the format
+    // claims are only checkable by rendering.
+    foreach (['README.md', 'CHANGELOG.md'] as $document) {
+        if (str_contains(spelledOut((string) file_get_contents($root . '/' . $document)), $claim)) {
+            $found[] = $document;
+        }
+    }
+
     // `.gitattributes` as well: it justified shipping the lock file with a claim
     // about Composer that was false, and nothing else in the repository reads it.
     $attributes = $root . '/.gitattributes';
@@ -126,6 +135,10 @@ it('does not claim again what the code does not do', function (string $claim) {
     'a path a document wrote was checked the same way an image path is' => 'the same question an image path asks',
     'a theme the caller never overrode silently replaced an earlier one' => 'so the second theme is applied',
     'an unquoted colour is an integer the loader has to turn back into a string' => '000000 arrives as `0`',
+    // True of the .docx writer and false of the .odt one, which writes the name
+    // as the `text:list-style` its lists refer to. Stated once as the .docx
+    // writer's behaviour it was read as a claim about both formats.
+    'the numbering style name is dropped on its way into the document' => 'the name does not reach the',
 ]);
 
 it('has no decorative dividers in it', function () {

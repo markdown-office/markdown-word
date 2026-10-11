@@ -241,14 +241,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **The `.phar` carried whatever the building machine had in its working copy.** The
+  staging tree is assembled with `cp -R`, so a `.DS_Store` in `src/` went into the
+  archive and the artifact stopped being reproducible — Finder rewrites that file
+  whenever the directory changes, so two builds of one tree differed. A stray also fed
+  the timestamp every entry is stamped with, so one newer than the sources moved every
+  timestamp in the archive. `.DS_Store`, `Thumbs.db`, `desktop.ini` and `__MACOSX` are
+  now dropped from both.
+
 - **`bulletList` and `orderedList` were silently ignored.** Both were read from the
   converter's own constructor configuration rather than the merged one, so naming them
   in a `styles:` block, a config file or a theme had no effect on the numbering
   written. Pre-existing, and newly reachable from a theme's `styles.yml`.
 
-  The limit that remains: PHPWord's numbering writer emits `w:abstractNumId` and never
-  a `w:name`, so the style *name* still does not reach the document. Bullet characters
-  are not configurable through these slots.
+  The limit that remains is format-specific, and the first version of this entry got it
+  wrong by describing the `.docx` case as the only one. An `.odt` writes the name as the
+  `text:list-style` its lists refer to. A `.docx` does not: PHPWord's Word writer emits
+  `w:abstractNum` and `w:abstractNumId` and never a `w:name`, so the numbering is reached
+  by id. In neither format does the name configure the bullet itself — the default is a
+  filled bullet, `o`, and a small filled square by nesting depth.
 
 - **A theme's own files were not checked against the scope.** The directory was held to
   the allowed roots and the two files inside it were not, so a `styles.yml` that was a

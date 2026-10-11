@@ -996,9 +996,13 @@ theme is written onto the text as direct formatting over them — so `--theme` r
 document there as it does anywhere else, and a flag beats a `theme:` in the document's own
 block.
 
-`bulletList` and `orderedList` name a numbering style, but the name does not reach the
-document: PHPWord's numbering writer emits `w:abstractNumId` and never a `w:name`. Bullet
-characters are not configurable through those slots.
+`bulletList` and `orderedList` name a numbering style, and what that name buys you depends
+on the format. In an `.odt` it becomes the `text:list-style` the document's lists refer to,
+so the name is there and readable in the file. In a `.docx` it is not written at all:
+PHPWord's Word writer emits `w:abstractNum` and `w:abstractNumId` and never a `w:name`,
+and the numbering is reached by id instead. Either way the name is a label — bullet
+characters are not configurable through these slots, and the default set is a filled
+bullet, `o`, and a small filled square, repeated by nesting depth.
 
 #### Images
 
