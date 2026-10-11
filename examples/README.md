@@ -331,20 +331,31 @@ third, or Word will ignore it.
 
 ## The template that is a template
 
-`build.php` also builds `out/template-report.dotx` and renders the same Markdown
-into it twice — once through the `.dotx`, once through an identical `.docx`:
+`build.php` builds `out/template-report.docx`, converts it to
+`out/template-report.dotx`, and renders the same Markdown into each:
 
 | | |
 | --- | --- |
 | `21-dotx-report.docx` | rendered through `template-report.dotx` |
 | `21-dotx-report.docx-template.docx` | rendered through `template-report.docx` |
 
-Open them side by side. The words, the styles and the layout are identical,
-because which kind of template it is makes no difference to the result. What it
-does change is what the result *is*: both are documents. A `.dotx` and a `.docx`
-differ by one line of `[Content_Types].xml`, and Word opens a package typed as a
-template by creating a *new* document from it — so a filled-in template that kept
-its own type is not a document, whatever it was saved as.
+Open the two results side by side. The words, the styles and the layout are
+identical, because which kind of template it is makes no difference to the
+result. What it does change is what the result *is*: both are documents. A
+`.dotx` and a `.docx` differ by one line of `[Content_Types].xml`, and Word opens
+a package typed as a template by creating a *new* document from it — so a
+filled-in template that kept its own type is not a document, whatever it was
+saved as.
+
+The `.dotx` is worth opening too: it is the template, with its masthead, its
+rules and its `${…}` regions unfilled.
+
+> The name of a package decides nothing, and that is worth being careful about
+> when building one. `asTemplate()` writes the type and `assertPackageType()`
+> then checks each file carries the type its name promises — the build stops if
+> a `.dotx` comes out a document or the other way round. Getting the conversion
+> backwards leaves both files working and both of them wrong: a `.dotx` Word
+> opens as an ordinary file, and a `.docx` it opens by spawning a new document.
 
 It is a report for a fictional consultancy, because a template that drives the
 body is only visible when there is a body worth looking at. The template defines

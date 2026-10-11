@@ -184,19 +184,29 @@ $built[] = ['13-frontmatter-override', 'Frontmatter outranked by the configurati
 // `.dotx` is a `.docx` with one line of `[Content_Types].xml` changed, and a binary
 // fixture does not show that line.
 //
-// Two documents come out of it, from the same Markdown, and they are worth opening
+// Built as a `.docx` first and converted afterwards, because PHPWord's writer has one
+// output and the conversion is the whole of the difference. Getting that order
+// backwards leaves the two files each carrying the other's type: a `.docx` that Word
+// opens by spawning a new document, and a `.dotx` it opens as an ordinary file.
+//
+// Two documents come out of them, from the same Markdown, and they are worth opening
 // side by side. `21-dotx-report.docx` is rendered through the `.dotx` and
-// `21-dotx-report.docx-template.docx` through an identical `.docx`; the words, the
-// formatting and the styles are the same in both, because which kind of template it
-// is makes no difference to the result. What it does change is what the result *is* —
-// both are documents, because a filled-in template that kept its own type would open
-// by creating a new document from itself rather than opening.
+// `21-dotx-report.docx-template.docx` through the `.docx`; the words, the formatting
+// and the styles are the same in both, because which kind of template it is makes no
+// difference to the result. What it does change is what the result *is* — both are
+// documents, because a filled-in template that kept its own type would open by
+// creating a new document from itself rather than opening.
 
-$dotxPath = $out . '/template-report.dotx';
 $docxTemplatePath = $out . '/template-report.docx';
+$dotxPath = $out . '/template-report.dotx';
 
-buildReportTemplate($dotxPath);
-asDocument($dotxPath, $docxTemplatePath);
+buildReportTemplate($docxTemplatePath);
+asTemplate($docxTemplatePath, $dotxPath);
+
+$DOCUMENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+
+assertPackageType($docxTemplatePath, $DOCUMENT_TYPE);
+assertPackageType($dotxPath, 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml');
 
 $reportMarkdown = (string) file_get_contents($root . '/markdown/21-dotx-report.md');
 
@@ -223,6 +233,10 @@ foreach ([
         ->repeat('facts', $reportRows)
         ->insert('report', $reportMarkdown)
         ->save($path);
+
+    // The claim the pair exists to show, checked rather than written in a README:
+    // whichever kind of template it was rendered into, what comes out is a document.
+    assertPackageType($path, $DOCUMENT_TYPE);
 
     $built[] = [$name, 'Rendered into ' . basename($template) . '.', $path];
 }
@@ -638,7 +652,7 @@ function ruleStyles(string $path, array $styles): void
  * packages differ only in the line above, so anything a renderer does differently for
  * one has to be about that line.
  */
-function asDocument(string $source, string $target): void
+function asTemplate(string $source, string $target): void
 {
     $document = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
     $template = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
@@ -649,15 +663,53 @@ function asDocument(string $source, string $target): void
     $zip->open($target);
 
     try {
-        $declared = $zip->getFromName('[Content_Types].xml');
+        $declared = (string) $zip->getFromName('[Content_Types].xml');
+        $rewritten = (string) preg_replace('~' . preg_quote($document, '~') . '~', $template, $declared);
+
+        // The name of a package decides nothing; the content type decides everything,
+        // and a `.dotx` that is really a document opens as an ordinary file while a
+        // `.docx` that is really a template spawns a new document on double-click.
+        // Neither is worth leaving for a reader to discover in Word.
+        if (!str_contains($rewritten, $template) || str_contains($rewritten, $document)) {
+            throw new RuntimeException(sprintf(
+                'Converting "%s" left a package that is neither a document nor a template; '
+                . 'a .dotx and a .docx differ only in the main part\'s content type.',
+                $source,
+            ));
+        }
+
         $zip->deleteName('[Content_Types].xml');
-        $zip->addFromString('[Content_Types].xml', (string) preg_replace(
-            '~' . preg_quote($document, '~') . '~',
-            $template,
-            (string) $declared,
-        ));
+        $zip->addFromString('[Content_Types].xml', $rewritten);
     } finally {
         $zip->close();
+    }
+
+    assertPackageType($target, $template);
+}
+
+/**
+ * Check that a package's body carries the content type its name promises.
+ *
+ * @param string $expected One of the two `wordprocessingml.{document,template}.main+xml` types.
+ */
+function assertPackageType(string $path, string $expected): void
+{
+    $zip = new ZipArchive();
+    $zip->open($path);
+
+    try {
+        $declared = (string) $zip->getFromName('[Content_Types].xml');
+    } finally {
+        $zip->close();
+    }
+
+    if (!str_contains($declared, $expected)) {
+        throw new RuntimeException(sprintf(
+            '"%s" is not the kind of package its name says: its body is declared as %s, not %s.',
+            $path,
+            preg_match('~wordprocessingml\.\w+\.main\+xml~', $declared, $found) ? $found[0] : 'nothing',
+            $expected,
+        ));
     }
 }
 

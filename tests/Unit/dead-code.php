@@ -160,6 +160,11 @@ it('does not claim again what the code does not do', function (string $claim) {
     // `template_file` was read into the block and used by nothing at all, so this
     // described a key that no renderer consulted as one somebody did.
     'template_file is read by whoever renders' => 'used by whoever renders',
+    // `asDocument()` rewrote the main part to `template.main+xml`, which is what
+    // makes a template — the opposite of what its name said, and the opposite of
+    // what its one caller wanted. It built a `.docx` that Word opens by spawning a
+    // new document, and a `.dotx` that it opens as an ordinary file.
+    'the docx-to-template conversion is named for a document' => 'function asDocument(',
 ]);
 
 it('has no decorative dividers in it', function () {
