@@ -448,12 +448,16 @@ into one never prints a line of this kind.
 
 ### What is not here
 
-**Only `.docx` is read back.** `WordToMarkdown` reads a `.docx`; handing it an
-`.odt` is not supported, and neither is an `.rtf`.
+**Only Word packages are read back.** `WordToMarkdown` reads a `.docx` and a `.dotx`;
+handing it an `.odt` is not supported, and neither is an `.rtf`. A `.dotx` read back is
+its unfilled content — the `${…}` markers are text, and that is the honest answer to
+be asked for one that has not been filled in.
 
-**A template is a `.docx`.** PHPWord's template processor reads that package and
-nothing else, so `mdword to-odt --template` is refused rather than half
-attempted.
+**A template is a `.docx` or a `.dotx`.** PHPWord's template processor reads that
+package and nothing else, so `mdword to-odt --template` is refused rather than half
+attempted. A `.dotx` is the same package with its body declared as a template's, and
+whatever it is rendered into, the result is a document — see [Word
+templates](#word-templates).
 
 **An SVG needs `ext-imagick` whichever format it is going to.** The raster beside
 the vector is drawn by something, and without it an SVG raises and says so rather
@@ -508,7 +512,7 @@ The options both directions share:
 | --- | --- |
 | `-c, --config <file.php>` | a file returning the styles and options to use |
 | `--theme <name>` | a named look to draw in; a `styles:` block still wins over it |
-| `-t, --template <file.docx>` | render into a Word template rather than a new document |
+| `-t, --template <file.docx\|.dotx>` | render into a Word template rather than a new document |
 | `--region <name>` | the template region to fill in, `body` by default |
 | `--define <name=value>` | a value for a single-line placeholder; repeatable |
 | `--images <mode>` | `embed`, `placeholder` or `skip` |
@@ -517,8 +521,10 @@ The options both directions share:
 | `--table-width <n>` | table width in fiftieths of a percent; `5000` is full width |
 | `--plain` | no code colouring, no quote style, no table borders, no added spacing |
 
-`--template` is `.docx` only; `to-odt` and `to-rtf` refuse it, because a template
-is a `.docx` package and there is nothing to render into otherwise.
+`--template` takes a `.docx` or a `.dotx`; `to-odt` and `to-rtf` refuse either,
+because a template is a Word package and there is nothing to render into otherwise.
+Whichever of the two it is, the result is a `.docx`: a filled-in template is a
+document, and [Word templates](#word-templates) is why.
 
 `to-markdown` also takes:
 
@@ -598,7 +604,10 @@ into a `w:hyperlink` element while writing the file.
 ## Word templates
 
 Point the renderer at the **styleIds** your template defines and it inherits the
-whole design — fonts, colours, spacing, headers and footers.
+whole design — fonts, colours, spacing, headers and footers. A `.docx` and a `.dotx`
+are both accepted, and which one it is makes no difference to the result: **a filled-in
+template is always a document.** See [What a `.dotx` costs](#what-a-dotx-costs) for
+why that is worth saying.
 
 ```php
 use MarkdownWord\Configuration;
@@ -623,6 +632,37 @@ $template
     ])
     ->save('northwind.docx');
 ```
+
+### What a `.dotx` costs
+
+Nothing to use one, and one thing to *produce* from one: the result is a document, not
+a filled template. That is the only difference between the two, and it is worth
+stating because the alternative is worse.
+
+A `.dotx` and a `.docx` are the same archive with one line of `[Content_Types].xml`
+different, and that line is what Word decides a file by. A package typed as a template
+is opened by *creating a new document from it* — double-clicking a filled-in `.dotx`
+gives you `Document1.docx` rather than the file you were sent, and anything
+dispatching on MIME type treats it as a template. So `to-docx` writes a document, and
+says so by writing one:
+
+```php
+$template = new MarkdownTemplate('report-template.dotx');
+$template->insert('body', $markdown)->save('northwind.docx');   // a .docx, whatever went in
+```
+
+The line matters for a second reason, which is why it is settled on the way in rather
+than patched on the way out. Which part holds the body is also read from that file,
+and it is not always `word/document.xml` — documents from Word Online carry
+`word/document22.xml`, which is why PHPWord looks the name up at all. Its lookup
+matches the *document* content type, so on a template it finds nothing, assumes
+`word/document.xml`, and writes there. The result was a document whose real body still
+held `${body}${slot}${/body}` and whose Markdown had gone into a part nothing pointed
+at: the content silently lost, with every word of the template's own text in place.
+
+Normalising the type on the way in answers both at once, so the template on disk is
+never opened for writing — the copy the renderer works from is ours, and it is removed
+when the renderer goes.
 
 ### The template contract
 
@@ -799,6 +839,22 @@ The block never reaches the document — it is configuration, not content — an
 names a template and is read separately, because it means nothing to a Word conversion
 and putting it in `Options` would add a key no renderer looks at. `theme:` is read too,
 by the [theme resolver](#themes) rather than by the validator.
+
+`template_file` is a path, so it is held to the same rule as a `theme`: resolved with
+`realpath()` and landed inside the working directory or the directory the Markdown was
+read from. A document is not trusted to mean the directory it names — `../` walks out
+of it, and an absolute path is read from wherever it points — and one written by a
+model, from a file it was given, is enough to be careful here. The boundary is *where
+a path lands*, not where it was written from: a document in `docs/` naming a template
+one directory up is inside the working directory and is a template, not an escape.
+
+```sh
+$ mdword to-docx notes.md --region summary   # template_file: report.dotx, beside notes.md
+$ mdword to-docx notes.md --template other.dotx   # the flag outranks the block
+```
+
+A relative name has nothing to resolve against when the Markdown comes from standard
+input, which is reported rather than guessed at from the working directory.
 
 Read the block off a parsed document and merge it with whatever else is in play:
 

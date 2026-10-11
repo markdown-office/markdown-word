@@ -19,6 +19,7 @@ use MarkdownWord\Text\TextExtractor;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use MarkdownWord\WordPackage;
 use MarkdownWord\WordToMarkdown;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
@@ -376,6 +377,22 @@ it('renderIntoContainer renders into a container you name', function () {
 it('the template hands back PHPWord\'s own processor', function () {
     expect((new MarkdownTemplate(readmeReportTemplate()))->processor())
         ->toBeInstanceOf(TemplateProcessor::class);
+});
+
+it('a filled-in .dotx is a document', function () {
+    // The page says a `.dotx` and a `.docx` are both accepted and which one it is
+    // makes no difference to the result. What it must not produce is a package Word
+    // would open by creating a new document from it, which is what leaving the
+    // template's own content type in place would give.
+    $output = Scratch::path('from-dotx', '.docx');
+
+    (new MarkdownTemplate(TemplateFactory::dotx()))
+        ->insert('body', "# Heading\n\nbody\n")
+        ->save($output);
+
+    expect(TemplateFactory::mainContentTypeOf($output))
+        ->toBe(WordPackage::DOCUMENT_MAIN)
+        ->and(TemplateFactory::bodyTextOf($output))->toContain('Heading');
 });
 
 // Configuration

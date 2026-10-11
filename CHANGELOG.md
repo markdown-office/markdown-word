@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`*.dotx` templates.** `--template`, `MarkdownTemplate` and `template_file:` all
+  accept a Word template as well as a Word document. Which of the two it is makes no
+  difference to the result: **a filled-in template is always a document.** A `.dotx`
+  is a `.docx` with one line of `[Content_Types].xml` different, and Word opens a
+  package typed as a template by creating a *new* document from it — so leaving that
+  line alone produced a file that double-clicked into `Document1.docx` rather than
+  opening, and that anything dispatching on MIME type read as a template.
+
+  **Fixes a silent loss of content.** The same line says which part holds the body,
+  and it is not always `word/document.xml` — documents from Word Online carry
+  `word/document22.xml`, which is why PHPWord looks the name up. Its lookup matches
+  the *document* content type, so on a template it matched nothing, fell back to
+  `word/document.xml`, and wrote there. The finished file kept
+  `${body}${slot}${/body}` in its real body and carried the rendered Markdown in a
+  part nothing pointed at: the content was gone, with every word of the template's
+  own text in place. `HyperlinkPass` threw `MalformedDocument` on such a template
+  rather than losing the links; the region's own check reported "the template has no
+  `${body}` region" for a template that had one.
+
+  The type is now settled on the way in, where one rewrite answers both. The template
+  on disk is never opened for writing: the copy the renderer works from is ours, and
+  is removed when the renderer goes.
+
+- **`template_file:` in a document's frontmatter** now renders into the template it
+  names. The key was documented in the README and explained in `Frontmatter`'s
+  docblock, and nothing read it: the block was parsed, the key was kept, and a
+  document with no template at all came out. `--template` outranks it, which is the
+  order the precedence table already gives every other setting.
+
+  It is a path a document writes, so it is held to `PathScope` for the reason a
+  `theme:` is: resolved with `realpath()` and landed inside the working directory or
+  the directory the Markdown was read from. The boundary is *where a path lands*, not
+  where it was written from — a document in `docs/` naming a template one directory
+  up is inside the working directory and is a template, not an escape.
+
 ### Changed
 
 - **A built-in Look & Feel, written as direct formatting.** Every style slot now

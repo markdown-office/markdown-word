@@ -20,9 +20,10 @@ use MarkdownWord\Exception\InvalidConfigurationValue;
  *
  * Two shapes live in the block and are kept apart on purpose. `options` and `styles`
  * are {@see \MarkdownWord\Configuration} and are handed to it as-is. `template_file`
- * and `theme_file` name a document or a deck and mean nothing to a Word conversion, so
- * they are read here and used by whoever renders — mixing them into `Options` would put
- * a key in the configuration that no renderer looks at.
+ * and `theme_file` name a file rather than a setting, and mean nothing to a Word
+ * conversion, so they are read here and resolved beside the other configuration —
+ * mixing them into `Options` would put a key in the configuration that no renderer
+ * looks at, and leave a path unchecked.
  *
  * The block is also where the source is: {@see self::lineOf()} answers where in a
  * file a given key sits, which is what lets a mistake in it be reported as "line 7"

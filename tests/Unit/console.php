@@ -8,6 +8,7 @@ use MarkdownWord\Console\Command\ToDocx;
 use MarkdownWord\Console\Command\ToMarkdown;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use MarkdownWord\WordPackage;
 
 /*
  * The `mdword` command.
@@ -356,7 +357,7 @@ it('renders into a .dotx and writes a document out', function () {
     // The extension says document and the package has to agree with it: Word opens a
     // package typed as a template by creating a new document from it.
     expect(TemplateFactory::mainContentTypeOf($output))
-        ->toBe(\MarkdownWord\WordPackage::DOCUMENT_MAIN);
+        ->toBe(WordPackage::DOCUMENT_MAIN);
     expect(TemplateFactory::bodyTextOf($output))->toContain('Overview');
 });
 

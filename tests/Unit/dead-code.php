@@ -151,6 +151,15 @@ it('does not claim again what the code does not do', function (string $claim) {
     // `move()` is on `Staging`; `DocxWriter` has no such method and no parent
     // that has one. The claim that the template's move copies the writer's held.
     'the template move is a copy of the writer move' => '{@see \MarkdownWord\Writer\DocxWriter::move()}',
+    // A `.dotx` is a package a Word document can be rendered into, and the claims
+    // below each said otherwise in a way a reader would act on: the README showed a
+    // document naming one and the CLI called the flag `.docx` only. A `.docx` template
+    // renders into a `.docx`, so "a template is a .docx" read as excluding the other.
+    'a template is a .docx' => 'A template is a `.docx`.',
+    'the template flag takes a .docx only' => '`--template` is `.docx` only',
+    // `template_file` was read into the block and used by nothing at all, so this
+    // described a key that no renderer consulted as one somebody did.
+    'template_file is read by whoever renders' => 'used by whoever renders',
 ]);
 
 it('has no decorative dividers in it', function () {

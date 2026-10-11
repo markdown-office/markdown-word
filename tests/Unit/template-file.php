@@ -11,6 +11,7 @@ use MarkdownWord\Template\TemplateFile;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use MarkdownWord\WordPackage;
 
 /*
  * `template_file:` in a document's own `---` block.
@@ -111,7 +112,7 @@ it('renders into the template the document names', function () {
     // A `.dotx` named and nothing else: the result is a document, or `to-docx` would
     // be writing something it does not name.
     expect(TemplateFactory::mainContentTypeOf($directory . '/out.docx'))
-        ->toBe(\MarkdownWord\WordPackage::DOCUMENT_MAIN);
+        ->toBe(WordPackage::DOCUMENT_MAIN);
 });
 
 it('lets the flag outrank the block', function () {
