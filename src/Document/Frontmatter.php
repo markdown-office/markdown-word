@@ -168,19 +168,19 @@ final class Frontmatter
 
     /**
      * The template a document names for itself in its `---` block, if it names one.
- *
- * A path rather than a name, because a template is a file and a document that
- * travels on its own has to be able to say which. It is not folded into
- * `toConfigurationArray()` because nothing in {@see \MarkdownWord\Configuration}
- * reads a path: the renderer asks for it beside the other configuration, where it
- * can be resolved and held to a directory rather than passed along as a string
- * nobody has checked — see {@see \MarkdownWord\Template\TemplateFile}.
- *
- * Null when the block names no template, which is the ordinary case and not a
- * failure. Returned as written, because resolving it is a filesystem operation
- * and the resolver is the thing that knows where a document may point.
- */
-public function templateFile(): ?string
+     *
+     * A path rather than a name, because a template is a file and a document that
+     * travels on its own has to be able to say which. It is not folded into
+     * `toConfigurationArray()` because nothing in {@see \MarkdownWord\Configuration}
+     * reads a path: the renderer asks for it beside the other configuration, where it
+     * can be resolved and held to a directory rather than passed along as a string
+     * nobody has checked — see {@see \MarkdownWord\Template\TemplateFile}.
+     *
+     * Null when the block names no template, which is the ordinary case and not a
+     * failure. Returned as written, because resolving it is a filesystem operation
+     * and the resolver is the thing that knows where a document may point.
+     */
+    public function templateFile(): ?string
     {
         $value = $this->getString('template_file');
 

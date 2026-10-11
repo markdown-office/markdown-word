@@ -302,21 +302,21 @@ class ToDocx extends BaseCommand
 
     /**
      * The template a document names in its own `---` block, resolved, or null.
- *
- * Read from the Markdown rather than from the block's text, so there is one YAML
- * parser in the process and a block that fails to parse fails in one place. The
- * block is stripped by the extension either way, so the Markdown that reaches the
- * template carries no frontmatter — the same contract as every other run.
- *
- * A `template_file:` is a path a document writes, so it is held to
- * {@see \MarkdownWord\Filesystem\PathScope} for the same reason a `theme:` is: the
- * document did not have to be trying, and one written by a model from a file it was
- * given is enough.
- *
- * @throws \MarkdownWord\Exception\TemplateNotFound when the name is not a template
- *         this run may read.
- */
-private function templateFromFrontmatter(string $markdown, ?string $input): ?string
+     *
+     * Read from the Markdown rather than from the block's text, so there is one YAML
+     * parser in the process and a block that fails to parse fails in one place. The
+     * block is stripped by the extension either way, so the Markdown that reaches the
+     * template carries no frontmatter — the same contract as every other run.
+     *
+     * A `template_file:` is a path a document writes, so it is held to
+     * {@see \MarkdownWord\Filesystem\PathScope} for the same reason a `theme:` is: the
+     * document did not have to be trying, and one written by a model from a file it was
+     * given is enough.
+     *
+     * @throws \MarkdownWord\Exception\TemplateNotFound when the name is not a template
+     *         this run may read.
+     */
+    private function templateFromFrontmatter(string $markdown, ?string $input): ?string
     {
         $document = CommonMarkParser::withAllExtensions()->parse($markdown);
         $written = Frontmatter::fromDocument($document, $markdown)->templateFile();
