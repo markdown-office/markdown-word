@@ -98,6 +98,28 @@ final class WordPackage
     }
 
     /**
+     * The part holding the body of an archive on disk.
+     *
+     * For the callers that only need to know where to read — the command line
+     * checking that a region is in a template — and so must not be handed a copy
+     * of a file that is not theirs to change.
+     */
+    public static function mainPartOf(string $path): string
+    {
+        $zip = new ZipArchive();
+
+        if ($zip->open($path) !== true) {
+            return self::FALLBACK_MAIN;
+        }
+
+        try {
+            return self::bodyPart($zip);
+        } finally {
+            $zip->close();
+        }
+    }
+
+    /**
      * The relationship part belonging to a body part.
      *
      * By the package's own convention rather than by substitution, so a body part

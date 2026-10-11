@@ -91,20 +91,12 @@ final class TemplatePackage
      * For the callers that only need to know where to read — the command line
      * checking that a region is in the template — and so must not be handed a copy
      * they would then have to clean up.
+     *
+     * @see WordPackage::mainPartOf()
      */
     public static function mainPartOf(string $template): string
     {
-        $zip = new ZipArchive();
-
-        if ($zip->open($template) !== true) {
-            return WordPackage::FALLBACK_MAIN;
-        }
-
-        try {
-            return WordPackage::bodyPart($zip);
-        } finally {
-            $zip->close();
-        }
+        return WordPackage::mainPartOf($template);
     }
 
     /** The file to render into: the caller's own, or a normalised copy of it. */
