@@ -286,18 +286,25 @@ final class WordFields
      * The name a field's instruction asks for, or null when it is not a `MERGEFIELD`.
      *
      * An instruction is free text — ` MERGEFIELD client \* MERGEFORMAT ` — so the name
-     * is the word after the field type, and only that word. Anything after it is a
-     * switch and belongs to Word.
+     * is what follows the field type, and only that. Anything after it is a switch and
+     * belongs to Word.
+     *
+     * A name with a space in it is stored quoted, so it is matched outside the quotes
+     * rather than by splitting on every space: `"client name"` is one name and not
+     * two, and splitting it leaves an instruction asking for a field called `"client`.
      */
     private static function nameOf(string $instruction): ?string
     {
-        $tokens = preg_split('~\s+~', trim($instruction)) ?: [];
+        // The quoted form first, or `"client name"` is read as the name `"client`.
+        if (preg_match('/^\s*MERGEFIELD\s+"([^"]*)"/i', $instruction, $found) === 1) {
+            return $found[1] === '' ? null : strtoupper($found[1]);
+        }
 
-        if (strtoupper($tokens[0] ?? '') !== self::MERGE) {
+        if (preg_match('/^\s*MERGEFIELD\s+(\S+)/i', $instruction, $found) !== 1) {
             return null;
         }
 
-        $name = trim($tokens[1] ?? '', "\" \t");
+        $name = trim($found[1], '"');
 
         return $name === '' ? null : strtoupper($name);
     }

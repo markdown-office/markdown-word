@@ -353,6 +353,60 @@ private static function mergeField(DOMDocument $dom, string $name): DOMElement
     return $field;
 }
 
+/**
+ * A package holding exactly the parts given, and nothing else.
+ *
+ * For a test about one part's contents rather than about a document PHPWord wrote:
+ * a `.docx` from {@see self::write()} has relationships, numbering and a stylesheet
+ * in it, and a test that only cares whether a field was filled should not have to
+ * reason about the rest.
+ *
+ * @param array<string, string> $parts Part name to its XML.
+ */
+public static function rawPackage(string $name, array $parts): string
+{
+    $path = Scratch::path($name . '-' . bin2hex(random_bytes(4)), '.docx');
+
+    $zip = new ZipArchive();
+    $zip->open($path, ZipArchive::CREATE);
+
+    $zip->addFromString(
+        '[Content_Types].xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        . '<Default Extension="xml" ContentType="application/xml"/>'
+        . '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        . '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+        . '</Types>',
+    );
+
+    foreach ($parts as $part => $xml) {
+        $zip->addFromString($part, $xml);
+    }
+
+    $zip->close();
+
+    return $path;
+}
+
+/** Put a part into an existing package, replacing what is there. */
+public static function addRawPart(string $path, string $part, string $xml): void
+{
+    $zip = new ZipArchive();
+    $zip->open($path);
+    $zip->deleteName($part);
+    $zip->addFromString($part, $xml);
+    $zip->close();
+}
+
+/** A Word part wrapped in its element, with the namespaces a `w:` fragment needs. */
+public static function part(string $root, string $inner): string
+{
+    return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<w:' . $root . ' xmlns:w="' . self::W_NS . '">' . $inner . '</w:' . $root . '>';
+}
+
 private static function write(PhpWord $phpWord, string $name): string
     {
         $path = Scratch::path($name);
