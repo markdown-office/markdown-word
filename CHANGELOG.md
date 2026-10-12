@@ -6,6 +6,58 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **A template is filled with Word's own constructs.** A value is a `MERGEFIELD` —
+  the field a person inserts with `Ctrl+F9` — and the place for the content is a
+  rich-text content control from the Developer tab. `${name}`, `${/name}` and
+  `${slot}` are gone, and with them `--define` and `--region`: there is no longer a
+  dialect of this library's own for a template to be written in.
+
+  **This is a breaking change.** A template written for the markers stops working,
+  and `MarkdownTemplate::insert()` takes the Markdown alone rather than a region name
+  and it. Nothing is deprecated first — the markers were never anything but this
+  library's, and supporting both would mean two ways to fill a template forever.
+
+  A filled field is **unlinked**: the value stays and the field goes, which is what
+  Word's own *Finish & Merge* produces and what a finished document wants. Only
+  `MERGEFIELD` is filled — a document is full of `PAGE`, `TOC` and `REF` fields that
+  are its own business, and a template that filled `PAGE` from a frontmatter block
+  would produce wrong page numbers. Headers and footers are filled too, because a
+  letterhead puts the client's name in a header.
+
+  `repeat()` is gone with it. A row-cloning primitive was a second dialect, and a
+  list of records is a table in the Markdown, which the template styles like any
+  other content.
+
+- **Values come out of the document**, under `fields:` in the block it already had:
+
+  ```markdown
+  ---
+  fields:
+    client: Northwind Ltd
+  ---
+
+  # Highlights
+  ```
+
+  A document whose client is in a PHP array is a document whose client is in two
+  places, and changing one does not change the other. `MarkdownTemplate`'s parser
+  carries `FrontMatterExtension` now, which is the opposite of `MarkdownToWord`'s:
+  there the block is configuration a caller may not have written, and here it is
+  where the values are.
+
+  `MarkdownToWord::renderIntoContainer()` accepts an already-parsed document, so a
+  template reads the block off one parse rather than parsing the same text twice.
+
+### Fixed
+
+- **A rendered block written into a template arrived as text.** PHPWord's element
+  writer emits a fragment indented for a human to read, and whitespace between a
+  `w:t` and its text *is* text to Word: every paragraph in the document opened with
+  the literal characters `<w:p>`. No text-level assertion could see it, because the
+  words after it were exactly right.
+
 ### Added
 
 - **`*.dotx` templates.** `--template`, `MarkdownTemplate` and `template_file:` all

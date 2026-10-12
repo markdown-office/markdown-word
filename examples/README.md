@@ -337,13 +337,14 @@ third, or Word will ignore it.
 
 `templates/meridian-qbr.dotx` is committed — it is the one Word file here you
 open rather than a build product, so a fresh clone has it without running
-anything. `php examples/build.php` renders the same Markdown into it and into an
-identical `.docx` built beside it:
+anything. `php examples/build.php` renders the same Markdown into it, into an
+identical `.docx`, and into a plain template that is only a logo and a control:
 
 | | |
 | --- | --- |
-| `21-dotx-report.docx` | rendered through `templates/meridian-qbr.dotx` |
-| `21-dotx-report.docx-template.docx` | rendered through `out/meridian-qbr.docx` |
+| `22-corporate-report.docx` | rendered through `templates/meridian-qbr.dotx` |
+| `22-corporate-report.docx-template.docx` | rendered through `out/meridian-qbr.docx` |
+| `23-plain-letterhead.docx` | rendered through a template with a logo and a control, and nothing else |
 
 Open the two results side by side. The words, the styles and the layout are
 identical, because which kind of template it is makes no difference to the
@@ -353,8 +354,8 @@ a package typed as a template by creating a *new* document from it — so a
 filled-in template that kept its own type is not a document, whatever it was
 saved as.
 
-The template itself is worth opening: it is the template, with its masthead, its
-rules and its `${…}` regions unfilled.
+The template itself is worth opening: it is the template, with its masthead, its logo
+and its body control unfilled.
 
 ```sh
 php examples/build.php --write-template   # rebuilds templates/meridian-qbr.dotx

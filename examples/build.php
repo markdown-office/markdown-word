@@ -306,7 +306,7 @@ foreach ([
 // The plain template: an ordinary Word document with nothing but the body control and
 // the logo, which is what most templates actually are. Everything else about the
 // appearance comes from the library's built-in look rather than from the file.
-$plainPath = $out . '/plain-letterhead' . DOCX_EXTENSION;
+$plainPath = $out . '/23-plain-letterhead' . DOCX_EXTENSION;
 $plainSource = $out . '/plain-letterhead-source' . DOCX_EXTENSION;
 
 buildPlainTemplate($plainSource);

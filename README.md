@@ -513,8 +513,6 @@ The options both directions share:
 | `-c, --config <file.php>` | a file returning the styles and options to use |
 | `--theme <name>` | a named look to draw in; a `styles:` block still wins over it |
 | `-t, --template <file.docx\|.dotx>` | render into a Word template rather than a new document |
-| `--region <name>` | the template region to fill in, `body` by default |
-| `--define <name=value>` | a value for a single-line placeholder; repeatable |
 | `--images <mode>` | `embed`, `placeholder` or `skip` |
 | `--no-images` | shorthand for `--images skip` |
 | `--image-base <dir>` | where relative image paths resolve from |
@@ -561,7 +559,8 @@ line from this repository, because it is the caller's mistake to fix and not a d
 Exit status is 1.
 
 A mistake is reported in a sentence, with what to do about it, and the exit code
-is non-zero — a wrong `--region` names the regions the template does have rather
+is non-zero — a template with nowhere for the content names the controls it does
+have rather
 than producing a document full of `${...}`.
 
 ### The phar
@@ -609,6 +608,17 @@ are both accepted, and which one it is makes no difference to the result: **a fi
 template is always a document.** See [What a `.dotx` costs](#what-a-dotx-costs) for
 why that is worth saying.
 
+Everything a template says is something Word already understands, because a template
+comes from Word and anything else would have to be invented here:
+
+| | |
+| --- | --- |
+| A value | a **`MERGEFIELD`**, the field a person inserts with `Ctrl+F9` |
+| A place for the content | a **rich-text content control**, named `body` |
+
+There is no third thing. A row of records is a table in the Markdown, and the template
+styles it like any other content — which is why there is no loop to explain.
+
 ```php
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
@@ -620,18 +630,31 @@ $config = Configuration::create()->withStyles([
     Styles::BLOCK_QUOTE => 'PullQuote',
 ]);
 
-$template = new MarkdownTemplate('report-template.docx', $config, [
-    'customer' => 'Northwind Ltd',
-]);
-
-$template
-    ->insert('body', file_get_contents('summary.md'))
-    ->repeat('rows', [
-        ['item' => 'Licence', 'price' => '1,200 EUR'],
-        ['item' => 'Support', 'price' => '300 EUR'],
-    ])
+(new MarkdownTemplate('report-template.docx', $config))
+    ->insert(file_get_contents('summary.md'))
     ->save('northwind.docx');
 ```
+
+`summary.md` carries its own values, so the document and everything in it travel
+together:
+
+```markdown
+---
+fields:
+  customer: Northwind Ltd
+---
+
+# Highlights
+
+- one
+- two
+```
+
+**Filled fields are unlinked.** The value stays and the field goes, which is what
+Word's own *Finish & Merge → Edit Individual Documents* produces and what a finished
+document wants: nothing to refresh with `F9`, and a value that can hold `&` or `<`
+without becoming an instruction. A template with no `body` control is a
+`NoContentControl`, which names the controls it does have.
 
 ### What a `.dotx` costs
 
@@ -666,33 +689,29 @@ when the renderer goes.
 
 ### The template contract
 
-A `${name}` macro is for a **single-line value**:
+A template says two things, and both are Word constructs:
+
+- **A value** is a `MERGEFIELD`. Insert one with `Ctrl+F9`, name it `customer`, and
+  the document supplies `customer` under `fields:`.
+- **A place for the content** is a rich-text **content control**, inserted from the
+  Developer tab. Its *tag* names it — `body` unless `insert()` is told otherwise —
+  because the tag is what a program reads and the alias is the visible label somebody
+  renames while working on the template.
+
+A template with no body control is refused rather than filled at the end of the
+document. A letterhead whose closing line and signature block come last would
+otherwise receive the body above them, and the result looks like a finished document.
 
 ```
-Report for ${customer}
+Report for «client»          ← a MERGEFIELD, filled and then unlinked
+┌ body ──────────────────┐
+│ Click here to enter…   │  ← a content control, replaced and then removed
+└───────────────────────┘
 ```
 
-Markdown needs a **region** — a `${name}` marker, a `${slot}` paragraph, and a
-matching `${/name}` marker. The region is cloned once per rendered block and each
-clone's slot is replaced:
-
-```
-${body}
-${slot}
-${/body}
-```
-
-A region whose macros are ordinary names repeats once per row instead:
-
-```
-${rows}
-${item}: ${price}
-${/rows}
-```
-
-`MarkdownTemplate::processor()` returns PHPWord's own `TemplateProcessor` for
-anything this class does not wrap — replacing images, applying an XSL style sheet
-and so on.
+The `«»` Word shows around a field is what a template carries before it is filled, not
+what a finished document has: fields are unlinked, so nothing in the output is a
+placeholder anyone could still type into.
 
 Two things are carried across into the template that a naive copy would lose, and
 that the library therefore rebuilds on the way out:
@@ -849,7 +868,7 @@ a path lands*, not where it was written from: a document in `docs/` naming a tem
 one directory up is inside the working directory and is a template, not an escape.
 
 ```sh
-$ mdword to-docx notes.md --region summary   # template_file: report.dotx, beside notes.md
+$ mdword to-docx notes.md      # template_file: report.dotx, beside notes.md
 $ mdword to-docx notes.md --template other.dotx   # the flag outranks the block
 ```
 
