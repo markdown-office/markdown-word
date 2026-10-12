@@ -263,6 +263,8 @@ final class MarkdownToWord implements Converter
             );
         }
 
+        $this->format = Format::Docx;
+
         return $this->write(Format::Docx, $this->toPhpWord(Input::markdown($this->source)), $target);
     }
 
@@ -292,6 +294,9 @@ final class MarkdownToWord implements Converter
                 . 'or to ' . self::class . '::toDocx().',
             );
         }
+
+        // Before the render, for the reason {@see self::to()} gives.
+        $this->format = $format;
 
         return $this->write($format, $this->toPhpWord(Input::markdown($this->source)), $target);
     }
@@ -344,6 +349,12 @@ final class MarkdownToWord implements Converter
      */
     public function to(Format $format, string $markdown, ?PhpWord $phpWord = null): string
     {
+        // Recorded before the document is rendered rather than in {@see self::write()},
+        // because what a picture is allowed to be depends on the format: a `.docx` can
+        // carry the vector and so may take a placeholder beside it, and a format that
+        // drops the vector has only the picture left to draw.
+        $this->format = $format;
+
         return $this->write($format, $this->toPhpWord($markdown, $phpWord), null);
     }
 
@@ -459,7 +470,7 @@ final class MarkdownToWord implements Converter
 
         $inlines = new InlineRenderer(
             $styles,
-            new ImageResolver($config->getOptions(), $this->images, $this->conversions, $this->vectors),
+            new ImageResolver($config->getOptions(), $this->images, $this->conversions, $this->vectors, $this->format),
             $this->links,
             $html,
             $config->getOptions()->deferredHyperlinks,

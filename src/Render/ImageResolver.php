@@ -7,6 +7,7 @@ namespace MarkdownWord\Render;
 use League\CommonMark\Extension\CommonMark\Node\Inline\Image;
 use MarkdownWord\Configuration\Options;
 use MarkdownWord\Exception\UnsupportedImageFormat;
+use MarkdownWord\Format;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\Exception\InvalidImageException;
 use PhpOffice\PhpWord\Exception\UnsupportedImageTypeException;
@@ -30,6 +31,7 @@ final class ImageResolver
         private readonly ImageDescriptionCollector $descriptions,
         private readonly ImageConversionCollector $conversions = new ImageConversionCollector(),
         private readonly SvgAttachmentCollector $vectors = new SvgAttachmentCollector(),
+        private readonly ?Format $format = null,
     ) {
     }
 
@@ -125,44 +127,43 @@ final class ImageResolver
      * An SVG goes in as a picture PHPWord can draw, with the vector kept for
      * {@see \MarkdownWord\Writer\SvgPass} to point a later Word at.
      *
-     * Whether that picture is a raster of the SVG or a placeholder depends on
-     * `svgFallback`. Word 2016 and later draw the vector either way, so the raster is
-     * there for the readers that do not — Google Docs among them — and a build asked
-     * for `none` never needs one, which is what takes the rasteriser off the default path.
+     * Whether that picture is a raster of the SVG or a placeholder turns on two things.
+     * `svgFallback` asks for it, and the format settles whether there is a choice at all:
+     * only a writer that keeps the vector has something for a raster to sit beside, so
+     * `.odt` and `.rtf`, which drop it, need the raster or they have no picture.
      *
-     * @throws UnsupportedImageFormat when the file claims to be a vector and is not one.
+     * @throws UnsupportedImageFormat when a picture is needed and this PHP cannot produce
+     *         one, when the file claims to be a vector and is not one, or when it states
+     *         no size to be placed at.
      */
     private function embedSvg(string $path, AbstractContainer $target, int $position): void
     {
-        $wantsRaster = $this->options->svgFallback === Options::SVG_FALLBACK_RASTER;
+        // Read first, so a file that holds no SVG is reported as that rather than as one
+        // that cannot be sized — the two have different fixes for whoever wrote it.
+        $original = $this->readVector($path);
 
-        // Asked for the size before anything else, because a file that states none has no
-        // honest size to be placed at. {@see SvgRasteriser::intrinsicSize()} would answer
-        // with a guess for the sake of a caller who can see the guess being made.
         if (!SvgRasteriser::declaresSize($path)) {
             throw UnsupportedImageFormat::svg($path, 'it states no width, height or viewBox, so there is nothing to place it at');
         }
 
-        // Asked for a raster and this build cannot draw one, the vector is written on its
-        // own rather than the conversion refused. A document with a picture in it beats a
-        // document nobody has, and {@see \MarkdownWord\MarkdownToWord::pendingLosses()}
-        // says what the older readers will be missing. A file that is not an SVG is the
-        // other matter, and still raises: that one is the caller's file, not this host.
-        if ($wantsRaster && !SvgRasteriser::available()) {
-            $wantsRaster = false;
-        }
+        $wantsRaster = $this->needsRaster();
 
         if ($wantsRaster) {
+            if (!SvgRasteriser::available()) {
+                throw UnsupportedImageFormat::svg($path);
+            }
+
             $raster = SvgRasteriser::toPng($path);
 
             if ($raster === null) {
                 throw UnsupportedImageFormat::svg($path, 'this PHP could not read it as one');
             }
         } else {
+            // A placeholder is only ever a stand-in for the vector a reader is about to be
+            // given. Where the vector is going to be dropped the placeholder would be all
+            // that is left of the picture, which {@see self::needsRaster()} rules out.
             $raster = PlaceholderRaster::bytes();
         }
-
-        $original = $this->readVector($path);
 
         // PHPWord measures the raster in pixels and lays it out in points, one pixel
         // to a point — but the raster is the SVG at 96dpi, so its pixel count is 1.33
@@ -198,6 +199,30 @@ final class ImageResolver
         $target->addImage($raster, $style);
 
         $this->vectors->add($position, 'image' . ($position + 1) . '.svg', $original, $wantsRaster);
+    }
+
+    /**
+     * Whether this picture has to be a real raster rather than a placeholder.
+     *
+     * Two ways to arrive at yes. A format that drops the vector leaves the picture as the
+     * only thing a reader will draw, so `svgFallback` has nothing to choose between and
+     * the raster is the picture. And `svgFallback: raster`, which is what the option is
+     * for — a raster for the readers that cannot take the vector.
+     *
+     * Asked for and not given, the vector is written on its own instead of the conversion
+     * being refused: a document whose readers may miss one picture beats no document, and
+     * {@see \MarkdownWord\MarkdownToWord::pendingLosses()} says what that costs.
+     */
+    private function needsRaster(): bool
+    {
+        $dropsVector = \in_array('svg-vector', $this->format?->drops() ?? [], true);
+
+        if ($dropsVector) {
+            return true;
+        }
+
+        return $this->options->svgFallback === Options::SVG_FALLBACK_RASTER
+            && SvgRasteriser::available();
     }
 
     /**

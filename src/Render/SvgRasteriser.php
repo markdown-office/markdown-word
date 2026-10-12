@@ -226,21 +226,17 @@ final class SvgRasteriser
     {
         $markup = @file_get_contents($path);
 
-        if ($markup === false || $markup === '') {
-            return null;
-        }
-
         // A `.svgz` is the same document gzipped, so it has to be opened before it can be
         // read. Asking the reader here is also what ImageMagick does with the file, which
         // is why the raster it produces and the size worked out here describe one picture.
-        if (\strtolower(\pathinfo($path, PATHINFO_EXTENSION)) === 'svgz') {
-            $inflated = @gzdecode($markup);
+        // Folded into the guard below rather than given its own exit: a file that cannot
+        // be opened and a file that is not XML are the same answer to this question.
+        if ($markup !== false && \strtolower(\pathinfo($path, PATHINFO_EXTENSION)) === 'svgz') {
+            $markup = @gzdecode($markup);
+        }
 
-            if ($inflated === false) {
-                return null;
-            }
-
-            $markup = $inflated;
+        if ($markup === false || $markup === '') {
+            return null;
         }
 
         // `LIBXML_NONET` for the reason `src/Xml.php` gives: a document should not

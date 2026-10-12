@@ -185,11 +185,16 @@ it('refuses an SVG it cannot read, and says the file rather than the format is t
 
     $markdown = "![Alt](broken.svg)\n";
 
+    // The reason, not the preamble every message of this kind shares. A file that is not
+    // a vector and a vector that states no size are both refused here, and the fixes are
+    // nothing alike: one is to export the file properly, the other to give the drawing a
+    // size. Reading the file before it is measured is what tells them apart.
     expect(fn () => (new MarkdownToWord($markdown, Configuration::create()->withOptions([
         'images' => 'embed',
         'imageBasePath' => $directory,
     ])))->toDocx($markdown))
-        ->toThrow(UnsupportedImageFormat::class, 'Word can hold an SVG');
+        ->toThrow(UnsupportedImageFormat::class, 'it holds no SVG, whatever it is called')
+        ->not->toThrow(UnsupportedImageFormat::class, 'states no width');
 });
 
 it('reports a rasteriser that is present but cannot draw the file', function () {

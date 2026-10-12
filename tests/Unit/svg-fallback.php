@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use MarkdownWord\Configuration;
+use MarkdownWord\Exception\UnsupportedImageFormat;
+use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Render\SvgRasteriser;
 use MarkdownWord\Tests\Support\Upstream;
@@ -215,6 +217,37 @@ it('attaches only this document\'s vectors to it', function () {
 
     @unlink($base . '/diagram.svg');
     @unlink($base . '/photo.png');
+    @rmdir($base);
+});
+
+it('gives a format that drops the vector a raster, or refuses rather than a blank', function () {
+    // `.odt` and `.rtf` never run the pass that attaches a vector, so whatever PHPWord
+    // was handed is all a reader will ever draw. A placeholder there is not a fallback
+    // for the vector — it *is* the picture, and it is one transparent pixel.
+    $base = svgBase('diagram.svg');
+
+    $converter = new MarkdownToWord(null, Configuration::create()->withOptions([
+        'images' => 'embed',
+        'imageBasePath' => $base,
+        'svgFallback' => 'none',
+    ]));
+
+    foreach ([Format::Odt, Format::Rtf] as $format) {
+        if (SvgRasteriser::available()) {
+            $bytes = $converter->to($format, "![A](diagram.svg)\n");
+
+            expect(strlen($bytes))->toBeGreaterThan(200);
+
+            continue;
+        }
+
+        // Without a rasteriser the only honest answer is to refuse, which is what the
+        // library did before there was a placeholder to write by mistake.
+        expect(fn () => $converter->to($format, "![A](diagram.svg)\n"))
+            ->toThrow(UnsupportedImageFormat::class);
+    }
+
+    @unlink($base . '/diagram.svg');
     @rmdir($base);
 });
 

@@ -518,6 +518,7 @@ The options both directions share:
 | `--images <mode>` | `embed`, `placeholder` or `skip` |
 | `--no-images` | shorthand for `--images skip` |
 | `--image-base <dir>` | where relative image paths resolve from |
+| `--svg-fallback <mode>` | `raster` writes a raster beside each SVG, `none` writes the vector alone |
 | `--table-width <n>` | table width in fiftieths of a percent; `5000` is full width |
 | `--plain` | no code colouring, no quote style, no table borders, no added spacing |
 
@@ -1173,7 +1174,7 @@ with no raster behind it renders nothing in all of them.
 
 Which of those two outcomes a document gets is `svgFallback`:
 
-| `svgFallback` | Written | Needs `ext-imagick` | Drawn by |
+| `svgFallback` | Written as `.docx` | Needs `ext-imagick` | Drawn by |
 | --- | --- | --- | --- |
 | `raster` *(default)* | raster beside the vector | yes | every reader |
 | `none` | the vector alone | no | Word 2016+, recent LibreOffice |
@@ -1182,6 +1183,11 @@ Which of those two outcomes a document gets is `svgFallback`:
 the extension and nothing else. It is the smaller document and the one that puts no
 rasteriser on the default path, and it costs the readers in the second column their
 pictures. Choose it when you know what will open the file.
+
+**The option is about `.docx`, because only `.docx` keeps the vector.** A raster is what
+an `.odt` or an `.rtf` has to draw the picture from, so those two always want one whatever
+this is set to, and where no usable rasteriser is installed they refuse an SVG rather than
+write a picture that is one transparent pixel.
 
 `raster` needs `ext-imagick`, which is **optional**. Where there is no usable
 rasteriser, the vector is written on its own rather than the conversion refused — a
