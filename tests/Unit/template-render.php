@@ -35,7 +35,7 @@ it('markdown is inserted where the placeholder sits', function () {
         Scratch::remember(TemplateFactory::report()),
         ['reference' => 'REF-1'],
         static function (MarkdownTemplate $template): void {
-            $template->insert("First line\n\nSecond line", 'summary');
+            $template->insert("First line\n\nSecond line");
         },
     );
 

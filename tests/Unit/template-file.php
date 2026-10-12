@@ -92,7 +92,6 @@ it('renders into the template the document names', function () {
     // default is `body`, which this template does not have.
     $run = runCli([
         'to-docx', $markdown,
-        '--region', 'summary',
         '-o', $directory . '/out.docx',
     ]);
 
@@ -193,7 +192,6 @@ it('accepts a document pointing inside the working directory', function () {
 
     $run = runCli([
         'to-docx', $markdown,
-        '--region', 'summary',
         '-o', $directory . '/out.docx',
     ]);
 

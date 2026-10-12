@@ -178,7 +178,7 @@ it('works through the template path too', function () {
 
     $target = Scratch::path('frontmatter-template.docx');
     (new MarkdownTemplate($template, Configuration::create(), [], frontmatterParser()))
-        ->insert('summary', $markdown)
+        ->insert($markdown)
         ->save($target);
 
     expect(xmlOf((string) file_get_contents($target)))->toContain('w:sz w:val="60"');

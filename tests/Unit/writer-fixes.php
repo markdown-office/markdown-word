@@ -211,8 +211,15 @@ it('continues a template that already has a list rather than colliding with it',
     expect($ids[1])->toBe(array_values(array_unique($ids[1])));
 
     // The paragraphs the Markdown added have to point at their own definition,
-    // and it has to be a bullet one.
-    preg_match('/<w:numId w:val="(\d+)"\/>/', TemplateFactory::xmlOf($output), $reference);
+    // and it has to be a bullet one. The paragraph is matched by its text rather
+    // than by position: the template brings a list of its own, and the first
+    // `w:numId` in the document is that one's.
+    $document = TemplateFactory::xmlOf($output);
+
+    preg_match('/<w:p\b(?:(?!<\/w:p>).)*?alpha(?:(?!<\/w:p>).)*?<\/w:p>/s', $document, $paragraph);
+
+    expect($paragraph)->not->toBeEmpty();
+    preg_match('/<w:numId w:val="(\d+)"\/>/', $paragraph[0], $reference);
 
     expect($reference)->not->toBeEmpty();
     expect($numbering)->toContain(sprintf('<w:num w:numId="%s">', $reference[1]));
@@ -372,7 +379,7 @@ function writerFixesRenderInto(string $template, string $markdown): string
     $output = Scratch::path('rendered');
 
     $processor = new MarkdownTemplate($template);
-    $processor->insert('body', $markdown);
+    $processor->insert($markdown);
 
     saveTemplateDocument($processor, $output);
 

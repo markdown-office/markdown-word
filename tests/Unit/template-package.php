@@ -71,7 +71,7 @@ it('carries a link whose label has emphasis into a template', function () {
     $output = Scratch::path('filled-with-link.docx');
 
     $renderer = new MarkdownTemplate($template);
-    $renderer->insert('body', 'A [**bold** link](https://example.com).' . "\n");
+    $renderer->insert('A [**bold** link](https://example.com).' . "\n");
 
     saveTemplateDocument($renderer, $output);
 
@@ -227,7 +227,7 @@ function fill(string $template, string $markdown): string
     $output = Scratch::path('filled-' . basename($template));
 
     $renderer = new MarkdownTemplate($template);
-    $renderer->insert('body', $markdown);
+    $renderer->insert($markdown);
 
     saveTemplateDocument($renderer, $output);
 

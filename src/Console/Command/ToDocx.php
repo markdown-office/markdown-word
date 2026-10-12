@@ -337,14 +337,12 @@ class ToDocx extends BaseCommand
     ): void {
         $overrides = $this->typedConfiguration($command);
 
-        // The values come out of the document's own `---` block, so a document says
-        // what its own values are rather than the command line saying them for it.
-        // `--define` is gone with the macro dialect: a value belongs to the document
-        // that has it, and a flag that fills a template was a second way to say the
-        // same thing.
-        $fields = $this->fieldsFrom($markdown);
-
-        $template = $this->application->template($path, $config, $fields, $overrides, $command->value('theme'));
+        // The values come out of the document's own `---` block, which
+        // {@see MarkdownTemplate::insert()} reads — a document says what its own
+        // values are rather than the command line saying them for it. `--define` is
+        // gone with the macro dialect: a value belongs to the document that has it,
+        // and a flag that fills a template was a second way to say the same thing.
+        $template = $this->application->template($path, $config, [], $overrides, $command->value('theme'));
         $template->insert($markdown);
 
         // Filling the document is the slow part of a run.
@@ -359,17 +357,6 @@ class ToDocx extends BaseCommand
         $template->save($output);
     }
 
-    /**
-     * The values a document supplies for its template's fields.
-     *
-     * @return array<string, string|int|float>
-     */
-    private function fieldsFrom(string $markdown): array
-    {
-        $document = CommonMarkParser::withAllExtensions()->parse($markdown);
-
-        return Frontmatter::fromDocument($document, $markdown)->fields();
-    }
 
     /**
      * @return array{values: list<string>, flags: list<string>, repeated: list<string>, aliases: array<string, string>}

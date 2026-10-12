@@ -44,9 +44,11 @@ final class TemplateFactory
         // side kept, which is what {@see self::withControl()} does when it splits.
         $section->addText('@@reference@@');
 
-        // `summary` rather than `body`: a template names where its content goes, and a
-        // report letterhead whose body region is called `summary` is the ordinary case.
-        return self::withControl(self::write($phpWord, 'report'), 'summary');
+        // `body`, the name {@see ContentControl::BODY} gives and the renderer looks for by
+        // default. A template may name it anything — `insert()` takes the name — and
+        // a letterhead whose control is called `terms` is as ordinary as one called
+        // `body`; this fixture uses the default so the CLI tests exercise it.
+        return self::withControl(self::write($phpWord, 'report'), ContentControl::BODY);
     }
 
     /**
@@ -99,10 +101,6 @@ final class TemplateFactory
         $phpWord = new PhpWord();
         $section = $phpWord->addSection();
 
-        $section->addText('${' . $name . '}');
-        $section->addText('${slot}');
-        $section->addText('${/' . $name . '}');
-
         // An ordered list, so the Markdown inserted into the same document is
         // the thing that changes format: numbered where the Markdown said
         // bullets is visible in a way two bullet lists are not.
@@ -114,7 +112,9 @@ final class TemplateFactory
         $section->addListItemRun(0, 'CorpOrdered')->addText('template one');
         $section->addListItemRun(0, 'CorpOrdered')->addText('template two');
 
-        return self::write($phpWord, 'with-list');
+        $path = self::write($phpWord, 'with-list');
+
+        return self::withControl($path, $name);
     }
 
     /**
