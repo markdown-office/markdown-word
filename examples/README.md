@@ -53,7 +53,7 @@ past.
 | `20-formats.rtf` | The same page as Rich Text. There is no list in it at all, the code block has no background and no colour, and there is no rule under the `---`. |
 | `22-corporate-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the templates](#the-templates). |
 | `22-corporate-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |
-| `23-plain-letterhead.docx` | The same report into a template that is only a logo and a content control, with no styles at all, so the built-in look does the work. |
+| `23-plain-letterhead.docx` | The same report into a template that is a logo and **nothing else** — no styles, and no content control either. The content is appended because the template names no place for it. Compare with `22`. |
 
 Numbering is one sequence and nothing shares a number. `markdown/14-rejected.md` is
 not in this table because `build.php` does not build it — converting it is the failure
@@ -326,7 +326,7 @@ committed, so a fresh clone can open them without running anything:
 | Template | What it carries |
 | --- | --- |
 | `meridian-qbr.dotx` | The corporate letterhead: the logo in the header, six `MERGEFIELD`s, a body content control, and the house fonts and sizes. |
-| `plain-letterhead.dotx` | A logo and a body content control. Nothing else — no styles at all, so whatever the document looks like comes from the library's built-in look. |
+| `plain-letterhead.dotx` | A logo and **nothing else** — no styles, and no content control. Nobody making a letterhead inserts one, which is what makes this the case the fallback exists for. |
 | `invoice.dotx` | Two font styles, an invoice heading, two `MERGEFIELD`s and a body control. Small, because it carries no logo. |
 
 Every one says the same two things, and both are things Word already understands:

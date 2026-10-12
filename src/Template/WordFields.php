@@ -58,9 +58,6 @@ use ZipArchive;
  */
 final class WordFields
 {
-    /** The field this resolves. Every other one is left alone; see the class docblock. */
-    private const MERGE = 'MERGEFIELD';
-
     private const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
     /** @var array<string, string> */

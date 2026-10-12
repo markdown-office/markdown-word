@@ -358,9 +358,14 @@ foreach ([
     $built[] = [$name, 'Rendered into ' . basename($template) . '.', $path];
 }
 
-// The plain template: an ordinary Word document with nothing but the body control and
-// the logo, which is what most templates actually are. Everything else about the
+// The plain template: a logo and nothing else, which is what most templates actually
+// are — and, more to the point, what a letterhead somebody made in Word to be filled in
+// by a person looks like, because nobody making one inserts a content control. The
+// content is appended, which is the whole of the fallback; everything else about the
 // appearance comes from the library's built-in look rather than from the file.
+//
+// The pair with `22-corporate-report` is deliberate: that one names where the content
+// goes, this one does not, and both render the same Markdown.
 $plainPath = $docs . '/23-plain-letterhead' . DOCX_EXTENSION;
 
 (new MarkdownTemplate($templatePaths['plain-letterhead']))

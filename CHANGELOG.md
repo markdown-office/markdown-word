@@ -89,6 +89,10 @@ All notable changes to this project are documented here. The format follows
   and names the controls the template does have. `mdword to-docx` reaches it with
   `--require-control`.
 
+  `ContentControl::fill()` returns `bool` where it returned `void` — whether it found a
+  control to fill. It no longer throws `NoContentControl` itself; deciding what an
+  absent control means is the caller's, and it now has the answer to decide on.
+
 - **`examples/out/` is emptied at the start of every build**, and holds only
   `documents/` and `previews/`. A build that wrote only what it still named left
   behind every name it had stopped naming, which is how a template written in the
