@@ -461,7 +461,7 @@ attempted. A `.dotx` is the same package with its body declared as a template's,
 whatever it is rendered into, the result is a document — see [Word
 templates](#word-templates).
 
-**An SVG needs `ext-imagick` whichever format it is going to.** The raster beside
+**An SVG needs `ext-imagick` unless `svgFallback` is `none`.** The raster beside
 the vector is drawn by something, and without it an SVG raises and says so rather
 than going in silently flattened.
 
@@ -1163,13 +1163,27 @@ vector referenced from an extension on the same picture element.
 ```
 
 `rId7` is the PNG, `rId8` is the SVG, and both are in `word/media/`. A 2016-or-later
-Word scales the vector like one; an older one draws the raster. The raster is not
-optional in the sense of "used only if nothing better is available" — **every** reader
-draws it unless it knows to prefer the vector, and a picture carrying the `svgBlip`
-with no raster behind it renders *nothing at all*. So an SVG has to be rasterised on
-the way in.
+Word scales the vector like one; an older one draws the raster.
 
-That needs `ext-imagick`, which is **optional**. Where it is absent, an SVG raises
+The raster is there for the readers that cannot take the vector — **Google Docs among
+them**, which draws a picture carrying only the `svgBlip` as nothing at all. It is not
+optional in the sense of "used only if nothing better is available": every reader draws
+the `a:blip` unless it knows to prefer the vector, so a picture carrying the extension
+with no raster behind it renders nothing in all of them.
+
+Which of those two outcomes a document gets is `svgFallback`:
+
+| `svgFallback` | Written | Needs `ext-imagick` | Drawn by |
+| --- | --- | --- | --- |
+| `raster` *(default)* | raster beside the vector | yes | every reader |
+| `none` | the vector alone | no | Word 2016+, recent LibreOffice |
+
+`r:embed` is optional on `a:blip`, so `none` is a shape Word opens: the blip carries
+the extension and nothing else. It is the smaller document and the one that puts no
+rasteriser on the default path, and it costs the readers in the second column their
+pictures. Choose it when you know what will open the file.
+
+`raster` needs `ext-imagick`, which is **optional**. Where it is absent, an SVG raises
 and says so:
 
 ```
@@ -1186,9 +1200,12 @@ sent a reader to check something that was never wrong.
 Two things are worth knowing about the mechanics. PHPWord writes images as VML, which
 has nowhere to hang an extension on, so a picture with a vector is rewritten as
 DrawingML — the form Word writes today — while every other image keeps PHPWord's
-markup untouched. And the picture is sized from the SVG's own dimensions rather than
-from the raster's, because PHPWord reads an image's pixels as points and the raster is
-the SVG at 96dpi: a 480-unit diagram would otherwise be laid out a third too large.
+markup untouched. And the picture is found by its position among the document's
+images, the same way its alt text is, rather than by the bytes of the raster beside it:
+PHPWord names media parts as it writes them, so a part name says nothing about which
+picture became it. The size comes from the SVG's own dimensions rather than the
+raster's, because PHPWord reads an image's pixels as points and the raster is the SVG at
+96dpi: a 480-unit diagram would otherwise be laid out a third too large.
 
 **A file that is there and cannot be used at all is refused.** A truncated download, a
 format this build has no decoder for: `Exception\UnsupportedImageFormat`, naming the

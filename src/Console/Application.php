@@ -192,7 +192,7 @@ final class Application
     {
         $command = CommandLine::parse(
             $argv,
-            values: ['to', 'output', 'config', 'template', 'region', 'images', 'image-base', 'table-width', 'media', 'line-ending'],
+            values: ['to', 'output', 'config', 'template', 'region', 'images', 'image-base', 'svg-fallback', 'table-width', 'media', 'line-ending'],
             flags: ['help', 'no-images', 'plain', 'setext', 'no-fence', 'no-header'],
             repeated: ['define'],
             aliases: self::aliasMap(),

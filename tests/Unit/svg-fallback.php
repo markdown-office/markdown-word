@@ -1,0 +1,158 @@
+<?php
+
+declare(strict_types=1);
+
+use MarkdownWord\Configuration;
+use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Tests\Support\Upstream;
+
+beforeEach(fn () => Upstream::install());
+afterEach(fn () => Upstream::restore());
+
+/*
+ * `svgFallback`, and the pairing that has to work whether or not a raster is written.
+ *
+ * Deliberately not in `svg.php`, which skips itself without ext-imagick: the whole point
+ * of `svgFallback: none` is that a build without a rasteriser can still write the vector,
+ * and a test that skips itself on such a build cannot say so.
+ */
+
+/** Write an SVG into a directory of its own and return the directory. */
+function svgBase(string $name, string $fill = '#1b3a5c'): string
+{
+    $directory = sys_get_temp_dir() . '/mdword-fallback-' . bin2hex(random_bytes(4));
+
+    if (!is_dir($directory)) {
+        mkdir($directory, 0o777, true);
+    }
+
+    writeSvg($directory . '/' . $name, $fill);
+
+    return $directory;
+}
+
+function writeSvg(string $path, string $fill, string $note = ''): void
+{
+    file_put_contents($path, sprintf(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120">'
+        . '<!-- %s -->'
+        . '<rect width="240" height="120" fill="%s"/></svg>',
+        $note,
+        $fill,
+    ));
+}
+
+/**
+ * @return array{document: string, rels: string, media: array<string, string>, names: list<string>}
+ */
+function renderFallback(string $markdown, string $basePath, string $mode): array
+{
+    $target = sys_get_temp_dir() . '/mdword-fallback-out.docx';
+
+    (new MarkdownToWord($markdown, Configuration::create()->withOptions([
+        'images' => 'embed',
+        'imageBasePath' => $basePath,
+        'svgFallback' => $mode,
+    ])))->save($target);
+
+    $zip = new ZipArchive();
+    $zip->open($target);
+
+    $media = [];
+    $names = [];
+
+    for ($index = 0; $index < $zip->numFiles; $index++) {
+        $name = (string) $zip->getNameIndex($index);
+        $names[] = $name;
+
+        if (str_contains($name, 'word/media/')) {
+            $media[$name] = (string) $zip->getFromName($name);
+        }
+    }
+
+    $parts = [
+        'document' => (string) $zip->getFromName('word/document.xml'),
+        'rels' => (string) $zip->getFromName('word/_rels/document.xml.rels'),
+    ];
+
+    $zip->close();
+    @unlink($target);
+
+    return $parts + ['media' => $media, 'names' => $names];
+}
+
+/** @return list<string> */
+function mediaNamed(array $media, string $extension): array
+{
+    return array_values(array_filter(
+        array_keys($media),
+        static fn (string $name): bool => str_ends_with($name, $extension),
+    ));
+}
+
+it('writes a raster beside the vector by default', function () {
+    $base = svgBase('diagram.svg');
+
+    $parts = renderFallback("![A](diagram.svg)\n", $base, 'raster');
+
+    expect(mediaNamed($parts['media'], '.png'))->toHaveCount(1)
+        ->and(mediaNamed($parts['media'], '.svg'))->toHaveCount(1)
+        ->and($parts['document'])->toContain('<a:blip r:embed=');
+
+    @unlink($base . '/diagram.svg');
+    @rmdir($base);
+});
+
+it('writes the vector on its own when asked, and leaves no raster behind', function () {
+    $base = svgBase('diagram.svg');
+
+    $parts = renderFallback("![A](diagram.svg)\n", $base, 'none');
+
+    // The `a:blip` carries the extension and nothing else. `r:embed` is optional in
+    // `CT_Blip`, and this is the shape Word draws a vector as when nobody asked for a
+    // fallback: Word 2016 and later render it, and every other reader renders nothing.
+    expect($parts['document'])->toContain('<a:blip><a:extLst>')
+        ->and($parts['document'])->not->toContain('<a:blip r:embed')
+        ->and(mediaNamed($parts['media'], '.svg'))->toHaveCount(1)
+        ->and(mediaNamed($parts['media'], '.png'))->toHaveCount(0);
+
+    @unlink($base . '/diagram.svg');
+    @rmdir($base);
+});
+
+it('gives each vector its own part, referenced by the picture it belongs to', function () {
+    $base = svgBase('one.svg');
+    writeSvg($base . '/two.svg', '#7c2d12');
+
+    $parts = renderFallback("![One](one.svg)\n\n![Two](two.svg)\n", $base, 'raster');
+
+    $written = mediaNamed($parts['media'], '.svg');
+    preg_match_all('~<asvg:svgBlip r:embed="(rId\d+)"~', $parts['document'], $references);
+
+    expect($written)->toHaveCount(2)
+        ->and($written[0])->not->toBe($written[1])
+        // Two pictures, two relationships, two parts: neither can be showing the other.
+        ->and(array_unique($references[1]))->toHaveCount(2)
+        ->and($parts['media'][$written[0]])->not->toBe($parts['media'][$written[1]]);
+
+    @unlink($base . '/one.svg');
+    @unlink($base . '/two.svg');
+    @rmdir($base);
+});
+
+it('finds its picture among the ordinary images rather than only among the vectors', function () {
+    // The pairing is the picture's position in the document, not a digest of its bytes,
+    // so a document whose first picture is a PNG has to put the vector on the second.
+    $base = svgBase('diagram.svg');
+    imagepng(imagecreatetruecolor(40, 30), $base . '/photo.png');
+
+    $parts = renderFallback("![Photo](photo.png)\n\n![Vector](diagram.svg)\n", $base, 'none');
+
+    expect(mediaNamed($parts['media'], '.svg'))->toHaveCount(1)
+        ->and(mediaNamed($parts['media'], '.png'))->toHaveCount(1)
+        ->and($parts['document'])->toContain('<asvg:svgBlip');
+
+    @unlink($base . '/diagram.svg');
+    @unlink($base . '/photo.png');
+    @rmdir($base);
+});

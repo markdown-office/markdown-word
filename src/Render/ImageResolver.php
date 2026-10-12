@@ -52,7 +52,7 @@ final class ImageResolver
         $path = $this->resolvePath($url);
 
         if ($this->options->images === Options::IMAGE_EMBED && $path !== null) {
-            $this->embed($path, $target);
+            $this->embed($path, $target, $this->descriptions->countPending());
             $this->descriptions->add($alt);
             $target->addText(' ');
 
@@ -74,15 +74,18 @@ final class ImageResolver
     /**
      * Add the image, decoding it first when Word will not take the format it is in.
  *
+     * @param int $position where this image falls among the document's pictures, which is
+     *        how {@see SvgAttachmentCollector} finds it again once the file has been written
+     *
      * @throws UnsupportedImageFormat when the file is in hand and unusable.
      */
-    private function embed(string $path, AbstractContainer $target): void
+    private function embed(string $path, AbstractContainer $target, int $position): void
     {
         // SVG is not a format Word refuses, which is what the branches below assume.
         // Word holds one happily, but never on its own — see {@see self::embedSvg()} —
         // so it cannot be discovered by letting PHPWord fail on it.
         if (self::looksLikeSvg($path)) {
-            $this->embedSvg($path, $target);
+            $this->embedSvg($path, $target, $position);
 
             return;
         }
@@ -119,18 +122,26 @@ final class ImageResolver
     }
 
     /**
-     * An SVG goes in as a raster, with the vector kept beside it for
+     * An SVG goes in as a picture PHPWord can draw, with the vector kept for
      * {@see \MarkdownWord\Writer\SvgPass} to point a later Word at.
      *
-     * @throws UnsupportedImageFormat when this PHP cannot rasterise the file.
+     * Whether that picture is a raster of the SVG or a placeholder depends on
+     * `svgFallback`. Word 2016 and later draw the vector either way, so the raster is
+     * there for the readers that do not — Google Docs among them — and a build asked
+     * for `none` never needs one, which is what takes the rasteriser off the default path.
+     *
+     * @throws UnsupportedImageFormat when a raster was asked for and this PHP cannot
+     *         produce one, or when the file cannot be read back as a vector.
      */
-    private function embedSvg(string $path, AbstractContainer $target): void
+    private function embedSvg(string $path, AbstractContainer $target, int $position): void
     {
-        if (!SvgRasteriser::available()) {
+        $wantsRaster = $this->options->svgFallback === Options::SVG_FALLBACK_RASTER;
+
+        if ($wantsRaster && !SvgRasteriser::available()) {
             throw UnsupportedImageFormat::svg($path);
         }
 
-        $raster = SvgRasteriser::toPng($path);
+        $raster = $wantsRaster ? SvgRasteriser::toPng($path) : PlaceholderRaster::bytes();
 
         if ($raster === null) {
             throw UnsupportedImageFormat::svg($path, 'this PHP could not read it as one');
@@ -171,7 +182,7 @@ final class ImageResolver
 
         $target->addImage($raster, $style);
 
-        $this->vectors->add($raster, $original);
+        $this->vectors->add($position, 'image' . ($position + 1) . '.svg', $original, $wantsRaster);
     }
 
     /**

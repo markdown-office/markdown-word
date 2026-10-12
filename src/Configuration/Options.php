@@ -45,6 +45,12 @@ final class Options
     public const IMAGE_PLACEHOLDER = 'placeholder';
     public const IMAGE_SKIP = 'skip';
 
+    /** Write an SVG with a raster of itself beside it, for readers that cannot take the vector. */
+    public const SVG_FALLBACK_RASTER = 'raster';
+
+    /** Write the SVG alone, for readers that take the vector. */
+    public const SVG_FALLBACK_NONE = 'none';
+
     /**
      * The properties where `null` is a value in its own right rather than the
      * absence of one; everywhere else it means "not configured" — or, in
@@ -60,6 +66,10 @@ final class Options
 
     /**
      * @param float           $imageMaxWidth     Maximum image width in centimetres; `0` disables scaling.
+     * @param string          $svgFallback       `raster` writes a PNG beside every SVG for readers
+     *        that cannot take the vector — Google Docs among them — at the cost of a rasteriser and
+     *        the bytes it produces. `none` writes the vector alone, which Word 2016 and later and
+     *        recent LibreOffice draw, and which every other reader draws as nothing at all.
      * @param int             $maxHeadingLevel   Headings deeper than this are rendered as paragraphs.
      * @param string          $orderedListFormat `w:numFmt` value for ordered lists (decimal, lowerLetter, ...).
      * @param string|null     $orderedListSuffix Separator between the number and the text: `tab`, `space` or `nothing`.
@@ -80,6 +90,7 @@ final class Options
         public readonly string $images = self::IMAGE_EMBED,
         public readonly ?string $imageBasePath = null,
         public readonly float $imageMaxWidth = 15.0,
+        public readonly string $svgFallback = self::SVG_FALLBACK_RASTER,
         public readonly int $maxHeadingLevel = 6,
         public readonly string $orderedListFormat = 'decimal',
         public readonly ?string $orderedListSuffix = 'tab',
@@ -151,6 +162,19 @@ final class Options
         return $this->with('maxHeadingLevel', $level);
     }
 
+    /**
+     * Whether an SVG is written with a raster of itself beside it, or on its own.
+     *
+     * A setter rather than a second argument to {@see self::withImages()}: the two
+     * answer different questions — what to do with an image, and what to put beside an
+     * SVG that is going in — and only the second has a value worth setting for a
+     * document whose images are all raster already.
+     */
+    public function withSvgFallback(string $mode): self
+    {
+        return $this->with('svgFallback', $mode);
+    }
+
     public function withTableBorders(bool $borders): self
     {
         return $this->with('tableBorders', $borders);
@@ -206,6 +230,7 @@ final class Options
             'images' => $this->images,
             'imageBasePath' => $this->imageBasePath,
             'imageMaxWidth' => $this->imageMaxWidth,
+            'svgFallback' => $this->svgFallback,
             'maxHeadingLevel' => $this->maxHeadingLevel,
             'orderedListFormat' => $this->orderedListFormat,
             'orderedListSuffix' => $this->orderedListSuffix,

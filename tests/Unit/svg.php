@@ -11,10 +11,11 @@ use MarkdownWord\Writer\SvgPass;
 /*
  * SVG in a Word document.
  *
- * Word has held SVG since 2016 and holds it the only way it ever can: a raster beside
- * the vector, with the vector referenced from an extension on the picture. A picture
- * carrying that extension and no raster renders nothing at all, which is why this is
- * two parts and not one.
+ * Word has held SVG since 2016, as a raster beside the vector with the vector referenced
+ * from an extension on the picture. Word 2016 and later draw the vector, and recent
+ * LibreOffice does too, so the raster is there for the readers that do not — Google Docs
+ * among them, which draws nothing at all for a picture carrying only the extension. That
+ * is what `svgFallback` chooses between.
  *
  * The awkward part is that PHPWord writes images as VML, and VML has no place to hang
  * the extension on — so the picture is rewritten as DrawingML. That is why these tests
@@ -68,13 +69,14 @@ function anSvg(string $name = 'diagram.svg', string $body = ''): string
  *
  * @return array{document: string, rels: string, types: string, media: array<string, string>, names: list<string>}
  */
-function renderWithSvg(string $markdown, string $basePath): array
+function renderWithSvg(string $markdown, string $basePath, string $svgFallback = 'raster'): array
 {
     $target = sys_get_temp_dir() . '/mdword-svg-out.docx';
 
     (new MarkdownToWord($markdown, Configuration::create()->withOptions([
         'images' => 'embed',
         'imageBasePath' => $basePath,
+        'svgFallback' => $svgFallback,
     ])))->save($target);
 
     $zip = new ZipArchive();
