@@ -167,13 +167,18 @@ final class NumberingMerger
      * text to Word, so a fragment written this way puts the literal characters
      * `<w:p>` at the start of every paragraph it was inserted into.
      *
-     * The indent is always between a tag and another tag, never inside text that is
-     * meant to be kept, so folding `>`-whitespace-`<` is what is wanted — the same
-     * reason {@see self::remap()} preserves whitespace rather than stripping it.
+     * The indent is always *across a line break*, so folding `>`-whitespace-`<` is what
+     * is wanted only when a newline is in it. A space with no newline beside it is not
+     * indentation: a soft line break in a wrapped Markdown paragraph is written as a
+     * run holding one space, and folding that too joins the two words the author wrapped
+     * between them — `revenue` and `growth` came out as `revenuegrowth`, in every
+     * document, because nothing asserted on text that had been wrapped.
+     *
+     * {@see self::remap()} preserves whitespace for the same reason.
      */
     private function compact(string $xml): string
     {
-        return (string) preg_replace('~>\s+<~', '><', $xml);
+        return (string) preg_replace('~>[ \t]*\r?\n\s*<~', '><', $xml);
     }
 
     /**
@@ -219,10 +224,11 @@ final class NumberingMerger
             $out .= $dom->saveXML($child);
         }
 
-        // `preserveWhiteSpace` keeps whatever whitespace the fragment already had, and
-        // a fragment written out by a writer that indented it arrives with some; this
-        // is the part that has to go, because it is not markup.
-        return (string) preg_replace('~>\s+<~', '><', $out);
+        // The indent that came in is left for {@see self::compact()}, which is the one
+        // place that knows how to tell an indent from a space a sentence needs. Doing it
+        // here as well meant this copy went on stripping spaces that were content, and
+        // the two copies drifted apart the moment either was fixed.
+        return $out;
     }
 
     public function hasNumbering(): bool
