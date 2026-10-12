@@ -225,14 +225,29 @@ jobs:
             printf("svg format registered: %s\n", in_array("SVG", Imagick::queryFormats(), true) ? "yes" : "no");
             foreach (Imagick::queryFormats("*SVG*") as $f) { printf("  format: %s %s\n", $f, Imagick::getVersion()["versionString"]); }
             $svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"20\"><text x=\"2\" y=\"15\" font-size=\"14\" fill=\"#000\">W</text></svg>";
-            try {
-              $i = new Imagick();
-              $i->setBackgroundColor(new ImagickPixel("transparent"));
-              $i->readImageBlob($svg);
-              printf("render: %dx%d, histogram entries %d\n", $i->getImageWidth(), $i->getImageHeight(), count($i->getImageHistogram()));
-            } catch (Throwable $e) {
-              printf("render threw: %s\n", $e->getMessage());
-            }
+            $file = tempnam(sys_get_temp_dir(), "probe") . ".svg";
+            file_put_contents($file, $svg);
+
+            $try = function (string $label, callable $read) use ($file) {
+              try {
+                $i = new Imagick();
+                $i->setBackgroundColor(new ImagickPixel("transparent"));
+                $read($i);
+                $ink = 0;
+                foreach ($i->getImageHistogram() as $c) { if ($c->getColorValue(Imagick::COLOR_ALPHA) > 0.0) { $ink++; } }
+                printf("%-28s %dx%d  inked colours: %d\n", $label, $i->getImageWidth(), $i->getImageHeight(), $ink);
+                $i->clear();
+              } catch (Throwable $e) {
+                printf("%-28s threw %s\n", $label, $e->getMessage());
+              }
+            };
+
+            $try("readImageBlob", fn ($i) => $i->readImageBlob($svg));
+            $try("readImage file", fn ($i) => $i->readImage($file));
+            $try("readImage rsvg:", fn ($i) => $i->readImage("rsvg:" . $file));
+            $try("readImageBlob rsvg:", fn ($i) => $i->readImageBlob("rsvg:" . $svg));
+            printf("delegates: %s\n", implode(", ", array_map(fn ($d) => $d["delegate"] ?? "?", Imagick::queryDelegates("*svg*"))));
+            @unlink($file);
           '
 
       - name: The rasteriser works here
