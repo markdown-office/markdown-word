@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Template;
 
+use League\CommonMark\Extension\FrontMatter\FrontMatterExtension;
+use League\CommonMark\Node\Block\Document;
 use MarkdownWord\Configuration;
+use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Exception\TemplateNotFound;
+use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Writer\DocxWriter;
 use MarkdownWord\Writer\OutputEscaping;
@@ -54,7 +58,7 @@ final class MarkdownTemplate
     private readonly NumberingMerger $numbering;
 
     /** @var array<string, string> */
-    private readonly array $fields;
+    private array $fields = [];
 
     /** @var list<AbstractElement>|null Rendered but not yet written; null when there is none. */
     private ?array $content = null;
@@ -63,11 +67,13 @@ final class MarkdownTemplate
     private string $control = ContentControl::BODY;
 
     /**
-     * @param array<string, string|int|float> $values Values substituted into single-line `${name}` placeholders.
-     * @param MarkdownParserInterface|null $parser The dialect the Markdown inside the template is read with. Null keeps
-     *        the default, which has no frontmatter extension — so a `---` at the top of a
-     *        Markdown region is a thematic break rather than configuration. Pass one with
-     *        `FrontMatterExtension` to read it as frontmatter.
+     * @param array<string, string|int|float> $values Values for the template's fields, for
+     *        a caller that has them somewhere other than the document. A document's own
+     *        `fields:` block is the ordinary source, and {@see self::insert()} reads it.
+     * @param MarkdownParserInterface|null $parser The dialect the Markdown is read with.
+     *        Null keeps a parser carrying `FrontMatterExtension`, because the values come
+     *        from the document's block and a parser without it would print that block at
+     *        the top of the document instead of reading it.
      * @param Configuration|array|null $overrides The layer above the frontmatter of the
      *        Markdown being inserted. An array is the form to prefer here: a
      *        `Configuration` names every setting there is and would put all of them,
@@ -78,7 +84,7 @@ final class MarkdownTemplate
         string $template,
         private readonly Configuration $config = new Configuration(),
         array $values = [],
-        ?MarkdownParserInterface $parser = null,
+        private readonly ?MarkdownParserInterface $parser = null,
         Configuration|array|null $overrides = null,
         ?string $theme = null,
     ) {
@@ -115,16 +121,10 @@ final class MarkdownTemplate
         $this->scratch = new PhpWord();
         $this->numbering = new NumberingMerger($this->scratch);
 
-        // Kept rather than filled here: the fields live in the finished document, and
-        // filling them before the content has been inserted would be filling a document
-        // this class is still going to write over.
-        $folded = [];
-
-        foreach ($values as $name => $value) {
-            $folded[strtoupper((string) $name)] = (string) $value;
-        }
-
-        $this->fields = $folded;
+        // Folded rather than filled here: the fields live in the finished document, and
+        // filling them before the content has been inserted would be filling a
+        // document this class is still going to write over.
+        $this->fields($values);
     }
 
     /**
@@ -170,10 +170,32 @@ final class MarkdownTemplate
      */
     public function insert(string $markdown, string $control = ContentControl::BODY): self
     {
-        $this->content = $this->render($markdown);
+        // The document's own values, read here rather than handed in: a document whose
+        // client is in a PHP array is a document whose client is in two places, and
+        // changing one does not change the other.
+        $document = $this->dialect()->parse($markdown);
+        $this->fields(Frontmatter::fromDocument($document, $markdown)->fields());
+
+        $this->content = $this->render($document);
         $this->control = $control;
 
         return $this;
+    }
+
+    /**
+     * The dialect the document is read with.
+     *
+     * Frontmatter by default, which is the opposite of {@see MarkdownToWord}'s: there
+     * the block is configuration a caller may not have written, and here it is where the
+     * values for the template's fields are. Without the extension a leading `---` is a
+     * thematic break and the block is printed at the top of the document.
+     */
+    private function dialect(): MarkdownParserInterface
+    {
+        return $this->parser ?? new CommonMarkParser([
+            ...CommonMarkParser::FLAVOURS['gfm'],
+            FrontMatterExtension::class,
+        ]);
     }
 
     /**
@@ -275,7 +297,7 @@ final class MarkdownTemplate
     /**
      * @return list<AbstractElement>
      */
-    private function render(string $markdown): array
+    private function render(Document $markdown): array
     {
         $section = $this->scratch->addSection();
 

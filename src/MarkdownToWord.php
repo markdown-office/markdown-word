@@ -220,15 +220,25 @@ final class MarkdownToWord implements Converter
      * header or a footer. No style definitions are written: the destination
      * document, a template most likely, is the authority on what its styles look
      * like, and defining them here would override the author's design.
+     *
+     * A document already parsed may be given instead of the Markdown it came from,
+     * which is what {@see \MarkdownWord\Template\MarkdownTemplate} does: it reads the
+     * frontmatter off the parse to find the values for the template's fields, and
+     * parsing the same text twice would be two chances at two different answers.
      */
     public function renderIntoContainer(
-        string $markdown,
+        string|Document $markdown,
         AbstractContainer $container,
         ?PhpWord $phpWord = null,
     ): AbstractContainer {
         $phpWord ??= new PhpWord();
-        $this->lastMarkdown = $markdown;
-        $document = $this->parse($markdown);
+
+        if ($markdown instanceof Document) {
+            $document = $markdown;
+        } else {
+            $this->lastMarkdown = $markdown;
+            $document = $this->parse($markdown);
+        }
 
         $this->renderInto($document, $container, $phpWord, defineStyles: false);
 

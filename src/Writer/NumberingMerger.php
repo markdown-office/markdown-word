@@ -155,13 +155,36 @@ final class NumberingMerger
             $elementWriter->write();
         });
 
-        return $this->remap($xmlWriter->getData());
+        return $this->compact($this->remap($xmlWriter->getData()));
+    }
+
+    /**
+     * Remove the whitespace PHPWord's element writer puts between elements.
+     *
+     * The writer emits a fragment indented for a human to read, and that is fine in a
+     * file being written once. It is not fine when the fragment is handed to something
+     * that inserts it into a document: whitespace between a `w:t` and its text *is*
+     * text to Word, so a fragment written this way puts the literal characters
+     * `<w:p>` at the start of every paragraph it was inserted into.
+     *
+     * The indent is always between a tag and another tag, never inside text that is
+     * meant to be kept, so folding `>`-whitespace-`<` is what is wanted — the same
+     * reason {@see self::remap()} preserves whitespace rather than stripping it.
+     */
+    private function compact(string $xml): string
+    {
+        return (string) preg_replace('~>\s+<~', '><', $xml);
     }
 
     /**
      * Rewrite the numbering references in a fragment of `word/document.xml`.
      *
      * {@see self::applyTo()} replaces the provisional values with the real ones.
+     *
+     * The fragment goes through a DOM because a `w:numId` may be split across runs by
+     * whatever built the document, and a string replacement would only find the ones
+     * that are whole. It comes back out of `saveXML()` rather than the string it went
+     * in as, and {@see self::compact()} removes what that adds.
      */
     public function remap(string $xml): string
     {
@@ -188,12 +211,18 @@ final class NumberingMerger
             }
         }
 
+        $dom->formatOutput = false;
+        $dom->preserveWhiteSpace = true;
+
         $out = '';
         foreach ($dom->documentElement?->childNodes ?? [] as $child) {
             $out .= $dom->saveXML($child);
         }
 
-        return $out;
+        // `preserveWhiteSpace` keeps whatever whitespace the fragment already had, and
+        // a fragment written out by a writer that indented it arrives with some; this
+        // is the part that has to go, because it is not markup.
+        return (string) preg_replace('~>\s+<~', '><', $out);
     }
 
     public function hasNumbering(): bool

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord\Template;
 
 use DOMElement;
+use DOMText;
 use DOMXPath;
 use MarkdownWord\Exception\MalformedDocument;
 use MarkdownWord\Exception\NoContentControl;
@@ -179,14 +180,33 @@ final class ContentControl
         $parent = $control->parentNode;
 
         foreach ($elements as $xml) {
-            $block = Xml::parse(sprintf('<root xmlns:w="%s">%s</root>', self::W_NS, $xml));
+            $block = Xml::parse(sprintf('<w xmlns:w="%s">%s</w>', self::W_NS, $xml));
 
-            foreach ($block?->documentElement?->childNodes ?? [] as $child) {
+            if ($block === null) {
+                throw new MalformedDocument('A rendered block is not XML.');
+            }
+
+            foreach ($block->documentElement?->childNodes ?? [] as $child) {
+                // Whitespace between elements is not markup and is not wanted either:
+                // a text node that is only a newline is written into the document as
+                // a line break nobody asked for.
+                if ($child instanceof DOMText && trim($child->textContent) === '') {
+                    continue;
+                }
+
                 $parent?->insertBefore($dom->importNode($child, true), $control);
             }
         }
 
         $parent?->removeChild($control);
+
+        // `saveXML()` indents what it did not author, and whitespace that lands
+        // between a `w:t` and its text is *text* in Word: a document written out this
+        // way has every paragraph reading as the literal characters `<w:p>`. The
+        // formatting is off, and what whitespace is left is what the template
+        // brought with it rather than what this function added.
+        $dom->formatOutput = false;
+        $dom->preserveWhiteSpace = true;
 
         return (string) $dom->saveXML();
     }

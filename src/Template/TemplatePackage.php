@@ -55,7 +55,7 @@ final class TemplatePackage
 
         if ($zip->open($template) !== true) {
             throw new FileNotWritable(sprintf(
-                'The template "%s" could not be opened. A Word template is a zip archive.',
+                'The template "%s" could not be opened. A Word template is a .docx or .dotx file, which is a zip archive.',
                 $template,
             ));
         }
@@ -124,7 +124,7 @@ final class TemplatePackage
             @unlink($temporary);
 
             throw new FileNotWritable(sprintf(
-                'The template "%s" could not be opened. A Word template is a zip archive.',
+                'The template "%s" could not be opened. A Word template is a .docx or .dotx file, which is a zip archive.',
                 $template,
             ));
         }
