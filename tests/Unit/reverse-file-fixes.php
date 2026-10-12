@@ -219,14 +219,25 @@ function fileFixInChildProcess(string $code, string $memoryLimit = '16M'): array
         . $code,
     );
 
+    // A child told to be small can die of the memory limit before a destructor runs,
+    // and a PHP fatal skips destructors — so whatever it had already written to a
+    // temporary directory is left behind. Pointing its temporary directory at `tmp/pest`
+    // is what makes that recoverable: the parent empties it after the test either way.
+    $temporary = Scratch::path('file-fix-temp', '');
+
+    if (!is_dir($temporary)) {
+        mkdir($temporary, 0o777, true);
+    }
+
     $output = [];
     $status = 1;
 
     exec(
         sprintf(
-            '%s -d memory_limit=%s -d error_reporting="E_ALL & ~E_DEPRECATED" %s 2>&1',
+            '%s -d memory_limit=%s -d sys_temp_dir=%s -d error_reporting="E_ALL & ~E_DEPRECATED" %s 2>&1',
             escapeshellarg(PHP_BINARY),
             escapeshellarg($memoryLimit),
+            escapeshellarg($temporary),
             escapeshellarg($script),
         ),
         $output,

@@ -20,6 +20,7 @@ use MarkdownWord\Writer\SvgPass;
  * document Word reports as corrupt.
  */
 
+use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 
 beforeEach(fn () => Upstream::install());
@@ -41,7 +42,11 @@ afterEach(fn () => Upstream::restore());
 
 function scratchDirectory(string $name): string
 {
-    $directory = sys_get_temp_dir() . '/mdword-svg-' . $name;
+    // `tmp/pest` rather than the system temporary directory, which is emptied after
+    // every test. A run writes nothing outside the repository, which is the whole
+    // point of that directory — and a scratch path in `sys_get_temp_dir()` silently
+    // opts out of it.
+    $directory = Scratch::path('svg-' . $name, '');
 
     if (!is_dir($directory)) {
         mkdir($directory, 0o777, true);
@@ -635,7 +640,7 @@ it('reports no rasteriser on a build that has none', function () {
         PHP;
 
     $program = \sprintf($script, var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true));
-    $file = tempnam(sys_get_temp_dir(), 'mdword-noimagick') . '.php';
+    $file = Scratch::path('noimagick', '.php');
     file_put_contents($file, $program);
 
     $output = shell_exec(escapeshellarg(PHP_BINARY) . ' -n ' . escapeshellarg($file) . ' 2>/dev/null');
@@ -658,7 +663,7 @@ it('says the extension is unavailable there, rather than blaming the file', func
         PHP;
 
     $program = \sprintf($script, var_export(dirname(__DIR__, 2) . '/vendor/autoload.php', true));
-    $file = tempnam(sys_get_temp_dir(), 'mdword-noimagick') . '.php';
+    $file = Scratch::path('noimagick', '.php');
     file_put_contents($file, $program);
 
     $output = (string) shell_exec(escapeshellarg(PHP_BINARY) . ' -n ' . escapeshellarg($file) . ' 2>/dev/null');

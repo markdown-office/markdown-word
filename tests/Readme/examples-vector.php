@@ -24,6 +24,7 @@ use MarkdownWord\Parser\CommonMarkParser;
  * about words rather than about a document.
  */
 
+use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 
 beforeEach(fn () => Upstream::install());
@@ -50,7 +51,7 @@ const VECTOR_EXTENSION_URI = '{96DAC541-7B7A-43D3-8B79-37D633B846F1}';
 /** The example rendered the way `examples/build.php` renders it. */
 function vectorDocument(): array
 {
-    $target = sys_get_temp_dir() . '/example-vector.docx';
+    $target = Scratch::path('vector', '.docx');
 
     (new MarkdownToWord(
         (string) file_get_contents(VECTOR_SOURCE),
@@ -187,7 +188,7 @@ it('lays the diagram out at the size the SVG stated', function () {
 it('keeps the ratio when the cap does apply, rather than squashing the drawing', function () {
     // At 8cm the diagram is too wide, so both axes scale together. A width that was set
     // on its own would leave the height alone and stretch the picture.
-    $directory = sys_get_temp_dir() . '/example-vector-cap';
+    $directory = Scratch::path('vector-cap', '');
 
     if (!is_dir($directory)) {
         mkdir($directory, 0o777, true);
@@ -217,7 +218,7 @@ it('keeps the ratio when the cap does apply, rather than squashing the drawing',
 it('embeds an SVG through the public API, not only through the build script', function () {
     // The build script is one caller. If the API needed a path only it had, the feature
     // would not be available to anybody else.
-    $directory = sys_get_temp_dir() . '/example-vector-api';
+    $directory = Scratch::path('vector-api', '');
 
     if (!is_dir($directory)) {
         mkdir($directory, 0o777, true);

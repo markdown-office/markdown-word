@@ -52,6 +52,27 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A code span lost its spaces.** `` `a   b` `` came out as `a b`, and `` `foo(  bar)` ``
+  as `foo( bar)`. CommonMark normalises exactly two things inside a code span — line
+  endings become spaces, and one space comes off each end when both ends have one — and
+  the parser has done both by the time the node reaches the renderer. Collapsing what
+  was left changed what the code said, which makes the two-space version and the
+  one-space version the same line and the difference is usually the bug being looked
+  for. Ordinary text is still collapsed, as a browser does; a code block never went
+  through that path.
+
+- **The tests wrote scratch files into the system temporary directory**, where
+  nothing removes them: 845 empty files and 557 zip-bomb scratch files accumulated,
+  and both grew on every run. `tempnam()` creates a real file, so the two calls that
+  appended `.php` to it were unlinking a path they had never been given. The scratch
+  directories and files now go to `tmp/pest`, which the suite empties after every
+  test, and a child process told to be small is given `-d sys_temp_dir` pointing there
+  — a PHP fatal skips destructors, so a child that dies of the memory limit leaves
+  whatever it had written.
+
+  One SVG test was reading a fixture another test happened to leave in the shared
+  scratch directory; it now writes its own.
+
 - **A soft line break in a wrapped paragraph lost its space.** Markdown is habitually
   hard-wrapped by hand, and every wrap point joined two words together:
   `revenue` and `growth` came out as `revenuegrowth`, `in January` as `inJanuary`.
