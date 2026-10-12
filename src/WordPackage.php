@@ -53,12 +53,8 @@ final class WordPackage
 
         // An archive with no declarations is not one this library wrote, and an
         // empty string is not XML that fails to parse — `DOMDocument::loadXML()`
-        // rejects it outright, so it is answered here rather than caught.
-        if ($declared === '') {
-            return self::FALLBACK_MAIN;
-        }
-
-        $dom = Xml::parse($declared);
+        // rejects it outright — so both are answered here rather than caught.
+        $dom = $declared === '' ? null : Xml::parse($declared);
 
         if ($dom === null) {
             return self::FALLBACK_MAIN;

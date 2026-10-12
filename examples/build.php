@@ -28,6 +28,36 @@ use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\Style\Font;
 use PhpOffice\PhpWord\Style\Paragraph;
 
+/**
+ * A package that is not what its name says is a mistake in *this* file, so it stops
+ * the build rather than producing a set of examples around it.
+ */
+final class BadPackage extends RuntimeException
+{
+}
+
+const DOCX_EXTENSION = '.docx';
+const CONTENT_TYPES_PART = '[Content_Types].xml';
+const STYLES_PART = 'word/styles.xml';
+
+// The consultancy's two colours, named because a house style is a palette rather
+// than a pile of hex literals, and a palette with one value in it eight times is
+// not a palette.
+const MRD_NAVY = '1B3A5C';
+const MRD_SLATE = '55606B';
+
+/**
+ * The paragraph properties a `<w:pBdr>` has to come before, in OOXML's sequence.
+ *
+ * `w:pBdr` sits in a fixed place inside `w:pPr` and Word refuses a part that is out
+ * of it: after `pStyle`, `keepNext`, `keepLines` and the framing properties, before
+ * `shd`, `tabs` and everything that indents or spaces the paragraph.
+ *
+ * Declared here rather than beside {@see borderOffset()} because this file runs
+ * top to bottom — the build calls into it long before its functions are reached.
+ */
+const AFTER_PBDR = ['shd', 'tabs', 'suppressAutoHyphens', 'kinsoku', 'wordWrap', 'spacing', 'ind', 'contextualSpacing', 'jc', 'textAlignment', 'outlineLvl', 'rPr'];
+
 $root = __DIR__;
 $out = $root . '/out';
 $assets = $root . '/markdown/assets';
@@ -69,7 +99,7 @@ foreach ([
 //
 // Shows what the configuration controls, side by side with the default.
 
-$path = $out . '/07-no-decoration.docx';
+$path = $out . '/07-no-decoration' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/01-kitchen-sink.md'),
     Configuration::create()->withoutDecoration(),
@@ -78,7 +108,7 @@ $built[] = ['07-no-decoration', 'The kitchen sink with every default switched of
 
 // A house style, defined in code
 
-$path = $out . '/08-house-style.docx';
+$path = $out . '/08-house-style' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/01-kitchen-sink.md'),
     houseStyle(),
@@ -87,7 +117,7 @@ $built[] = ['08-house-style', 'The kitchen sink in a custom house style.', $path
 
 // The same source, with the extras a README tends to use
 
-$path = $out . '/09-extended-parser.docx';
+$path = $out . '/09-extended-parser' . DOCX_EXTENSION;
 (new MarkdownToWord(
     "# With the extended parser\n\n"
     . "Footnotes[^1] and description lists are available here.\n\n"
@@ -101,8 +131,8 @@ $built[] = ['09-extended-parser', 'Footnotes and description lists.', $path];
 
 // A Word template
 
-$templatePath = $out . '/template-invoice.docx';
-$outputPath = $out . '/10-template.docx';
+$templatePath = $out . '/template-invoice' . DOCX_EXTENSION;
+$outputPath = $out . '/10-template' . DOCX_EXTENSION;
 
 buildInvoiceTemplate($templatePath);
 
@@ -136,7 +166,7 @@ $frontmatterParser = new CommonMarkParser([
 ]);
 
 // 11 — the block is read, and it configures the render.
-$path = $out . '/11-frontmatter.docx';
+$path = $out . '/11-frontmatter' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/11-frontmatter.md'),
     Configuration::create(),
@@ -145,7 +175,7 @@ $path = $out . '/11-frontmatter.docx';
 $built[] = ['11-frontmatter', 'Frontmatter configuring the conversion.', $path];
 
 // 12 — the same Markdown with no block, for the pair.
-$path = $out . '/12-frontmatter-none.docx';
+$path = $out . '/12-frontmatter-none' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/12-frontmatter-none.md'),
     Configuration::create(),
@@ -154,7 +184,7 @@ $path = $out . '/12-frontmatter-none.docx';
 $built[] = ['12-frontmatter-none', 'The same Markdown with no frontmatter.', $path];
 
 // 13 — the block is outranked by the configuration passed in code.
-$path = $out . '/13-frontmatter-override.docx';
+$path = $out . '/13-frontmatter-override' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/13-frontmatter-override.md'),
     // Deliberately the opposite of the block: no borders, no heading cap, a plain
@@ -197,7 +227,7 @@ $built[] = ['13-frontmatter-override', 'Frontmatter outranked by the configurati
 // documents, because a filled-in template that kept its own type would open by
 // creating a new document from itself rather than opening.
 
-$docxTemplatePath = $out . '/template-report.docx';
+$docxTemplatePath = $out . '/template-report' . DOCX_EXTENSION;
 $dotxPath = $out . '/template-report.dotx';
 
 buildReportTemplate($docxTemplatePath);
@@ -292,7 +322,7 @@ foreach ([
 // and an example that cannot be built on somebody's machine is worse than one that
 // says why it was skipped.
 if (\extension_loaded('imagick')) {
-    $path = $out . '/19-vector.docx';
+    $path = $out . '/19-vector' . DOCX_EXTENSION;
     // The same base path the other examples get: without it a relative source path
     // resolves against the working directory and the picture is not found, which
     // falls back to the alt text and produces a document with no picture in it.
@@ -312,7 +342,7 @@ if (\extension_loaded('imagick')) {
 // The way back
 
 
-$roundTripped = (new WordToMarkdown($out . '/01-kitchen-sink.docx'))->convert();
+$roundTripped = (new WordToMarkdown($out . '/01-kitchen-sink' . DOCX_EXTENSION))->convert();
 file_put_contents($out . '/18-round-trip.md', $roundTripped);
 
 $built[] = [
@@ -412,10 +442,10 @@ function houseStyle(): Configuration
 {
     return Configuration::create()
         ->withStyles([
-            Styles::HEADING_1 => ['size' => 20, 'bold' => true, 'color' => '1B3A5C', 'space' => ['before' => 0, 'after' => 240]],
-            Styles::HEADING_2 => ['size' => 15, 'bold' => true, 'color' => '1B3A5C', 'space' => ['before' => 280, 'after' => 120]],
+            Styles::HEADING_1 => ['size' => 20, 'bold' => true, 'color' => MRD_NAVY, 'space' => ['before' => 0, 'after' => 240]],
+            Styles::HEADING_2 => ['size' => 15, 'bold' => true, 'color' => MRD_NAVY, 'space' => ['before' => 280, 'after' => 120]],
             Styles::HEADING_3 => ['size' => 12, 'bold' => true, 'color' => '2E5F86', 'space' => ['before' => 200, 'after' => 80]],
-            Styles::BLOCK_QUOTE => ['italic' => true, 'color' => '55606B', 'indentation' => ['left' => 567, 'right' => 567]],
+            Styles::BLOCK_QUOTE => ['italic' => true, 'color' => MRD_SLATE, 'indentation' => ['left' => 567, 'right' => 567]],
             Styles::CODE_FONT => ['name' => 'Consolas', 'size' => 9, 'color' => '1F3864'],
             Styles::LINK_FONT => ['color' => '1B5E9B', 'underline' => 'single'],
             Styles::TABLE_CELL => ['size' => 10],
@@ -453,7 +483,7 @@ function buildReportTemplate(string $path): void
     // `Paragraph` is accepted and quietly applies none of them, which is how this
     // looked like plain body text for a while.
     $phpWord->addFontStyle('MrdTitle', [
-        'name' => 'Georgia', 'size' => 22, 'bold' => true, 'color' => '1B3A5C',
+        'name' => 'Georgia', 'size' => 22, 'bold' => true, 'color' => MRD_NAVY,
     ], ['space' => ['before' => 0, 'after' => 60]]);
 
     $phpWord->addFontStyle('MrdFirm', [
@@ -461,7 +491,7 @@ function buildReportTemplate(string $path): void
     ], ['space' => ['before' => 0, 'after' => 320]]);
 
     $phpWord->addFontStyle('MrdMeta', [
-        'size' => 9, 'color' => '55606B',
+        'size' => 9, 'color' => MRD_SLATE,
     ], ['space' => ['before' => 0, 'after' => 40]]);
 
     // The three lines of one fact in the repeating region. The rules between them are
@@ -470,7 +500,7 @@ function buildReportTemplate(string $path): void
     $indent = ['indentation' => ['left' => 284]];
 
     $phpWord->addFontStyle('MrdFactLabel', [
-        'bold' => true, 'size' => 10, 'color' => '1B3A5C',
+        'bold' => true, 'size' => 10, 'color' => MRD_NAVY,
     ], [...$indent, 'space' => ['before' => 0, 'after' => 0]]);
 
     $phpWord->addFontStyle('MrdFactValue', [
@@ -492,11 +522,11 @@ function buildReportTemplate(string $path): void
     ]);
 
     $phpWord->addFontStyle('MrdHeading1', [
-        'name' => 'Georgia', 'size' => 16, 'bold' => true, 'color' => '1B3A5C',
+        'name' => 'Georgia', 'size' => 16, 'bold' => true, 'color' => MRD_NAVY,
     ], ['space' => ['before' => 320, 'after' => 140], 'keepNext' => true]);
 
     $phpWord->addFontStyle('MrdHeading2', [
-        'name' => 'Georgia', 'size' => 13, 'bold' => true, 'color' => '1B3A5C',
+        'name' => 'Georgia', 'size' => 13, 'bold' => true, 'color' => MRD_NAVY,
     ], ['space' => ['before' => 260, 'after' => 110], 'keepNext' => true]);
 
     $phpWord->addFontStyle('MrdHeading3', [
@@ -504,7 +534,7 @@ function buildReportTemplate(string $path): void
     ], ['space' => ['before' => 200, 'after' => 90], 'keepNext' => true]);
 
     $phpWord->addFontStyle('MrdQuote', [
-        'italic' => true, 'color' => '55606B',
+        'italic' => true, 'color' => MRD_SLATE,
     ], [
         'indentation' => ['left' => 454, 'right' => 454],
         'space' => ['before' => 160, 'after' => 180],
@@ -551,13 +581,38 @@ function buildReportTemplate(string $path): void
     IOFactory::createWriter($phpWord, 'Word2007')->save($path);
 
     $hairline = ['size' => 4, 'color' => 'C9D4DE'];
-    $accent = ['size' => 12, 'color' => '1B3A5C'];
+    $accent = ['size' => 12, 'color' => MRD_NAVY];
 
     ruleStyles($path, [
         'MrdQuote' => ['left' => $accent],
         'MrdFactLabel' => ['top' => $hairline, 'bottom' => $hairline],
         'MrdFactNote' => ['bottom' => $hairline],
     ]);
+}
+
+/**
+ * Where the border goes, as the offset into the paragraph's properties.
+ *
+ * The *earliest* of the elements that are actually there, not the first that happens
+ * to be in {@see AFTER_PBDR}: PHPWord writes `ind` before `spacing`, so a list-order
+ * lookup puts the border between the two and Word rejects the part. Null when none is
+ * present, which puts the border last and is correct for a paragraph with nothing.
+ */
+function borderOffset(string $properties): ?int
+{
+    $at = null;
+
+    foreach (AFTER_PBDR as $element) {
+        $found = strpos($properties, '<w:' . $element);
+
+        if ($found === false) {
+            continue;
+        }
+
+        $at = $at === null ? $found : min($at, $found);
+    }
+
+    return $at;
 }
 
 /**
@@ -576,19 +631,11 @@ function buildReportTemplate(string $path): void
  */
 function ruleStyles(string $path, array $styles): void
 {
-    // `w:pBdr` sits in a fixed place inside `w:pPr`, and Word refuses a part that is
-    // out of sequence: after `pStyle`, `keepNext`, `keepLines` and the framing
-    // properties, before `shd`, `tabs` and everything that indents or spaces the
-    // paragraph. So the border goes in before the first of those that is there, and
-    // at the end when none of them is — rather than simply appended, which would put
-    // it after the `w:spacing` these styles already have.
-    $afterBorder = ['shd', 'tabs', 'suppressAutoHyphens', 'kinsoku', 'wordWrap', 'spacing', 'ind', 'contextualSpacing', 'jc', 'textAlignment', 'outlineLvl', 'rPr'];
-
     $zip = new ZipArchive();
     $zip->open($path);
 
     try {
-        $declared = (string) $zip->getFromName('word/styles.xml');
+        $declared = (string) $zip->getFromName(STYLES_PART);
 
         foreach ($styles as $id => $sides) {
             $borders = '';
@@ -604,23 +651,8 @@ function ruleStyles(string $path, array $styles): void
 
             $declared = preg_replace_callback(
                 '~(<w:style w:type="paragraph"[^>]*w:styleId="' . preg_quote($id, '~') . '">.*?<w:pPr(?:\s[^>]*)?>)(.*?)(</w:pPr>)~s',
-                static function (array $style) use ($borders, $afterBorder): string {
-                    // The *earliest* of them in the paragraph properties, not the
-                    // first that happens to be in the list: PHPWord writes `ind`
-                    // before `spacing`, so a list-order lookup puts the border
-                    // between the two and Word rejects the part.
-                    $at = null;
-
-                    foreach ($afterBorder as $element) {
-                        $found = strpos($style[2], '<w:' . $element);
-
-                        if ($found === false) {
-                            continue;
-                        }
-
-                        $at = $at === null ? $found : min($at, $found);
-                    }
-
+                static function (array $style) use ($borders): string {
+                    $at = borderOffset($style[2]);
                     $inner = $style[2];
 
                     return $style[1]
@@ -634,8 +666,8 @@ function ruleStyles(string $path, array $styles): void
             );
         }
 
-        $zip->deleteName('word/styles.xml');
-        $zip->addFromString('word/styles.xml', (string) $declared);
+        $zip->deleteName(STYLES_PART);
+        $zip->addFromString(STYLES_PART, (string) $declared);
     } finally {
         $zip->close();
     }
@@ -663,7 +695,7 @@ function asTemplate(string $source, string $target): void
     $zip->open($target);
 
     try {
-        $declared = (string) $zip->getFromName('[Content_Types].xml');
+        $declared = (string) $zip->getFromName(CONTENT_TYPES_PART);
         $rewritten = (string) preg_replace('~' . preg_quote($document, '~') . '~', $template, $declared);
 
         // The name of a package decides nothing; the content type decides everything,
@@ -671,15 +703,15 @@ function asTemplate(string $source, string $target): void
         // `.docx` that is really a template spawns a new document on double-click.
         // Neither is worth leaving for a reader to discover in Word.
         if (!str_contains($rewritten, $template) || str_contains($rewritten, $document)) {
-            throw new RuntimeException(sprintf(
+            throw new BadPackage(sprintf(
                 'Converting "%s" left a package that is neither a document nor a template; '
                 . 'a .dotx and a .docx differ only in the main part\'s content type.',
                 $source,
             ));
         }
 
-        $zip->deleteName('[Content_Types].xml');
-        $zip->addFromString('[Content_Types].xml', $rewritten);
+        $zip->deleteName(CONTENT_TYPES_PART);
+        $zip->addFromString(CONTENT_TYPES_PART, $rewritten);
     } finally {
         $zip->close();
     }
@@ -698,13 +730,13 @@ function assertPackageType(string $path, string $expected): void
     $zip->open($path);
 
     try {
-        $declared = (string) $zip->getFromName('[Content_Types].xml');
+        $declared = (string) $zip->getFromName(CONTENT_TYPES_PART);
     } finally {
         $zip->close();
     }
 
     if (!str_contains($declared, $expected)) {
-        throw new RuntimeException(sprintf(
+        throw new BadPackage(sprintf(
             '"%s" is not the kind of package its name says: its body is declared as %s, not %s.',
             $path,
             preg_match('~wordprocessingml\.\w+\.main\+xml~', $declared, $found) ? $found[0] : 'nothing',
@@ -722,8 +754,8 @@ function buildInvoiceTemplate(string $path): void
 {
     $phpWord = new PhpWord();
 
-    $phpWord->addFontStyle('InvoiceTitle', ['bold' => true, 'size' => 24, 'color' => '1B3A5C'], new Paragraph());
-    $phpWord->addFontStyle('InvoiceMeta', ['size' => 10, 'color' => '55606B'], new Paragraph());
+    $phpWord->addFontStyle('InvoiceTitle', ['bold' => true, 'size' => 24, 'color' => MRD_NAVY], new Paragraph());
+    $phpWord->addFontStyle('InvoiceMeta', ['size' => 10, 'color' => MRD_SLATE], new Paragraph());
     $phpWord->addFontStyle('InvoiceBody', ['size' => 11], new Paragraph());
 
     $section = $phpWord->addSection();
