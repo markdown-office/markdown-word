@@ -61,9 +61,25 @@ const AFTER_PBDR = ['shd', 'tabs', 'suppressAutoHyphens', 'kinsoku', 'wordWrap',
 $root = __DIR__;
 $out = $root . '/out';
 $assets = $root . '/markdown/assets';
+$templates = $root . '/templates';
 
 @mkdir($out, 0o777, true);
 @mkdir($assets, 0o777, true);
+@mkdir($templates, 0o777, true);
+
+// `--write-template` rebuilds `templates/meridian-qbr.dotx` and stops. The template is
+// committed rather than built, because it is the one file here a reader opens in Word
+// rather than a build product — and this is how it is changed, so the generator and
+// the committed copy cannot drift apart without anyone editing a zip by hand.
+if (in_array('--write-template', $argv ?? [], true)) {
+    buildReportTemplate($templates . '/meridian-qbr.docx');
+    asTemplate($templates . '/meridian-qbr.docx', $templates . '/meridian-qbr.dotx');
+    @unlink($templates . '/meridian-qbr.docx');
+
+    printf("Wrote %s\n", $templates . '/meridian-qbr.dotx');
+
+    exit(0);
+}
 
 logo($assets . '/logo.png');
 
@@ -210,14 +226,18 @@ $built[] = ['13-frontmatter-override', 'Frontmatter outranked by the configurati
 
 // A Word *template* — a `.dotx`
 //
-// Built rather than checked in, for the same reason the invoice template above is: a
-// `.dotx` is a `.docx` with one line of `[Content_Types].xml` changed, and a binary
-// fixture does not show that line.
+// The template is `templates/meridian-qbr.dotx`, and it is committed: this is the one
+// Word file here a reader is meant to open rather than a build product, and a fresh
+// clone that could only get it by running Composer and PHP had no reason to carry it.
+// `buildReportTemplate()` is what wrote it and `asTemplate()` is what turns its `.docx`
+// form into this one, so `php examples/build.php --write-template` regenerates it —
+// which is not the same as reproducing it byte for byte, because `docProps/core.xml`
+// carries the time it was written and two runs a minute apart differ there and nowhere
+// else.
 //
-// Built as a `.docx` first and converted afterwards, because PHPWord's writer has one
-// output and the conversion is the whole of the difference. Getting that order
-// backwards leaves the two files each carrying the other's type: a `.docx` that Word
-// opens by spawning a new document, and a `.dotx` it opens as an ordinary file.
+// Its `.docx` twin is built here rather than committed, because it exists to be the
+// other half of a comparison rather than to be opened: two nearly identical binaries
+// in the repository is one too many.
 //
 // Two documents come out of them, from the same Markdown, and they are worth opening
 // side by side. `21-dotx-report.docx` is rendered through the `.dotx` and
@@ -227,16 +247,15 @@ $built[] = ['13-frontmatter-override', 'Frontmatter outranked by the configurati
 // documents, because a filled-in template that kept its own type would open by
 // creating a new document from itself rather than opening.
 
-$docxTemplatePath = $out . '/template-report' . DOCX_EXTENSION;
-$dotxPath = $out . '/template-report.dotx';
+$dotxPath = $root . '/templates/meridian-qbr.dotx';
+$docxTemplatePath = $out . '/meridian-qbr.docx';
 
-buildReportTemplate($docxTemplatePath);
-asTemplate($docxTemplatePath, $dotxPath);
+asDocument($dotxPath, $docxTemplatePath);
 
 $DOCUMENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
 
-assertPackageType($docxTemplatePath, $DOCUMENT_TYPE);
 assertPackageType($dotxPath, 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml');
+assertPackageType($docxTemplatePath, $DOCUMENT_TYPE);
 
 $reportMarkdown = (string) file_get_contents($root . '/markdown/21-dotx-report.md');
 
@@ -674,15 +693,58 @@ function ruleStyles(string $path, array $styles): void
 }
 
 /**
- * Rewrite a `.docx` package as a `.dotx`, which is what makes it a Word template.
+ * Rewrite a `.dotx` package as a `.docx`, so the two can be rendered from and compared.
  *
  * One line of `[Content_Types].xml` is the entire difference: the body part is
- * declared as a template's rather than a document's, and Word opens a package typed
- * that way by creating a *new* document from it.
+ * declared as a document's rather than a template's. Everything else is left exactly as
+ * it is, which is the point — the two packages differ only in that line, so anything a
+ * renderer does differently for one has to be about it.
  *
- * The parts that follow it are left exactly as they are, which is the point — the two
- * packages differ only in the line above, so anything a renderer does differently for
- * one has to be about that line.
+ * @see self::asTemplate() for the same rewrite the other way, which is how
+ *      `templates/meridian-qbr.dotx` is produced in the first place.
+ */
+function asDocument(string $source, string $target): void
+{
+    $document = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+    $template = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
+
+    copy($source, $target);
+
+    $zip = new ZipArchive();
+    $zip->open($target);
+
+    try {
+        $declared = (string) $zip->getFromName(CONTENT_TYPES_PART);
+        $rewritten = (string) preg_replace('~' . preg_quote($template, '~') . '~', $document, $declared);
+
+        // The name of a package decides nothing; the content type decides everything,
+        // and a `.dotx` that is really a document opens as an ordinary file while a
+        // `.docx` that is really a template spawns a new document on double-click.
+        // Neither is worth leaving for a reader to discover in Word.
+        if (!str_contains($rewritten, $document) || str_contains($rewritten, $template)) {
+            throw new BadPackage(sprintf(
+                'Converting "%s" left a package that is neither a document nor a template; '
+                . 'a .dotx and a .docx differ only in the main part\'s content type.',
+                $source,
+            ));
+        }
+
+        $zip->deleteName(CONTENT_TYPES_PART);
+        $zip->addFromString(CONTENT_TYPES_PART, $rewritten);
+    } finally {
+        $zip->close();
+    }
+
+    assertPackageType($target, $document);
+}
+
+/**
+ * Rewrite a `.docx` package as a `.dotx`, which is what makes it a Word template.
+ *
+ * Only used by `--write-template`, which is how the committed
+ * `templates/meridian-qbr.dotx` is produced. Kept as its own function rather than as a
+ * flag on {@see self::asDocument()} because the two run in opposite directions and
+ * neither is the general case.
  */
 function asTemplate(string $source, string $target): void
 {
@@ -698,16 +760,8 @@ function asTemplate(string $source, string $target): void
         $declared = (string) $zip->getFromName(CONTENT_TYPES_PART);
         $rewritten = (string) preg_replace('~' . preg_quote($document, '~') . '~', $template, $declared);
 
-        // The name of a package decides nothing; the content type decides everything,
-        // and a `.dotx` that is really a document opens as an ordinary file while a
-        // `.docx` that is really a template spawns a new document on double-click.
-        // Neither is worth leaving for a reader to discover in Word.
         if (!str_contains($rewritten, $template) || str_contains($rewritten, $document)) {
-            throw new BadPackage(sprintf(
-                'Converting "%s" left a package that is neither a document nor a template; '
-                . 'a .dotx and a .docx differ only in the main part\'s content type.',
-                $source,
-            ));
+            throw new BadPackage(sprintf('Converting "%s" left a package that is not a template.', $source));
         }
 
         $zip->deleteName(CONTENT_TYPES_PART);
