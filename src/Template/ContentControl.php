@@ -311,12 +311,7 @@ final class ContentControl
 
         try {
             $xml = $zip->getFromName(WordPackage::bodyPart($zip));
-
-            if (!is_string($xml)) {
-                return [];
-            }
-
-            $dom = Xml::parse($xml);
+            $dom = is_string($xml) ? Xml::parse($xml) : null;
 
             if ($dom === null) {
                 return [];
