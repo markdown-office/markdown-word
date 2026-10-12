@@ -207,6 +207,16 @@ jobs:
       # the run would still be green. Asserted here rather than left to be noticed in
       # the skip count, because a suite that stopped testing the rasteriser is worse
       # than one that failed.
+      #
+      # `librsvg2-bin` is what ImageMagick uses as its SVG delegate. Without it the
+      # runner falls back to ImageMagick's own renderer, which registers the format and
+      # then drops the text out of every picture — so the tests below were checking a
+      # rasteriser that was quietly producing half a picture.
+      - name: Install an SVG delegate
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes librsvg2-bin fonts-dejavu-core
+
       - name: The rasteriser works here
         run: |
           php -r '
