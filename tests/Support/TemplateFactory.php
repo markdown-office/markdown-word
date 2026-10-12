@@ -13,6 +13,11 @@ use ZipArchive;
 /**
  * Builds the Word documents the tests need as input, rather than checking binary
  * fixtures into the repository.
+ *
+ * Input, which is the whole of the distinction: a fixture exists so a test has
+ * something to open, and nobody reads one. `examples/templates/meridian-qbr.dotx` is
+ * committed for the opposite reason — it is there to be opened in Word, and a clone
+ * that could only get it by running Composer and PHP had no reason to carry it.
  */
 final class TemplateFactory
 {

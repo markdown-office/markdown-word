@@ -29,6 +29,10 @@ it, the format goes into the preview's name as well.
 | `13-frontmatter-override.docx` | The same block, outranked by the configuration passed in code. |
 | `21-dotx-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the template that is a template](#the-template-that-is-a-template). |
 | `21-dotx-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |
+
+`templates/meridian-qbr.dotx` is committed rather than built — it is the one
+Word file here you open rather than a build product. See
+[the template that is a template](#the-template-that-is-a-template).
 | `15-images-embed.docx` | Images, embedded: relative paths resolved through `imageBasePath`, `imageMaxWidth`, a WebP converted into the document, and the alt-text fallback. |
 | `15-images-placeholder.docx` | The same source with `images: placeholder` — the alt text, then the path. |
 | `15-images-skip.docx` | The same source with `images: skip` — no pictures and no captions. |
@@ -331,13 +335,15 @@ third, or Word will ignore it.
 
 ## The template that is a template
 
-`build.php` builds `out/template-report.docx`, converts it to
-`out/template-report.dotx`, and renders the same Markdown into each:
+`templates/meridian-qbr.dotx` is committed — it is the one Word file here you
+open rather than a build product, so a fresh clone has it without running
+anything. `php examples/build.php` renders the same Markdown into it and into an
+identical `.docx` built beside it:
 
 | | |
 | --- | --- |
-| `21-dotx-report.docx` | rendered through `template-report.dotx` |
-| `21-dotx-report.docx-template.docx` | rendered through `template-report.docx` |
+| `21-dotx-report.docx` | rendered through `templates/meridian-qbr.dotx` |
+| `21-dotx-report.docx-template.docx` | rendered through `out/meridian-qbr.docx` |
 
 Open the two results side by side. The words, the styles and the layout are
 identical, because which kind of template it is makes no difference to the
@@ -347,15 +353,18 @@ a package typed as a template by creating a *new* document from it — so a
 filled-in template that kept its own type is not a document, whatever it was
 saved as.
 
-The `.dotx` is worth opening too: it is the template, with its masthead, its
+The template itself is worth opening: it is the template, with its masthead, its
 rules and its `${…}` regions unfilled.
 
-> The name of a package decides nothing, and that is worth being careful about
-> when building one. `asTemplate()` writes the type and `assertPackageType()`
-> then checks each file carries the type its name promises — the build stops if
-> a `.dotx` comes out a document or the other way round. Getting the conversion
-> backwards leaves both files working and both of them wrong: a `.dotx` Word
-> opens as an ordinary file, and a `.docx` it opens by spawning a new document.
+```sh
+php examples/build.php --write-template   # rebuilds templates/meridian-qbr.dotx
+```
+
+> **The name of a package decides nothing.** `assertPackageType()` checks each
+> file carries the type its name promises, and the build stops otherwise —
+> because getting the conversion backwards leaves both files working and both of
+> them wrong: a `.dotx` Word opens as an ordinary file, and a `.docx` it opens
+> by spawning a new document. Neither complains.
 
 It is a report for a fictional consultancy, because a template that drives the
 body is only visible when there is a body worth looking at. The template defines
