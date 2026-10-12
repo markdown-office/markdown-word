@@ -128,13 +128,16 @@ jobs:
       # library's real findings means editing `src/`, so the level moves when
       # they are fixed rather than the findings being hidden until then. Nothing
       # here is suppressed to get a green run.
+      # `examples/build.php` is here for the same reason it is in `sonar.sources`:
+      # it writes OOXML by hand, and a library defect was found by looking at what
+      # it produced rather than by anything that could see it here.
       - name: Analyse
         run: |
           php tmp/phpstan.phar analyse \
             --level=1 \
             --autoload-file=vendor/autoload.php \
             --no-progress \
-            src bin/mdword tools tests
+            src bin/mdword tools tests examples/build.php
 
   # The library on the oldest PHP it claims to support.
   #

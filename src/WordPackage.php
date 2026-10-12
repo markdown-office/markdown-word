@@ -22,33 +22,27 @@ use ZipArchive;
  * the guess is a part nobody reads. Every pass over a finished document has to ask
  * here instead of naming the part, or it edits a part the reader never opens.
  *
- * @see \MarkdownWord\Template\TemplatePackage for the template side of the same
- *      question, which also settles the type on the way in.
+ * @see \MarkdownWord\Template\TemplatePackage for the template side, which settles
+ *      the type on the way in.
  */
 final class WordPackage
 {
-    /** The type a `.docx` declares for its body. */
     public const DOCUMENT_MAIN = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
 
-    /** The type a `.dotx` declares for the same part. */
     public const TEMPLATE_MAIN = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
 
-    /** The declarations themselves, which every other answer here is read out of. */
+    /** The declarations every other answer here is read out of. */
     public const CONTENT_TYPES = '[Content_Types].xml';
 
     /**
-     * Where the body is when the declarations say nothing about it.
-     *
-     * What PHPWord assumes and what nearly every package uses; the lookup exists
-     * for the ones that do not, so it is a fallback rather than an error. A caller
-     * that then fails to find the part reports it by name, which says more than a
-     * failure here would about a part the caller never asked for.
+     * Where the body is when the declarations say nothing about it: what PHPWord
+     * assumes and what nearly every package uses. A fallback rather than an error,
+     * because a caller that then fails to find the part reports it by name, which
+     * says more than a failure here would about a part it never asked for.
      */
     public const FALLBACK_MAIN = 'word/document.xml';
 
     /**
-     * The part holding the body of an open archive.
-     *
      * Read through the XML rather than by pattern, because the attributes of an
      * `Override` may be written in either order and a lookup that assumes one of
      * them cannot tell a part it failed to find from a package that declares none.
@@ -98,8 +92,6 @@ final class WordPackage
     }
 
     /**
-     * The part holding the body of an archive on disk.
-     *
      * For the callers that only need to know where to read — the command line
      * checking that a region is in a template — and so must not be handed a copy
      * of a file that is not theirs to change.
@@ -120,8 +112,6 @@ final class WordPackage
     }
 
     /**
-     * The relationship part belonging to a body part.
-     *
      * By the package's own convention rather than by substitution, so a body part
      * called something other than `document.xml` finds its relationships beside it.
      */
@@ -131,17 +121,15 @@ final class WordPackage
     }
 
     /**
-     * Whether the declarations say the body is a template's rather than a document's.
-     *
-     * Which is what makes a filled-in template something other than a document: Word
-     * opens a package typed this way by creating a new document from it.
+     * Whether the body is declared as a template's rather than a document's, which
+     * is what makes a filled-in template something other than a document: Word opens
+     * a package typed this way by creating a new document from it.
      */
     public static function isTemplate(ZipArchive $zip): bool
     {
         return str_contains(self::contentTypesOf($zip), self::TEMPLATE_MAIN);
     }
 
-    /** The declarations in an open archive, or an empty string when unreadable. */
     public static function contentTypesOf(ZipArchive $zip): string
     {
         $declared = $zip->getFromName(self::CONTENT_TYPES);

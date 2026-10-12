@@ -10,11 +10,11 @@ namespace MarkdownWord\Exception;
  * template that is fine failing for a different reason is the machine's, and
  * that is a {@see FileNotWritable}.
  *
- * A document that names its own template through `template_file:` is a document
- * writing a path, and these messages hold to the same rule as
- * {@see ThemeNotFound}'s: the name is echoed as written and the path it resolved
- * to is not, because the resolved form is a path the document chose to ask about
- * and echoing it answers a question about this machine it had no business asking.
+ * A document that names its own template is a document writing a path, and these
+ * messages hold to the same rule as {@see ThemeNotFound}'s: the name is echoed as
+ * written and the path it resolved to is not, because the resolved form is a path
+ * the document chose to ask about and echoing it answers a question about this
+ * machine it had no business asking.
  */
 final class TemplateNotFound extends InvalidInput
 {
@@ -27,8 +27,7 @@ final class TemplateNotFound extends InvalidInput
     }
 
     /**
-     * @param list<string> $searched the directories a relative name was looked for in,
-     *        for a failure that has to say where it went looking
+     * @param list<string> $searched the directories a relative name was looked for in
      */
     public static function aMissingFile(string $written, array $searched): self
     {

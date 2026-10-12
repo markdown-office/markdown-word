@@ -9,7 +9,7 @@ use MarkdownWord\WordPackage;
 use ZipArchive;
 
 /**
- * The template a document is rendered into, ready to be rendered into.
+ * Settles what kind of package a template is, before anything is rendered into it.
  *
  * A `.dotx` and a `.docx` are the same archive with one content type in
  * `[Content_Types].xml` different, and that one line decides two things at once.
@@ -27,17 +27,13 @@ use ZipArchive;
  * content written there while the real body kept its placeholders: the Markdown
  * gone, and nothing saying so.
  *
- * So the type is settled on the way in, where one rewrite answers both. A template
- * is copied to the temporary directory with its body declared as a document's, and
- * that copy is what {@see self::path()} hands to the template processor. A package
- * that already is a document is passed straight through — untouched, uncopied, and
- * with nothing of ours to clean up afterwards.
+ * So the type is settled on the way in, where one rewrite answers both. A package
+ * that already is a document is passed straight through — untouched and uncopied.
  */
 final class TemplatePackage
 {
     /**
-     * @param string $template The file to hand to the template processor: the
-     *        caller's own file, or a normalised copy of it.
+     * @param string $template The caller's own file, or a normalised copy of it.
      * @param string|null $temporary The copy to delete, or null when the caller's own
      *        file was passed through and there is nothing of ours to remove.
      */
@@ -48,11 +44,8 @@ final class TemplatePackage
     }
 
     /**
-     * A template ready to be rendered into.
-     *
      * The copy outlives a single render, because {@see MarkdownTemplate} is rendered
-     * into repeatedly and every one of those renders needs it. It is removed when
-     * this object goes.
+     * into repeatedly and every one of those renders needs it.
      *
      * @throws FileNotWritable when the normalised copy cannot be staged or written.
      */
@@ -81,13 +74,12 @@ final class TemplatePackage
         return new self($rewritten = self::rewrite($template, $declared), $rewritten);
     }
 
-    /** The file to render into: the caller's own, or a normalised copy of it. */
     public function path(): string
     {
         return $this->template;
     }
 
-    /** Whether the template given was a `.dotx`, and so was normalised. */
+    /** Whether a copy was made, which is to say the template given was a `.dotx`. */
     public function isTemplate(): bool
     {
         return $this->temporary !== null;
@@ -101,8 +93,6 @@ final class TemplatePackage
     }
 
     /**
-     * A copy of the template with its body declared as a document's.
-     *
      * Copied rather than edited in place, because the template belongs to whoever
      * handed it over and the caller may hold a hard link to it.
      *
