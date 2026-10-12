@@ -122,8 +122,12 @@ function escapeTemplate(string $template, array $values = [], array $markdown = 
 
     $processor = new MarkdownTemplate($template, values: $values);
 
-    foreach ($markdown as $region => $content) {
-        $processor->insert($region, $content);
+    // The Markdown goes in once, wherever the template's content control is, so the
+    // last one named here is the one that lands. Kept as a loop because the values
+    // are what these tests are about and the shape of the helper should not change
+    // with them.
+    foreach ($markdown as $control => $content) {
+        $processor->insert($content, (string) $control);
     }
 
     saveTemplateDocument($processor, $output);

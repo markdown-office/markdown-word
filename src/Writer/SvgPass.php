@@ -9,7 +9,6 @@ use DOMElement;
 use DOMXPath;
 use MarkdownWord\Exception\MalformedDocument;
 use MarkdownWord\WordPackage;
-use MarkdownWord\Render\SvgAttachmentCollector;
 use ZipArchive;
 
 /**
@@ -31,11 +30,13 @@ use ZipArchive;
  *
  * A 2016-or-later reader picks up the vector and scales it like a vector. An older one
  * ignores the extension and draws the PNG, which is the whole reason the PNG is there —
- * a picture carrying an `svgBlip` with no raster beside it renders nothing at all.
+ * a picture carrying an `svgBlip` with no raster beside it renders nothing at all in
+ * every reader that does not prefer the vector, and Google Docs is one of those.
  *
- * The element is matched by the content of the raster rather than by the order the
- * pictures were added, because PHPWord names its media parts as it writes them and two
- * pictures of the same bytes are one entry in the archive and two in the document.
+ * The element is matched by its position among the document's pictures, the same way
+ * {@see ImageDescriptionPass} matches alt text, because a media part name would not do:
+ * PHPWord names those as it writes them, and two pictures of the same bytes are one
+ * entry in the archive and two in the document.
  */
 final class SvgPass
 {
@@ -66,8 +67,9 @@ final class SvgPass
     private int $nextDrawingId = 1;
 
     /**
-     * @param list<array{fallback: string, vector: string}> $attachments the hash of each
-     *        PNG PHPWord was given, and the SVG to attach to it
+     * @param list<array{position: int, name: string, vector: string, raster: bool}> $attachments
+     *        where each vector belongs in the document, the part name it takes, the vector
+     *        itself, and whether a raster of it is in the file to be kept
      *
      * @return int how many pictures carry a vector afterwards
      *
@@ -92,44 +94,37 @@ final class SvgPass
             $rels = $this->load((string) $zip->getFromName($relsPath), $relsPath);
             $document = $this->load((string) $zip->getFromName($body), $body);
 
-            $byHash = $this->rastersByHash($zip);
+            $pictures = $this->picturesInDocumentOrder($document);
             $this->nextDrawingId = $this->highestDrawingId($document) + 1;
             $this->declareDrawingNamespaces($document);
 
             $attached = 0;
             $next = $this->highestRelationshipId($rels);
             $rewritten = false;
+            $discarded = [];
 
             foreach ($attachments as $attachment) {
-                $target = $byHash[$attachment['fallback']] ?? null;
-
-                if ($target === null) {
-                    continue;
-                }
-
-                $rasterId = $this->relationshipId($rels, $target);
-                $picture = $rasterId === null ? null : $this->pictureUsing($document, $rasterId);
+                $picture = $pictures[$attachment['position']] ?? null;
 
                 if ($picture === null) {
                     continue;
                 }
 
                 $vectorId = 'rId' . $next++;
-                $drawing = $this->buildDrawing($document, $rasterId, $vectorId, $picture);
+                $drawing = $this->buildDrawing($document, $picture['raster'], $vectorId, $picture, $attachment['raster']);
 
                 $vml = $picture['picture'];
                 $vml->parentNode?->replaceChild($drawing, $vml);
 
-                $this->addRelationship(
-                    $rels,
-                    $vectorId,
-                    'media/' . \basename($target, '.png') . '.svg',
-                );
+                $this->addRelationship($rels, $vectorId, 'media/' . $attachment['name']);
 
-                $zip->addFromString(
-                    self::MEDIA_PREFIX . \basename($target, '.png') . '.svg',
-                    $attachment['vector'],
-                );
+                $zip->addFromString(self::MEDIA_PREFIX . $attachment['name'], $attachment['vector']);
+
+                // Nothing points at a placeholder once its picture has become a vector, so
+                // the part and its relationship are both dead weight in the archive.
+                if ($attachment['raster'] === false) {
+                    $discarded[$picture['raster']] = true;
+                }
 
                 $attached++;
                 $rewritten = true;
@@ -137,6 +132,10 @@ final class SvgPass
 
             if ($rewritten === false) {
                 return 0;
+            }
+
+            foreach (\array_keys($discarded) as $rasterId) {
+                $this->discardRaster($zip, $rels, $document, $rasterId);
             }
 
             // Read before deleting: `ZipArchive::deleteName()` is what it says, and an
@@ -157,69 +156,91 @@ final class SvgPass
     }
 
     /**
-     * Media part path to relationship target, for every part in the archive.
+     * Every VML picture in the document, in the order PHPWord wrote them.
      *
-     * @return array<string, string> hash to a target such as `media/image3.png`
+     * The order is the pairing {@see \MarkdownWord\Render\SvgAttachmentCollector} records
+     * against, and it is the same one {@see ImageDescriptionPass} already matches alt
+     * text on. A media part name would not do: PHPWord names those as it writes them, so
+     * the name says nothing about which picture became it.
+     *
+     * @return list<array{picture: \DOMElement, raster: string, width: float, height: float, description: string}>
      */
-    private function rastersByHash(ZipArchive $zip): array
+    private function picturesInDocumentOrder(DOMDocument $document): array
     {
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('v', 'urn:schemas-microsoft-com:vml');
+        $xpath->registerNamespace('r', self::R_NS);
+
         $found = [];
+        $nodes = $xpath->query('//v:imagedata');
 
-        for ($index = 0; $index < $zip->numFiles; $index++) {
-            $name = (string) $zip->getNameIndex($index);
-
-            if (!\str_starts_with($name, self::MEDIA_PREFIX)) {
+        foreach ($nodes === false ? [] : $nodes as $node) {
+            if (!$node instanceof DOMElement) {
                 continue;
             }
 
-            $bytes = $zip->getFromName($name);
+            $shape = $node->parentNode;
+            $picture = $shape?->parentNode;
 
-            if ($bytes === false) {
+            if (!$shape instanceof DOMElement || !$picture instanceof DOMElement) {
                 continue;
             }
 
-            $found[SvgAttachmentCollector::fingerprint($bytes)] = \substr($name, \strlen('word/'));
+            [$width, $height] = $this->sizeOf($shape->getAttribute('style'));
+
+            $found[] = [
+                'picture' => $picture,
+                'raster' => $node->getAttributeNS(self::R_NS, 'id'),
+                'width' => $width,
+                'height' => $height,
+                // PHPWord keeps a description on the VML as `o:title`, and DrawingML keeps
+                // it on `wp:docPr/@descr`. Moving between the two without carrying it
+                // across silently deletes the alt text, which is the one part of a picture
+                // a screen reader has.
+                'description' => $node->getAttributeNS(self::O_NS, 'title'),
+            ];
         }
 
         return $found;
     }
 
     /**
-     * The VML picture a raster relationship points at, and how big it is drawn.
+     * Remove a placeholder raster that nothing references any more.
      *
-     * @return array{picture: \DOMElement, width: float, height: float, description: string}|null
+     * Checked rather than assumed: PHPWord gives identical bytes one part and one
+     * relationship, so a document can hold several vectors that share this one, and each
+     * has to be rewritten before the part can go.
      */
-    private function pictureUsing(DOMDocument $document, string $rasterId): ?array
+    private function discardRaster(ZipArchive $zip, DOMDocument $rels, DOMDocument $document, string $rasterId): void
     {
+        if ($rasterId === '') {
+            return;
+        }
+
         $xpath = new DOMXPath($document);
         $xpath->registerNamespace('v', 'urn:schemas-microsoft-com:vml');
         $xpath->registerNamespace('r', self::R_NS);
 
-        $data = $xpath->query(sprintf('//v:imagedata[@r:id="%s"]', $rasterId))?->item(0);
-
-        if (!$data instanceof DOMElement) {
-            return null;
+        if (\count($xpath->query(sprintf('//v:imagedata[@r:id="%s"]', $rasterId)) ?: []) > 0) {
+            return;
         }
 
-        $shape = $data->parentNode;
-        $picture = $shape?->parentNode;
+        foreach ($rels->getElementsByTagNameNS(self::REL_NS, 'Relationship') as $relationship) {
+            if (!$relationship instanceof DOMElement || $relationship->getAttribute('Id') !== $rasterId) {
+                continue;
+            }
 
-        if (!$shape instanceof DOMElement || !$picture instanceof DOMElement) {
-            return null;
+            $target = $relationship->getAttribute('Target');
+            $relationship->parentNode?->removeChild($relationship);
+
+            $part = 'word/' . $target;
+
+            if ($zip->locateName($part) !== false) {
+                $zip->deleteName($part);
+            }
+
+            return;
         }
-
-        [$width, $height] = $this->sizeOf($shape->getAttribute('style'));
-
-        return [
-            'picture' => $picture,
-            'width' => $width,
-            'height' => $height,
-            // PHPWord keeps a description on the VML as `o:title`, and DrawingML keeps
-            // it on `wp:docPr/@descr`. Moving between the two without carrying it
-            // across silently deletes the alt text, which is the one part of a picture
-            // a screen reader has.
-            'description' => $data->getAttributeNS(self::O_NS, 'title'),
-        ];
     }
 
     /**
@@ -248,12 +269,16 @@ final class SvgPass
 
     /**
      * The DrawingML picture that replaces it.
+     * @param string|null $rasterId the relationship holding a raster of the SVG, or null
+     *        when the document carries the vector alone
+     * @param bool        $withRaster whether to point at that raster at all
      */
     private function buildDrawing(
         DOMDocument $document,
-        string $rasterId,
+        ?string $rasterId,
         string $vectorId,
         array $picture,
+        bool $withRaster,
     ): DOMElement {
         $id = $this->nextDrawingId++;
 
@@ -263,6 +288,14 @@ final class SvgPass
         $description = \htmlspecialchars($picture['description'], \ENT_XML1 | \ENT_QUOTES);
         $attribute = $description === '' ? '' : \sprintf(' descr="%s"', $description);
         $name = \htmlspecialchars('Picture ' . $id, \ENT_XML1 | \ENT_QUOTES);
+
+        // `r:embed` is optional in `CT_Blip`, and a blip carrying nothing but the SVG
+        // extension is what Word writes a vector as when nobody asked for a raster. Word
+        // 2016 and later draw it; an older reader draws nothing, which is the trade
+        // `svgFallback: none` makes rather than a fault to repair.
+        $embed = $withRaster && $rasterId !== null && $rasterId !== ''
+            ? \sprintf(' r:embed="%s"', $this->escape($rasterId))
+            : '';
 
         // Written as markup rather than assembled node by node: the serialiser repeats
         // a namespace declaration on every element built with `createElementNS()`, so a
@@ -275,7 +308,7 @@ final class SvgPass
             . '<wp:docPr id="%9$d" name="%10$s"%11$s/>'
             . '<a:graphic><a:graphicData uri="%4$s"><pic:pic>'
             . '<pic:nvPicPr><pic:cNvPr id="%9$d" name="%10$s"%11$s/><pic:cNvPicPr/></pic:nvPicPr>'
-            . '<pic:blipFill><a:blip r:embed="%12$s"><a:extLst>'
+            . '<pic:blipFill><a:blip%12$s><a:extLst>'
             . '<a:ext uri="%13$s"><asvg:svgBlip r:embed="%14$s"/></a:ext>'
             . '</a:extLst></a:blip><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
             . '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%7$d" cy="%8$d"/></a:xfrm>'
@@ -292,7 +325,7 @@ final class SvgPass
             $id,
             $name,
             $attribute,
-            $this->escape($rasterId),
+            $embed,
             self::SVG_EXTENSION_URI,
             $this->escape($vectorId),
         );
@@ -356,17 +389,6 @@ final class SvgPass
         };
 
         return (float) $match[1] * $perUnit;
-    }
-
-    private function relationshipId(DOMDocument $rels, string $target): ?string
-    {
-        foreach ($rels->getElementsByTagNameNS(self::REL_NS, 'Relationship') as $relationship) {
-            if ($relationship instanceof DOMElement && $relationship->getAttribute('Target') === $target) {
-                return $relationship->getAttribute('Id');
-            }
-        }
-
-        return null;
     }
 
     private function addRelationship(DOMDocument $rels, string $id, string $target): void

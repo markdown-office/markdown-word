@@ -28,8 +28,10 @@ use MarkdownWord\Configuration\Options;
 use MarkdownWord\Console\UpstreamDeprecations;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Template\ContentControl;
 use MarkdownWord\Template\MarkdownTemplate;
 use MarkdownWord\Text\TextExtractor;
+use MarkdownWord\Xml;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 
@@ -253,10 +255,40 @@ $templatePath = $work . '/template.docx';
 
 $blank = new PhpWord();
 $section = $blank->addSection();
-$section->addText('${body}');
-$section->addText('${slot}');
-$section->addText('${/body}');
+$section->addText('%%body%%');
 IOFactory::createWriter($blank, 'Word2007')->save($templatePath);
+
+// PHPWord writes no content control, so the marker is replaced with one in the part
+// afterwards — which is what a template authored in Word carries.
+$zip = new ZipArchive();
+$zip->open($templatePath);
+$dom = new DOMDocument();
+$dom->loadXML((string) $zip->getFromName('word/document.xml'));
+$zip->close();
+
+$xpath = new DOMXPath($dom);
+$xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+$control = Xml::parse(
+    '<root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+    . ContentControl::markup(ContentControl::BODY) . '</root>',
+)?->documentElement?->firstChild;
+
+foreach ($xpath->query('//w:p') ?: [] as $paragraph) {
+    if (!$control instanceof DOMNode || trim((string) $paragraph->textContent) !== '%%body%%') {
+        continue;
+    }
+
+    $paragraph->parentNode?->replaceChild($dom->importNode($control, true), $paragraph);
+
+    break;
+}
+
+$zip = new ZipArchive();
+$zip->open($templatePath);
+$zip->deleteName('word/document.xml');
+$zip->addFromString('word/document.xml', (string) $dom->saveXML());
+$zip->close();
 
 foreach ($templateConfigurations as $configName => $config) {
     foreach ($cases as $caseName => $markdown) {
@@ -264,7 +296,7 @@ foreach ($templateConfigurations as $configName => $config) {
 
         try {
             $processor = new MarkdownTemplate($templatePath, $config ?? new Configuration());
-            $processor->insert('body', $markdown);
+            $processor->insert($markdown);
             $output = $work . '/template-out.docx';
             $processor->save($output);
 

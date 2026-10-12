@@ -45,10 +45,11 @@ final class UnsupportedImageFormat extends InvalidInput
      * An SVG, on a build that cannot put one into a document.
      *
      * The reason is a rasteriser, not the format. Word has held SVG since 2016 and
-     * holds it the only way it ever can: a raster beside the vector, which is what
-     * older readers draw, with the vector referenced from an extension on the same
-     * element. A document carrying the vector and no raster renders no picture at
-     * all, so there is no version of this that keeps the SVG and skips the PNG.
+     * holds it as a raster beside the vector, with the vector referenced from an
+     * extension on the same element. A document written `svgFallback: raster` carries
+     * both, because a reader that does not prefer the vector draws nothing at all —
+     * Google Docs among them. `svgFallback: none` writes the vector alone and needs no
+     * rasteriser; the caller chooses, and this is the message for the choice they made.
      *
      * @param string $detail what this build found wrong with the file itself, when the
      *                       rasteriser was present and the file was still no good

@@ -22,7 +22,10 @@ use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\WordToMarkdown;
+use MarkdownWord\Template\ContentControl;
+use MarkdownWord\Xml;
 use MarkdownWord\Template\MarkdownTemplate;
+use PhpOffice\PhpWord\Element\Section;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\Style\Font;
@@ -58,12 +61,105 @@ const MRD_SLATE = '55606B';
  */
 const AFTER_PBDR = ['shd', 'tabs', 'suppressAutoHyphens', 'kinsoku', 'wordWrap', 'spacing', 'ind', 'contextualSpacing', 'jc', 'textAlignment', 'outlineLvl', 'rPr'];
 
+const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+// The two types a Word package's body can be declared as, which is the whole of what
+// a `.docx` and a `.dotx` differ by.
+const DOCUMENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+const TEMPLATE_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
+
+/** The house logo, put in the template's header. */
+const LOGO = __DIR__ . '/markdown/assets/example-logo-meridian.png';
+
+/**
+ * A paragraph that stands for the content control until `controlIn()` has put one there.
+ *
+ * PHPWord cannot write a content control, and what it writes in its place is escaped
+ * into a `w:t` — so the control is added to the part afterwards, by editing the
+ * paragraph this marker is in.
+ *
+ * Not the `@@…@@` marker the fields use, or `fieldsIn()` would read it as a field
+ * named `body-control` and consume it first.
+ */
+const CONTROL_PLACEHOLDER = '%%body-control%%';
+
 $root = __DIR__;
 $out = $root . '/out';
+$docs = $out . '/documents';
+$previews = $out . '/previews';
 $assets = $root . '/markdown/assets';
+$templates = $root . '/templates';
 
-@mkdir($out, 0o777, true);
+// Everything in `out/` is produced by this script and nothing else, and it is
+// gitignored besides, so it starts empty. A build that only writes what it still names
+// leaves behind every name it has stopped naming, which is how the directory came to
+// hold a template written in the `${…}` dialect that has since been removed, under a
+// number the numbering has since moved past.
+emptyDirectory($out);
+
+@mkdir($docs, 0o777, true);
+@mkdir($previews, 0o777, true);
 @mkdir($assets, 0o777, true);
+@mkdir($templates, 0o777, true);
+
+// Where a template is built before it is typed, and where the `.docx` twin is written
+// for the one comparison that needs it. Both are intermediates: a reader who opened
+// them would see something that looks like an example and is not one.
+$scratch = sys_get_temp_dir() . '/mdword-examples-' . bin2hex(random_bytes(6));
+@mkdir($scratch, 0o777, true);
+
+register_shutdown_function(static function () use ($scratch): void {
+    emptyDirectory($scratch);
+});
+
+// The three Word templates the examples render into, all in `templates/` and all named
+// as the `.dotx` they are.
+//
+// They are committed rather than built, so that a fresh clone can open them without
+// running Composer, PHP or having LibreOffice installed. They are also *generated*, so
+// that nobody has to edit a zip by hand: `--write-templates` rebuilds all three, and a
+// plain build never touches them.
+//
+// Regenerating is a separate step because it is not repeatable: `docProps/core.xml`
+// carries the time a document was written, so two runs a minute apart differ there and
+// nowhere else, and a build that rewrote a committed binary on every run would leave
+// the working tree permanently dirty for a difference nobody can see.
+$templatePaths = [
+    'invoice' => $templates . '/invoice.dotx',
+    'meridian-qbr' => $templates . '/meridian-qbr.dotx',
+    'plain-letterhead' => $templates . '/plain-letterhead.dotx',
+];
+
+if (in_array('--write-templates', $argv ?? [], true)) {
+    $build = [
+        'invoice' => 'buildInvoiceTemplate',
+        'meridian-qbr' => 'buildReportTemplate',
+        'plain-letterhead' => 'buildPlainTemplate',
+    ];
+
+    foreach ($build as $name => $builder) {
+        $asDocument = $scratch . '/' . $name . DOCX_EXTENSION;
+
+        $builder($asDocument);
+        asTemplate($asDocument, $templatePaths[$name]);
+
+        printf("Wrote %s\n", $templatePaths[$name]);
+    }
+
+    exit(0);
+}
+
+$missing = array_keys(array_filter($templatePaths, static fn (string $t): bool => !is_file($t)));
+
+if ($missing !== []) {
+    fprintf(
+        STDERR,
+        "Missing template(s): %s\nRun `php examples/build.php --write-templates` to build them.\n",
+        implode(', ', $missing),
+    );
+
+    exit(1);
+}
 
 logo($assets . '/logo.png');
 
@@ -89,7 +185,7 @@ foreach ([
         'imageBasePath' => $root . '/markdown',
     ]);
 
-    $path = $out . '/' . $name . DOCX_EXTENSION;
+    $path = $docs . '/' . $name . DOCX_EXTENSION;
     (new MarkdownToWord($markdown, $config))->save($path);
 
     $built[] = [$name, $description, $path];
@@ -99,7 +195,7 @@ foreach ([
 //
 // Shows what the configuration controls, side by side with the default.
 
-$path = $out . '/07-no-decoration' . DOCX_EXTENSION;
+$path = $docs . '/07-no-decoration' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/01-kitchen-sink.md'),
     Configuration::create()->withoutDecoration(),
@@ -108,7 +204,7 @@ $built[] = ['07-no-decoration', 'The kitchen sink with every default switched of
 
 // A house style, defined in code
 
-$path = $out . '/08-house-style' . DOCX_EXTENSION;
+$path = $docs . '/08-house-style' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/01-kitchen-sink.md'),
     houseStyle(),
@@ -117,7 +213,7 @@ $built[] = ['08-house-style', 'The kitchen sink in a custom house style.', $path
 
 // The same source, with the extras a README tends to use
 
-$path = $out . '/09-extended-parser' . DOCX_EXTENSION;
+$path = $docs . '/09-extended-parser' . DOCX_EXTENSION;
 (new MarkdownToWord(
     "# With the extended parser\n\n"
     . "Footnotes[^1] and description lists are available here.\n\n"
@@ -131,19 +227,16 @@ $built[] = ['09-extended-parser', 'Footnotes and description lists.', $path];
 
 // A Word template
 
-$templatePath = $out . '/template-invoice' . DOCX_EXTENSION;
-$outputPath = $out . '/10-template' . DOCX_EXTENSION;
+$outputPath = $docs . '/10-template' . DOCX_EXTENSION;
 
-buildInvoiceTemplate($templatePath);
-
-(new MarkdownTemplate($templatePath, houseStyle(), ['number' => 'INV-2024-0042', 'customer' => 'Northwind Ltd']))
-    ->repeat('lines', [
-        ['description' => 'Licence renewal', 'amount' => '1,200.00'],
-        ['description' => 'Priority support', 'amount' => '300.00'],
-        ['description' => 'On-site training', 'amount' => '900.00'],
-    ])
-    ->insert('terms', "## Terms\n\nPayment is due within **14 days**.\n\n- Bank transfer\n- Card\n\n"
-        . "> Late payment attracts interest at 4% per year.\n")
+(new MarkdownTemplate($templatePaths['invoice'], houseStyle()))
+    ->insert(
+        "---\nfields:\n  number: INV-2024-0042\n  customer: Northwind Ltd\n---\n\n"
+        . "| Description | Amount |\n| --- | ---: |\n"
+        . "| Licence renewal | 1,200.00 |\n| Priority support | 300.00 |\n| On-site training | 900.00 |\n\n"
+        . "## Terms\n\nPayment is due within **14 days**.\n\n- Bank transfer\n- Card\n\n"
+        . "> Late payment attracts interest at 4% per year.\n",
+    )
     ->save($outputPath);
 
 $built[] = ['10-template', 'Markdown rendered into a Word template.', $outputPath];
@@ -166,7 +259,7 @@ $frontmatterParser = new CommonMarkParser([
 ]);
 
 // 11 — the block is read, and it configures the render.
-$path = $out . '/11-frontmatter' . DOCX_EXTENSION;
+$path = $docs . '/11-frontmatter' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/11-frontmatter.md'),
     Configuration::create(),
@@ -175,7 +268,7 @@ $path = $out . '/11-frontmatter' . DOCX_EXTENSION;
 $built[] = ['11-frontmatter', 'Frontmatter configuring the conversion.', $path];
 
 // 12 — the same Markdown with no block, for the pair.
-$path = $out . '/12-frontmatter-none' . DOCX_EXTENSION;
+$path = $docs . '/12-frontmatter-none' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/12-frontmatter-none.md'),
     Configuration::create(),
@@ -184,7 +277,7 @@ $path = $out . '/12-frontmatter-none' . DOCX_EXTENSION;
 $built[] = ['12-frontmatter-none', 'The same Markdown with no frontmatter.', $path];
 
 // 13 — the block is outranked by the configuration passed in code.
-$path = $out . '/13-frontmatter-override' . DOCX_EXTENSION;
+$path = $docs . '/13-frontmatter-override' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/13-frontmatter-override.md'),
     // Deliberately the opposite of the block: no borders, no heading cap, a plain
@@ -210,66 +303,76 @@ $built[] = ['13-frontmatter-override', 'Frontmatter outranked by the configurati
 
 // A Word *template* — a `.dotx`
 //
-// Built rather than checked in, for the same reason the invoice template above is: a
-// `.dotx` is a `.docx` with one line of `[Content_Types].xml` changed, and a binary
-// fixture does not show that line.
+// The template is `templates/meridian-qbr.dotx`, and it is committed: this is the one
+// Word file here a reader is meant to open rather than a build product, and a fresh
+// clone that could only get it by running Composer and PHP had no reason to carry it.
+// `buildReportTemplate()` is what wrote it and `asTemplate()` is what turns its `.docx`
+// form into this one, so `php examples/build.php --write-template` regenerates it —
+// which is not the same as reproducing it byte for byte, because `docProps/core.xml`
+// carries the time it was written and two runs a minute apart differ there and nowhere
+// else.
 //
-// Built as a `.docx` first and converted afterwards, because PHPWord's writer has one
-// output and the conversion is the whole of the difference. Getting that order
-// backwards leaves the two files each carrying the other's type: a `.docx` that Word
-// opens by spawning a new document, and a `.dotx` it opens as an ordinary file.
+// Its `.docx` twin is built here rather than committed, because it exists to be the
+// other half of a comparison rather than to be opened: two nearly identical binaries
+// in the repository is one too many.
 //
 // Two documents come out of them, from the same Markdown, and they are worth opening
-// side by side. `21-dotx-report.docx` is rendered through the `.dotx` and
-// `21-dotx-report.docx-template.docx` through the `.docx`; the words, the formatting
+// side by side. `22-corporate-report.docx` is rendered through the `.dotx` and
+// `22-corporate-report.docx-template.docx` through the `.docx`; the words, the formatting
 // and the styles are the same in both, because which kind of template it is makes no
 // difference to the result. What it does change is what the result *is* — both are
 // documents, because a filled-in template that kept its own type would open by
 // creating a new document from itself rather than opening.
 
-$docxTemplatePath = $out . '/template-report' . DOCX_EXTENSION;
-$dotxPath = $out . '/template-report.dotx';
+$dotxPath = $templatePaths['meridian-qbr'];
+$docxTemplatePath = $scratch . '/meridian-qbr' . DOCX_EXTENSION;
 
-buildReportTemplate($docxTemplatePath);
-asTemplate($docxTemplatePath, $dotxPath);
+asDocument($dotxPath, $docxTemplatePath);
 
-$DOCUMENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+assertPackageType($dotxPath, TEMPLATE_TYPE);
+assertPackageType($docxTemplatePath, DOCUMENT_TYPE);
 
-assertPackageType($docxTemplatePath, $DOCUMENT_TYPE);
-assertPackageType($dotxPath, 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml');
-
-$reportMarkdown = (string) file_get_contents($root . '/markdown/21-dotx-report.md');
-
-$reportValues = [
-    'client' => 'Contoso Industrial',
-    'period' => 'Q2 2026',
-    'reference' => 'MER-QBR-2026-02',
-    'prepared' => '14 April 2026',
-];
-
-$reportRows = [
-    ['label' => 'Contract value', 'value' => '€412,000', 'note' => 'three-year term'],
-    ['label' => 'Renewal date', 'value' => '31 March 2029', 'note' => 'auto-renew off'],
-    ['label' => 'Named contacts', 'value' => '4', 'note' => '2 technical, 2 commercial'],
-];
+// The corporate example: a report rendered into a letterhead that carries its own
+// logo, fonts and sizes.
+//
+// Its values are in the Markdown file's own `---` block, under `fields:`. That is the
+// whole point of the shape — the document says what its own values are, and the
+// template says what those values look like. A PHP array here would be a second place
+// for the same fact, and changing one would not change the other.
+$corporateMarkdown = (string) file_get_contents($root . '/markdown/22-corporate-report.md');
 
 foreach ([
-    '21-dotx-report' => $dotxPath,
-    '21-dotx-report.docx-template' => $docxTemplatePath,
+    '22-corporate-report' => $dotxPath,
+    '22-corporate-report.docx-template' => $docxTemplatePath,
 ] as $name => $template) {
-    $path = $out . '/' . $name . DOCX_EXTENSION;
+    $path = $docs . '/' . $name . DOCX_EXTENSION;
 
-    (new MarkdownTemplate($template, reportStyle(), $reportValues))
-        ->repeat('facts', $reportRows)
-        ->insert('report', $reportMarkdown)
+    (new MarkdownTemplate($template, reportStyle()))
+        ->insert($corporateMarkdown)
         ->save($path);
 
     // The claim the pair exists to show, checked rather than written in a README:
     // whichever kind of template it was rendered into, what comes out is a document.
-    assertPackageType($path, $DOCUMENT_TYPE);
+    assertPackageType($path, DOCUMENT_TYPE);
 
     $built[] = [$name, 'Rendered into ' . basename($template) . '.', $path];
 }
+
+// The plain template: a logo and nothing else, which is what most templates actually
+// are — and, more to the point, what a letterhead somebody made in Word to be filled in
+// by a person looks like, because nobody making one inserts a content control. The
+// content is appended, which is the whole of the fallback; everything else about the
+// appearance comes from the library's built-in look rather than from the file.
+//
+// The pair with `22-corporate-report` is deliberate: that one names where the content
+// goes, this one does not, and both render the same Markdown.
+$plainPath = $docs . '/23-plain-letterhead' . DOCX_EXTENSION;
+
+(new MarkdownTemplate($templatePaths['plain-letterhead']))
+    ->insert($corporateMarkdown)
+    ->save($plainPath);
+
+$built[] = ['23-plain-letterhead', 'The same report into a template that names no place for it: a logo and nothing else.', $plainPath];
 
 // Images
 //
@@ -287,7 +390,7 @@ foreach ([
     'placeholder' => Options::IMAGE_PLACEHOLDER,
     'skip' => Options::IMAGE_SKIP,
 ] as $mode => $value) {
-    $path = $out . '/15-images-' . $mode . DOCX_EXTENSION;
+    $path = $docs . '/15-images-' . $mode . DOCX_EXTENSION;
     (new MarkdownToWord(
         $images,
         Configuration::create()->withOptions([
@@ -306,7 +409,7 @@ foreach ([
     '16-styled-tables' => 'Table style slots from the frontmatter.',
     '17-borderless-tables' => 'The table options, with no style slot.',
 ] as $name => $description) {
-    $path = $out . '/' . $name . DOCX_EXTENSION;
+    $path = $docs . '/' . $name . DOCX_EXTENSION;
     (new MarkdownToWord(
         (string) file_get_contents($root . '/markdown/' . $name . '.md'),
         Configuration::create(),
@@ -322,7 +425,7 @@ foreach ([
 // and an example that cannot be built on somebody's machine is worse than one that
 // says why it was skipped.
 if (\extension_loaded('imagick')) {
-    $path = $out . '/19-vector' . DOCX_EXTENSION;
+    $path = $docs . '/19-vector' . DOCX_EXTENSION;
     // The same base path the other examples get: without it a relative source path
     // resolves against the working directory and the picture is not found, which
     // falls back to the alt text and produces a document with no picture in it.
@@ -342,13 +445,13 @@ if (\extension_loaded('imagick')) {
 // The way back
 
 
-$roundTripped = (new WordToMarkdown($out . '/01-kitchen-sink' . DOCX_EXTENSION))->convert();
-file_put_contents($out . '/18-round-trip.md', $roundTripped);
+$roundTripped = (new WordToMarkdown($docs . '/01-kitchen-sink' . DOCX_EXTENSION))->convert();
+file_put_contents($docs . '/18-round-trip.md', $roundTripped);
 
 $built[] = [
     '18-round-trip',
     'The kitchen sink read back out of 01-kitchen-sink.docx.',
-    $out . '/18-round-trip.md',
+    $docs . '/18-round-trip.md',
 ];
 
 // The other two output formats
@@ -364,7 +467,7 @@ $built[] = [
 $formats = (string) file_get_contents($root . '/markdown/20-formats.md');
 
 foreach (Format::cases() as $format) {
-    $path = $out . '/20-formats' . $format->extension();
+    $path = $docs . '/20-formats' . $format->extension();
     $converter = new MarkdownToWord($formats, Configuration::create()->withOptions([
         'images' => Options::IMAGE_EMBED,
         'imageBasePath' => $root . '/markdown',
@@ -381,15 +484,15 @@ foreach (Format::cases() as $format) {
 
 // Report
 
-echo "\nBuilt:\n\n";
+echo "\nBuilt, into out/documents/:\n\n";
 
 foreach ($built as [$name, $description, $path]) {
-    printf("  %-22s %s\n", basename($path), $description);
+    printf("  %-34s %s\n", basename($path), $description);
 }
 
 echo "\n";
 
-renderPreviews($built);
+renderPreviews($built, $previews);
 
 /**
  * The report template's own styles, pointed at by name.
@@ -554,31 +657,46 @@ function buildReportTemplate(string $path): void
 
     $section = $phpWord->addSection();
 
-    // The masthead: the firm's own lines, and the client's details filled in through
-    // single-line macros rather than Markdown.
+    addLogo($section);
+
+    // The masthead. `@@…@@` is a marker this file replaces with a real `MERGEFIELD`
+    // afterwards — PHPWord has no API for a field, and a template written by hand or in
+    // Word has one.
     $section->addText('MERIDIAN ADVISORY', null, 'MrdFirm');
     $section->addText('Quarterly Business Review', null, 'MrdTitle');
-    $section->addText('${client}   ·   ${period}   ·   ${reference}', null, 'MrdMeta');
-    $section->addText('Prepared ${prepared}', null, 'MrdMeta');
+    // One marker per paragraph, so what separates them is text in the template and
+    // not padding folded into a field — a field's value carries the field's run
+    // properties, and a run of spaces at the start of one is not a separator.
+    $section->addText('Prepared for @@client@@', null, 'MrdMeta');
+    $section->addText('Period @@period@@   ·   Reference @@reference@@', null, 'MrdMeta');
+    $section->addText('Issued @@prepared@@', null, 'MrdMeta');
 
-    // A repeating region: the renderer clones it once per row and adds the `#1`,
-    // `#2`, ... index to the macros inside, so the template holds the plain names.
-    $section->addText('${facts}');
-    $section->addText('${label}', null, 'MrdFactLabel');
-    $section->addText('${value}', null, 'MrdFactValue');
-    $section->addText('${note}', null, 'MrdFactNote');
-    $section->addText('${/facts}');
+    $section->addText('@@contract_value@@', null, 'MrdFactLabel');
+    $section->addText('@@renewal_date@@', null, 'MrdFactValue');
 
-    // The Markdown region, and the whole of the report body.
-    $section->addText('${report}');
-    $section->addText('${slot}');
-    $section->addText('${/report}');
+    // Where the Markdown goes, and the closing line after it — which is why this is a
+    // content control and not "the end of the document": content appended below the
+    // signature block looks like a finished report and is not one.
+    // Where the Markdown goes. Written into the part after the writer has run, because
+    // a `w:sdt` is a child of `w:body` and PHPWord has no API for one — given to
+    // `addText()` it would be escaped into a `w:t` and be the literal characters
+    // `<w:sdt>` on the page rather than a control.
+    $section->addText(CONTROL_PLACEHOLDER);
 
-    // A closing line, so the template is visibly a document rather than a frame: the
-    // Markdown lands above it and the signature block stays where it was put.
     $section->addText('Meridian Advisory · Registered in Scotland · Confidential', null, 'MrdMeta');
 
     IOFactory::createWriter($phpWord, 'Word2007')->save($path);
+
+    fieldsIn($path, [
+        'client' => '',
+        'period' => '',
+        'reference' => '',
+        'prepared' => '',
+        'contract_value' => '',
+        'renewal_date' => 'Contract runs to ',
+    ]);
+
+    controlIn($path, ContentControl::BODY);
 
     $hairline = ['size' => 4, 'color' => 'C9D4DE'];
     $accent = ['size' => 12, 'color' => MRD_NAVY];
@@ -613,6 +731,252 @@ function borderOffset(string $properties): ?int
     }
 
     return $at;
+}
+
+/**
+ * The house logo in a section's header, so it is on every page.
+ *
+ * A header image and not a page background, on purpose: Word's `w:background` is shown
+ * on screen and left out of the printed page by default, which is the wrong trade for a
+ * document that gets printed and filed.
+ *
+ * The size is in points rather than centimetres because PHPWord does not read a unit
+ * it does not know — given `'4.6cm'` it stores 0, and a logo sized by nothing arrives
+ * at the width of its own pixels. It also reads an image's pixels as points, which is
+ * the same correction the SVG pass makes for a vector.
+ */
+function addLogo(Section $section): void
+{
+    if (!is_file(LOGO)) {
+        return;
+    }
+
+    [$pixelsWide, $pixelsHigh] = getimagesize(LOGO) ?: [0, 0];
+
+    if ($pixelsWide <= 0 || $pixelsHigh <= 0) {
+        return;
+    }
+
+    // 4.6 cm across — a letterhead logo rather than a banner.
+    $pointsWide = 4.6 * 72 / 2.54;
+
+    $section->addHeader()->addImage(LOGO, [
+        'width' => $pointsWide,
+        'height' => $pointsWide * $pixelsHigh / $pixelsWide,
+    ]);
+}
+
+/**
+ * A plain Word template: the logo, a body control, and nothing else.
+ *
+ * Deliberately not a letterhead. Everything that would make this a *corporate*
+ * template — the house fonts, the sizes, the navy, the rules — is what the library's
+ * built-in look already provides, so leaving them out is the demonstration: a template
+ * is not what makes a document look designed, and a file that carries only a logo and
+ * a place for the content is the one most templates actually are.
+ */
+function buildPlainTemplate(string $path): void
+{
+    $phpWord = new PhpWord();
+    $section = $phpWord->addSection();
+
+    addLogo($section);
+
+    // No content control, and that is the point: this is what a letterhead somebody
+    // made in Word to be filled in by a person looks like, because nobody making one
+    // inserts a control. The two template examples are a pair for exactly that reason —
+    // `22-corporate-report` is rendered through one that names where the content goes,
+    // `23-plain-letterhead` through one that does not.
+    IOFactory::createWriter($phpWord, 'Word2007')->save($path);
+}
+
+/**
+ * Replace `@@name@@` with a real Word field, in the parts of a template that can hold one.
+ *
+ * PHPWord has no API for a field, and a template comes from Word — where a person
+ * presses Ctrl+F9 and gets one — so the field is written into the part directly. The
+ * alternative would be a marker syntax of this file's own, which is the thing the
+ * library stopped using.
+ *
+ * The simple shape is written, `w:fldSimple`, because it is one element and reads the
+ * same. Word's own five-run form is handled by the library when it fills one, which is
+ * what a template authored in Word will carry.
+ *
+ * @param array<string, string> $before Text that goes immediately before each field, so a
+ *        marker inside a sentence keeps the sentence.
+ */
+function fieldsIn(string $path, array $before = []): void
+{
+    foreach (partsWithFields($path) as $part) {
+        rewritePart($path, $part, static function (DOMDocument $dom) use ($before): void {
+            foreach (fieldRuns($dom) as $run) {
+                replaceMarkers($dom, $run, $before);
+            }
+        });
+    }
+}
+
+/**
+ * The parts of a template that can hold a field: the body, and every header and
+ * footer there is.
+ *
+ * The header and footer parts are numbered from one, and `hasPart()` says whether
+ * one is there rather than assuming the numbering is contiguous.
+ *
+ * @return list<string>
+ */
+function partsWithFields(string $path): array
+{
+    $parts = ['word/document.xml'];
+
+    foreach (['header', 'footer'] as $kind) {
+        for ($index = 1; $index <= 99; $index++) {
+            $part = sprintf('word/%s%d.xml', $kind, $index);
+
+            if (hasPart($path, $part)) {
+                $parts[] = $part;
+            }
+        }
+    }
+
+    return $parts;
+}
+
+/**
+ * Every run in a part that carries a marker.
+ *
+ * @return list<DOMElement>
+ */
+function fieldRuns(DOMDocument $dom): array
+{
+    $xpath = new DOMXPath($dom);
+    $xpath->registerNamespace('w', W_NS);
+
+    $runs = [];
+
+    foreach ($xpath->query('//w:r[w:t]') ?: [] as $run) {
+        $text = $run->getElementsByTagNameNS(W_NS, 't')->item(0);
+
+        if ($text instanceof DOMElement && str_contains((string) $text->textContent, '@@')) {
+            $runs[] = $run;
+        }
+    }
+
+    return $runs;
+}
+
+/**
+ * Split one run into the fields and text its markers stand for.
+ *
+ * The pieces alternate text, name, text, name, and they are built in that order and
+ * then inserted before the run together: inserting each in turn before an anchor that
+ * moves with it reverses them, which is how "Prepared for @@client@@" came out as
+ * "Contoso IndustrialPrepared for".
+ *
+ * @param array<string, string> $before
+ */
+function replaceMarkers(DOMDocument $dom, DOMElement $run, array $before): void
+{
+    $parent = $run->parentNode;
+
+    if (!$parent instanceof DOMElement) {
+        return;
+    }
+
+    $text = $run->getElementsByTagNameNS(W_NS, 't')->item(0);
+    $pieces = explode('@@', $text instanceof DOMElement ? (string) $text->textContent : '');
+    $nodes = [];
+
+    foreach ($pieces as $index => $piece) {
+        if ($piece === '') {
+            continue;
+        }
+
+        if ($index % 2 === 0) {
+            $nodes[] = textRun($dom, $piece);
+
+            continue;
+        }
+
+        // Only the first field in a run takes the text that goes before it; the rest
+        // are preceded by a separator the template already wrote.
+        $nodes[] = mergeField($dom, $piece, $index === 1 ? ($before[$piece] ?? '') : '');
+    }
+
+    foreach ($nodes as $node) {
+        $parent->insertBefore($node, $run);
+    }
+
+    $parent->removeChild($run);
+}
+
+/**
+ * Replace the placeholder paragraph with a real content control.
+ *
+ * The whole paragraph goes, not just the marker: the control is a child of `w:body`
+ * and the marker sits inside a `w:t` inside a run inside a paragraph, so what
+ * replaces the paragraph is the control in its place.
+ */
+function controlIn(string $path, string $name): void
+{
+    rewritePart($path, 'word/document.xml', static function (DOMDocument $dom) use ($name): void {
+        $xpath = new DOMXPath($dom);
+        $xpath->registerNamespace('w', W_NS);
+
+        foreach ($xpath->query('//w:p[w:r/w:t]') ?: [] as $paragraph) {
+            $text = $paragraph->getElementsByTagNameNS(W_NS, 't')->item(0);
+
+            if (!$text instanceof DOMElement || trim((string) $text->textContent) !== CONTROL_PLACEHOLDER) {
+                continue;
+            }
+
+            $control = Xml::parse(
+                sprintf(
+                    '<root xmlns:w="%s" xmlns:xml="http://www.w3.org/XML/1998/namespace">%s</root>',
+                    W_NS,
+                    ContentControl::markup($name, 'The report goes here.'),
+                ),
+            )?->documentElement?->firstChild;
+
+            if (!$control instanceof DOMNode) {
+                throw new BadPackage('The content control could not be built.');
+            }
+
+            $paragraph->parentNode?->replaceChild($dom->importNode($control, true), $paragraph);
+
+            return;
+        }
+
+        throw new BadPackage(sprintf('The template has no "%s" marker to replace with a control.', $name));
+    });
+}
+
+/** A plain text run, where the fragment carries text rather than a field. */
+function textRun(DOMDocument $dom, string $text): DOMElement
+{
+    $run = $dom->createElementNS(W_NS, 'w:r');
+    $node = $dom->createElementNS(W_NS, 'w:t');
+    $node->setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+    $node->appendChild($dom->createTextNode($text));
+    $run->appendChild($node);
+
+    return $run;
+}
+
+/** A `w:fldSimple` naming a `MERGEFIELD`, in the shape Word writes. */
+function mergeField(DOMDocument $dom, string $name, string $before = ''): DOMElement
+{
+    $field = $dom->createElementNS(W_NS, 'w:fldSimple');
+    $field->setAttributeNS(W_NS, 'w:instr', ' MERGEFIELD ' . $name . ' \\* MERGEFORMAT ');
+
+    $run = $dom->createElementNS(W_NS, 'w:r');
+    $text = $dom->createElementNS(W_NS, 'w:t');
+    $text->setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+    $text->appendChild($dom->createTextNode($before . '«' . $name . '»'));
+    $run->appendChild($text);
+    $field->appendChild($run);
+
+    return $field;
 }
 
 /**
@@ -674,20 +1038,19 @@ function ruleStyles(string $path, array $styles): void
 }
 
 /**
- * Rewrite a `.docx` package as a `.dotx`, which is what makes it a Word template.
+ * Rewrite a `.dotx` package as a `.docx`, so the two can be rendered from and compared.
  *
  * One line of `[Content_Types].xml` is the entire difference: the body part is
- * declared as a template's rather than a document's, and Word opens a package typed
- * that way by creating a *new* document from it.
+ * declared as a document's rather than a template's. Everything else is left exactly as
+ * it is, which is the point — the two packages differ only in that line, so anything a
+ * renderer does differently for one has to be about it.
  *
- * The parts that follow it are left exactly as they are, which is the point — the two
- * packages differ only in the line above, so anything a renderer does differently for
- * one has to be about that line.
+ * @see self::asTemplate() for the same rewrite the other way, which is how
+ *      `templates/meridian-qbr.dotx` is produced in the first place.
  */
-function asTemplate(string $source, string $target): void
+function asDocument(string $source, string $target): void
 {
-    $document = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
-    $template = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
+    [$document, $template] = [DOCUMENT_TYPE, TEMPLATE_TYPE];
 
     copy($source, $target);
 
@@ -696,13 +1059,13 @@ function asTemplate(string $source, string $target): void
 
     try {
         $declared = (string) $zip->getFromName(CONTENT_TYPES_PART);
-        $rewritten = (string) preg_replace('~' . preg_quote($document, '~') . '~', $template, $declared);
+        $rewritten = (string) preg_replace('~' . preg_quote($template, '~') . '~', $document, $declared);
 
         // The name of a package decides nothing; the content type decides everything,
         // and a `.dotx` that is really a document opens as an ordinary file while a
         // `.docx` that is really a template spawns a new document on double-click.
         // Neither is worth leaving for a reader to discover in Word.
-        if (!str_contains($rewritten, $template) || str_contains($rewritten, $document)) {
+        if (!str_contains($rewritten, $document) || str_contains($rewritten, $template)) {
             throw new BadPackage(sprintf(
                 'Converting "%s" left a package that is neither a document nor a template; '
                 . 'a .dotx and a .docx differ only in the main part\'s content type.',
@@ -716,7 +1079,93 @@ function asTemplate(string $source, string $target): void
         $zip->close();
     }
 
+    assertPackageType($target, $document);
+}
+
+/**
+ * Rewrite a `.docx` package as a `.dotx`, which is what makes it a Word template.
+ *
+ * Only used by `--write-template`, which is how the committed
+ * `templates/meridian-qbr.dotx` is produced. Kept as its own function rather than as a
+ * flag on {@see self::asDocument()} because the two run in opposite directions and
+ * neither is the general case.
+ */
+function asTemplate(string $source, string $target): void
+{
+    [$document, $template] = [DOCUMENT_TYPE, TEMPLATE_TYPE];
+
+    copy($source, $target);
+
+    $zip = new ZipArchive();
+    $zip->open($target);
+
+    try {
+        $declared = (string) $zip->getFromName(CONTENT_TYPES_PART);
+        $rewritten = (string) preg_replace('~' . preg_quote($document, '~') . '~', $template, $declared);
+
+        if (!str_contains($rewritten, $template) || str_contains($rewritten, $document)) {
+            throw new BadPackage(sprintf('Converting "%s" left a package that is not a template.', $source));
+        }
+
+        $zip->deleteName(CONTENT_TYPES_PART);
+        $zip->addFromString(CONTENT_TYPES_PART, $rewritten);
+    } finally {
+        $zip->close();
+    }
+
     assertPackageType($target, $template);
+}
+
+/**
+ * Whether an archive holds a part by that name.
+ *
+ * @see self::assertPackageType() for why the name and the type are checked separately.
+ */
+function hasPart(string $path, string $part): bool
+{
+    $zip = new ZipArchive();
+    $opened = $zip->open($path) === true;
+    $found = $opened && $zip->locateName($part) !== false;
+    $zip->close();
+
+    return $found;
+}
+
+/**
+ * Edit one part of a package in place, through a callback that has the whole document.
+ *
+ * The whole part rather than a fragment, because a field is a child of a paragraph and
+ * a `w:fldSimple` is a child of `w:p`: replacing one run inside a paragraph is how you
+ * end up with unbalanced XML, and there is no way to add a sibling to a run without
+ * holding its parent.
+ *
+ * @param callable(DOMDocument):void $edit
+ */
+function rewritePart(string $path, string $part, callable $edit): void
+{
+    $zip = new ZipArchive();
+    $zip->open($path);
+
+    try {
+        $xml = $zip->getFromName($part);
+
+        if (!is_string($xml)) {
+            return;
+        }
+
+        $dom = Xml::parse($xml);
+
+        if ($dom === null) {
+            throw new BadPackage(sprintf('%s in "%s" is not valid XML.', $part, $path));
+        }
+
+        $edit($dom);
+
+        $zip->deleteName($part);
+        $zip->addFromString($part, (string) $dom->saveXML());
+    } finally {
+        $zip->close();
+    }
 }
 
 /**
@@ -754,9 +1203,8 @@ function buildInvoiceTemplate(string $path): void
 {
     $phpWord = new PhpWord();
 
-    $phpWord->addFontStyle('InvoiceTitle', ['bold' => true, 'size' => 24, 'color' => MRD_NAVY], new Paragraph());
-    $phpWord->addFontStyle('InvoiceMeta', ['size' => 10, 'color' => MRD_SLATE], new Paragraph());
-    $phpWord->addFontStyle('InvoiceBody', ['size' => 11], new Paragraph());
+    $phpWord->addFontStyle('InvoiceTitle', ['bold' => true, 'size' => 24, 'color' => MRD_NAVY]);
+    $phpWord->addFontStyle('InvoiceMeta', ['size' => 10, 'color' => MRD_SLATE]);
 
     $section = $phpWord->addSection();
 
@@ -765,22 +1213,16 @@ function buildInvoiceTemplate(string $path): void
     // this wrong writes a `w:rStyle` reference to a paragraph style, which Word
     // silently ignores.
     $section->addText('INVOICE', null, 'InvoiceTitle');
-    $section->addText('No. ${number}   ·   Issued for ${customer}', null, 'InvoiceMeta');
-
-    // A repeating region: the renderer clones it once per row and adds the
-    // `#1`, `#2`, ... index to the macros inside, so the template itself holds
-    // the plain names.
-    $section->addText('${lines}');
-    $section->addText('${description} — ${amount}');
-    $section->addText('${/lines}');
-
-    // A Markdown region: the renderer clones it once per rendered block and
-    // replaces the `${slot}` paragraph in each copy.
-    $section->addText('${terms}');
-    $section->addText('${slot}');
-    $section->addText('${/terms}');
+    $section->addText('No. @@number@@   ·   Issued for @@customer@@', null, 'InvoiceMeta');
+    $section->addText(CONTROL_PLACEHOLDER);
 
     IOFactory::createWriter($phpWord, 'Word2007')->save($path);
+
+    // The values are `MERGEFIELD`s — what a person inserts with Ctrl+F9 — and the
+    // content goes into a content control, which is what the Developer tab inserts.
+    // Neither is written by PHPWord, so both go into the part afterwards.
+    fieldsIn($path);
+    controlIn($path, ContentControl::BODY);
 }
 
 function logo(string $path): void
@@ -805,7 +1247,7 @@ function logo(string $path): void
 /**
  * Render the first page of each document so the result can be eyeballed.
  */
-function renderPreviews(array $built): void
+function renderPreviews(array $built, string $previews): void
 {
     $soffice = locateLibreOffice();
 
@@ -815,53 +1257,67 @@ function renderPreviews(array $built): void
         return;
     }
 
-    // Every format the examples write, so the comparison page can be looked at as
-    // well as read. The round trip is Markdown and has no first page to look at.
-    $documents = ['docx', 'odt', 'rtf'];
-    $rendered = 0;
+    // Every format the examples write, so the comparison page can be looked at as well
+    // as read. The round trip is Markdown and has no first page to look at.
+    $renderable = ['docx', 'odt', 'rtf'];
 
-    foreach ($built as [, , $path]) {
-        $extension = pathinfo($path, PATHINFO_EXTENSION);
+    // One directory for the run, emptied between documents rather than one per document.
+    //
+    // LibreOffice names its output after the file it was given, so the three formats
+    // behind `20-formats` each write `20-formats.png` into whatever directory they were
+    // given: in one shared directory each overwrites the last, and the one left standing
+    // would stand for all three — the opposite of what the comparison page is for. A
+    // directory per document solves that and leaks one directory into the system temp
+    // folder on every run of the script, forever, which is what a scratch directory is
+    // for.
+    $scratch = sys_get_temp_dir() . '/mdword-preview-' . bin2hex(random_bytes(6));
 
-        if (!in_array($extension, $documents, true)) {
-            continue;
-        }
+    if (!is_dir($scratch) && !mkdir($scratch, 0o777, true) && !is_dir($scratch)) {
+        echo "A temporary directory could not be made, so no preview images were produced.\n";
 
-        // Into a directory of its own, because LibreOffice names its output after
-        // the file it was given: three documents sharing a stem would otherwise
-        // each overwrite the last one's preview, and the one left standing would
-        // stand for all three — the opposite of what the comparison page is for.
-        $scratch = sys_get_temp_dir() . '/mdword-preview-' . bin2hex(random_bytes(6));
-
-        if (!is_dir($scratch) && !mkdir($scratch, 0o777, true) && !is_dir($scratch)) {
-            continue;
-        }
-
-        exec(sprintf(
-            '%s --headless --convert-to png --outdir %s %s 2>/dev/null',
-            escapeshellcmd($soffice),
-            escapeshellarg($scratch),
-            escapeshellarg($path),
-        ), $output, $status);
-
-        if ($status === 0 && movePreview($scratch, $path, $extension)) {
-            $rendered++;
-        }
-
-        $output = [];
+        return;
     }
 
-    printf("Rendered %d preview image(s) next to the documents.\n", $rendered);
+    $rendered = 0;
+
+    try {
+        foreach ($built as [, , $path]) {
+            $extension = pathinfo($path, PATHINFO_EXTENSION);
+
+            if (!in_array($extension, $renderable, true)) {
+                continue;
+            }
+
+            emptyDirectory($scratch);
+
+            exec(sprintf(
+                '%s --headless --convert-to png --outdir %s %s 2>/dev/null',
+                escapeshellcmd($soffice),
+                escapeshellarg($scratch),
+                escapeshellarg($path),
+            ), $output, $status);
+
+            if ($status === 0 && movePreview($scratch, $previews, $path, $extension)) {
+                $rendered++;
+            }
+
+            $output = [];
+        }
+    } finally {
+        emptyDirectory($scratch);
+    }
+
+    printf("Rendered %d preview image(s) into out/previews/.\n", $rendered);
 }
 
 /**
- * Put a document's preview image beside it, under a name of its own.
+ * Put a document's preview image in the previews directory, under a name of its own.
  *
  * The format goes into the name wherever it is not the default, so the `.docx` is
  * `20-formats.png` and its two siblings are `20-formats.odt.png` and
  * `20-formats.rtf.png`.
  */
-function movePreview(string $scratch, string $path, string $extension): bool
+function movePreview(string $scratch, string $previews, string $path, string $extension): bool
 {
     $stem = (string) preg_replace('/\.[^.]+$/', '', $path);
     $produced = $scratch . '/' . basename($stem) . '.png';
@@ -870,9 +1326,46 @@ function movePreview(string $scratch, string $path, string $extension): bool
         return false;
     }
 
-    $wanted = $extension === 'docx' ? $stem . '.png' : $stem . '.' . $extension . '.png';
+    $name = $extension === 'docx'
+        ? basename($stem) . '.png'
+        : basename($stem) . '.' . $extension . '.png';
 
-    return rename($produced, $wanted);
+    return rename($produced, $previews . '/' . $name);
+}
+
+/**
+ * Delete a directory and everything in it.
+ *
+ * `out/` is where the build puts its output and nowhere else, so emptying it first is
+ * what keeps a file whose example has been renamed or removed from outliving it.
+ *
+ * Word's owner file is deleted with everything else rather than treated as a reason to
+ * stop. It is written beside a document while it is open and removed when it closes,
+ * which in practice means it is usually left behind: a build that refused on finding one
+ * would never run again, and the eight of them that were sitting in `out/` were all
+ * from documents closed hours earlier.
+ */
+function emptyDirectory(string $path): void
+{
+    if (!is_dir($path)) {
+        return;
+    }
+
+    $entries = array_values(array_diff(scandir($path) ?: [], ['.', '..']));
+
+    foreach ($entries as $entry) {
+        $child = $path . '/' . $entry;
+
+        if (is_dir($child) && !is_link($child)) {
+            emptyDirectory($child);
+
+            continue;
+        }
+
+        @unlink($child);
+    }
+
+    @rmdir($path);
 }
 
 function locateLibreOffice(): ?string

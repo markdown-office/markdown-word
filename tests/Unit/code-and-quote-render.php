@@ -175,3 +175,46 @@ it('block quote style is configurable', function () {
 
     expect(paragraphStyleOf(renderElements("> quoted\n", $config)[0]))->toBe('Quote');
 });
+
+/*
+ * A code span's spaces are code.
+ *
+ * CommonMark normalises exactly two things inside one — line endings become spaces, and
+ * one space comes off each end when both ends have one and the span is not all spaces —
+ * and the parser has done both by the time the node reaches the renderer. Anything after
+ * that is not normalisation, it is alteration: `foo(  bar)` and `foo( bar)` are different
+ * lines of code, and the two-space version is usually the bug the reader is looking for.
+ *
+ * A code *block* never passes through the same path and always kept its whitespace; these
+ * are the inline cases, which did not.
+ */
+
+it('keeps the spaces inside a code span', function () {
+    expect(renderText("Run `a   b` here.\n"))->toContain('a   b');
+});
+
+it('keeps an alignment a code span is there for', function () {
+    // The reason anyone writes a run of spaces in one, and the reason collapsing it is
+    // a defect rather than a tidy-up.
+    expect(renderText("`name  value\nid    7`\n"))->toContain('name  value');
+});
+
+it('keeps a code span that is one space', function () {
+    // The one case where the two rules disagree, and the only one that could go either
+    // way: `` ` ` `` holds a single space and is not an empty span.
+    expect(renderText("a` `b\n"))->toContain(' ');
+});
+
+it('still takes one space off each end, as the spec says', function () {
+    expect(renderText("`  lead and trail  `\n"))->toContain(' lead and trail ');
+});
+
+it('still collapses the whitespace of ordinary text', function () {
+    // The other half of the same decision. A browser collapses it, so the document must,
+    // and `&#10;` inside ordinary text is a space on screen whatever the source says.
+    expect(renderText("one   two\n"))->toBe('one two');
+});
+
+it('leaves the whitespace in a code block alone', function () {
+    expect(renderText("```\na    b\n```\n"))->toContain('a    b');
+});

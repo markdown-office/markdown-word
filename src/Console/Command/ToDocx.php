@@ -12,6 +12,7 @@ use MarkdownWord\Console\ConsoleException;
 use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Format;
 use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Template\ContentFallback;
 use MarkdownWord\Template\TemplateFile;
 use MarkdownWord\WordPackage;
 use ZipArchive;
@@ -25,9 +26,6 @@ use ZipArchive;
  */
 class ToDocx extends BaseCommand
 {
-    /** The region a template is expected to have, used when `--region` is not given. */
-    public const DEFAULT_REGION = 'body';
-
     /**
      * @param list<string> $argv
      */
@@ -65,7 +63,6 @@ class ToDocx extends BaseCommand
         $theme = $command->value('theme');
 
         if ($template === null) {
-            $this->rejectWithoutTemplate($command);
             $this->convert($settings, $markdown, $input, $output, $overrides, $theme);
         } else {
             $this->assertTemplateIsSupported();
@@ -223,6 +220,10 @@ class ToDocx extends BaseCommand
             $overrides['imageBasePath'] = (string) $command->value('image-base');
         }
 
+        if ($command->value('svg-fallback') !== null) {
+            $overrides['svgFallback'] = (string) $command->value('svg-fallback');
+        }
+
         if ($command->value('table-width') !== null) {
             $overrides['tableWidth'] = self::tableWidth((string) $command->value('table-width'));
         }
@@ -331,28 +332,6 @@ class ToDocx extends BaseCommand
         ))->resolve($written);
     }
 
-    private function rejectWithoutTemplate(CommandLine $command): void
-    {
-        $offenders = [];
-
-        if ($command->repeated('define') !== []) {
-            $offenders[] = '--define';
-        }
-
-        if ($command->value('region') !== null) {
-            $offenders[] = '--region';
-        }
-
-        if ($offenders === []) {
-            return;
-        }
-
-        throw new ConsoleException(
-            sprintf('%s only means something together with --template.', implode(' and ', $offenders)),
-            ['A template names the region the Markdown goes into.'],
-        );
-    }
-
     private function intoTemplate(
         string $markdown,
         string $path,
@@ -361,27 +340,24 @@ class ToDocx extends BaseCommand
         ?string $input,
         string $output,
     ): void {
-        // Everything the run was *told* comes off the command line here rather than being
-        // handed in alongside it: `--define` and `--region` are already read this way in
-        // this method, and `--theme` and the typed overrides are as much a function of the
-        // command line as either of those are. Passing them separately made the list say
-        // they had been arrived at somewhere else.
         $overrides = $this->typedConfiguration($command);
-        $values = [];
 
-        foreach ($command->repeated('define') as $pair) {
-            [$name, $value] = CommandLine::pair($pair, '--define');
-            $values[$name] = $value;
+        // The values come out of the document's own `---` block, which
+        // {@see MarkdownTemplate::insert()} reads — a document says what its own
+        // values are rather than the command line saying them for it. `--define` is
+        // gone with the macro dialect: a value belongs to the document that has it,
+        // and a flag that fills a template was a second way to say the same thing.
+        $template = $this->application->template($path, $config, [], $overrides, $command->value('theme'));
+        $template->insert($markdown);
+
+        // A template with no place for the content takes it at the end, which is what
+        // makes any `.dotx` usable. A pipeline that would rather know than have it
+        // appended below a signature block asks for that here.
+        if ($command->flag('require-control')) {
+            $template->contentFallback(ContentFallback::Error);
         }
 
-        $region = (string) $command->value('region', self::DEFAULT_REGION);
-
-        self::assertRegionExists($path, $region);
-
-        $template = $this->application->template($path, $config, $values, $overrides, $command->value('theme'));
-        $template->insert($region, $markdown);
-
-        // The second guard: filling the region is the slow part of a run.
+        // Filling the document is the slow part of a run.
         $this->guardAgainstOverwrite($input, $output);
 
         if ($output === '-') {
@@ -393,62 +369,6 @@ class ToDocx extends BaseCommand
         $template->save($output);
     }
 
-    /**
-     * Filling a region that is not there leaves the `${name}` markers in the
-     * finished document, so a wrong name would otherwise produce a file that looks
-     * fine and is full of placeholders. Failing here says which regions the
-     * template does have.
-     *
-     * @throws ConsoleException when the region is not in the template.
-     */
-    private static function assertRegionExists(string $path, string $region): void
-    {
-        if (!is_file($path)) {
-            throw new ConsoleException(sprintf('The template "%s" does not exist.', $path));
-        }
-
-        $zip = new ZipArchive();
-
-        if ($zip->open($path) !== true) {
-            throw new ConsoleException(
-                sprintf('The template "%s" could not be opened.', $path),
-                ['A Word template is a .docx or .dotx file, which is a zip archive.'],
-            );
-        }
-
-        try {
-            $body = WordPackage::bodyPart($zip);
-            $document = $zip->getFromName($body);
-        } finally {
-            $zip->close();
-        }
-
-        if (!is_string($document)) {
-            throw new ConsoleException(sprintf('The template "%s" has no document body.', $path));
-        }
-
-        // The markers are spread across runs by whoever built the template, so each
-        // half is looked for on its own: the closing one is what tells a region
-        // apart from a single-line `${name}` value.
-        if (str_contains($document, '${' . $region . '}') && str_contains($document, '${/' . $region . '}')) {
-            return;
-        }
-
-        preg_match_all('/\$\{\/?([A-Za-z_][A-Za-z0-9_]*)\}/', $document, $matches);
-        $found = array_values(array_unique($matches[1] ?? []));
-
-        sort($found);
-
-        throw new ConsoleException(
-            sprintf('The template has no "${%s}" region.', $region),
-            $found === []
-                ? ['It has no ${name} regions at all. See the template contract in the README.']
-                : ['It does have: ' . implode(', ', array_map(
-                    static fn (string $name): string => '${' . $name . '}',
-                    $found,
-                ))],
-        );
-    }
 
     /**
      * @return array{values: list<string>, flags: list<string>, repeated: list<string>, aliases: array<string, string>}
@@ -456,9 +376,9 @@ class ToDocx extends BaseCommand
     public static function spec(): array
     {
         return [
-            'values' => ['output', 'config', 'template', 'theme', 'region', 'images', 'image-base', 'table-width', 'to'],
-            'flags' => ['help', 'no-images', 'plain'],
-            'repeated' => ['define'],
+'values' => ['output', 'config', 'template', 'theme', 'images', 'image-base', 'svg-fallback', 'table-width', 'to'],
+            'flags' => ['help', 'no-images', 'plain', 'require-control'],
+            'repeated' => [],
             'aliases' => ['o' => 'output', 't' => 'template', 'c' => 'config', 'h' => 'help'],
         ];
     }
@@ -473,11 +393,11 @@ class ToDocx extends BaseCommand
             ['-c, --config <file.php>', 'a file returning the styles and options to use'],
             ['--theme <name>', 'a named look to draw in; a styles: block still wins over it'],
             ['-t, --template <file.docx|.dotx>', 'render into a Word template rather than a new document'],
-            ['--region <name>', 'the template region to fill in (default: body)'],
-            ['--define <name=value>', 'a value for a single-line placeholder; repeatable'],
+            ['--require-control', 'refuse a template that has no content control, instead of appending to it'],
             ['--images <mode>', 'embed, placeholder or skip'],
             ['--no-images', 'shorthand for --images skip'],
             ['--image-base <dir>', 'where relative image paths resolve from'],
+            ['--svg-fallback <mode>', 'raster for readers that cannot take a vector, or none for those that can'],
             ['--table-width <n>', 'table width in fiftieths of a percent; 5000 is full width'],
             ['--plain', 'no code colouring, no quote style, no table borders, no added spacing'],
             ['--to <format>', 'which way to convert; detected from the file otherwise'],

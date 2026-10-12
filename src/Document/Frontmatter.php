@@ -191,7 +191,46 @@ final class Frontmatter
         return trim($value);
     }
 
-/**
+    /**
+     * The values a document supplies for the fields in its template.
+     *
+     * Read under `fields:`, one key per `MERGEFIELD` the template names. It is the
+     * document that says what its own values are — a document whose client is in a
+     * PHP array is a document whose client is in two places, and changing one does not
+     * change the other.
+     *
+     * Flat on purpose. A template's fields are named by Word, one name each, and a
+     * nesting here would have to be flattened before it could match any of them.
+     *
+     * @return array<string, string|int|float> Empty when the block has no `fields:`,
+     *         which is the ordinary case: a document rendered into no template needs
+     *         no values, and one that is has to say them.
+     */
+    public function fields(): array
+    {
+        $values = [];
+
+        foreach ($this->getArray('fields') as $name => $value) {
+            if (!is_scalar($value)) {
+                continue;
+            }
+
+            // A boolean a document wrote as `true` is a word to it and a letter to a
+            // field, so it is spelled rather than cast: `1` in a letterhead is a
+            // mystery, and `true` is what the author wrote.
+            if (is_bool($value)) {
+                $values[(string) $name] = $value ? 'true' : 'false';
+
+                continue;
+            }
+
+            $values[(string) $name] = $value;
+        }
+
+        return $values;
+    }
+
+    /**
      * The part of the block that configures the conversion.
      *
      * Only the two sub-keys {@see \MarkdownWord\Configuration} understands are passed

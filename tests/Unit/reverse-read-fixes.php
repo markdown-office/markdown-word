@@ -196,13 +196,26 @@ function reverseFixInChildProcess(string $code): array
         . $code,
     );
 
+    // A child told to be small can die of the memory limit before a destructor runs,
+    // and a PHP fatal skips destructors — so whatever it had written is left behind.
+    // `sys_temp_dir` redirects both `sys_get_temp_dir()` and PHPWord's
+    // `Settings::getTempDir()`, which falls back to the former, so one setting covers
+    // what the child writes and what the dependency writes for it. The parent empties
+    // `tmp/pest` after the test either way.
+    $temporary = Scratch::path('read-fix-temp', '');
+
+    if (!is_dir($temporary)) {
+        mkdir($temporary, 0o777, true);
+    }
+
     $output = [];
     $status = 1;
 
     exec(
         sprintf(
-            '%s -d memory_limit=128M -d error_reporting="E_ALL & ~E_DEPRECATED" %s 2>&1',
+            '%s -d memory_limit=128M -d sys_temp_dir=%s -d error_reporting="E_ALL & ~E_DEPRECATED" %s 2>&1',
             escapeshellarg(PHP_BINARY),
+            escapeshellarg($temporary),
             escapeshellarg($script),
         ),
         $output,

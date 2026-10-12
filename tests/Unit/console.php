@@ -263,31 +263,30 @@ it('reports a configuration file that returns the wrong thing', function () {
 
 // Templates
 
-it('renders into a template region and substitutes values', function () {
+it('renders into a template and fills the fields the document supplies', function () {
     $template = TemplateFactory::report();
     $output = Scratch::path('from-template');
 
-    $run = runCli([
-        'to-docx', '-',
-        '--template', $template,
-        '--region', 'summary',
-        '--define', 'reference=REF-42',
-        '-o', $output,
-    ], "## Overview\n\nRevenue **grew**.\n");
+    // The values are in the document's own block, which is the whole of where they
+    // come from: a document that says who it is for says so in one place.
+    $run = runCli(
+        ['to-docx', '-', '--template', $template, '-o', $output],
+        "---\nfields:\n  reference: REF-42\n---\n\n## Overview\n\nRevenue **grew**.\n",
+    );
 
     expect($run['code'])->toBe(0);
 
     $text = TemplateFactory::textOf($output);
 
-    expect($text)->toContain('Reference: REF-42');
+    expect($text)->toContain('REF-42');
     expect($text)->toContain('Overview');
-    // The region is gone rather than left as literal placeholders.
-    expect($text)->not->toContain('${slot}');
+    // The field is unlinked, so the document carries no field and no placeholder.
+    expect($text)->not->toContain('«');
 });
 
 it('draws a template in the theme the command line named', function () {
     $markdown = "## Overview\n\nRevenue **grew**.\n";
-    $argv = ['to-docx', '-', '--template', TemplateFactory::report(), '--region', 'summary'];
+    $argv = ['to-docx', '-', '--template', TemplateFactory::report()];
 
     $themed = Scratch::path('with-theme');
     expect(runCli([...$argv, '--theme', 'minimal', '-o', $themed], $markdown)['code'])->toBe(0);
@@ -306,7 +305,6 @@ it('resolves the named theme on the template path, and says so when it cannot', 
     $run = runCli([
         'to-docx', '-',
         '--template', TemplateFactory::report(),
-        '--region', 'summary',
         '--theme', 'no-such-theme',
         '-o', Scratch::path('never'),
     ], '# X');
@@ -318,17 +316,34 @@ it('resolves the named theme on the template path, and says so when it cannot', 
     expect($run['err'])->toContain('no-such-theme');
 });
 
-it('says which regions a template does have when the named one is missing', function () {
+it('renders into a template that has no content control at all', function () {
+    // The default is what makes any `.dotx` usable, so the command line has to reach
+    // it too: a letterhead nobody put a control in is the ordinary case now.
+    $out = Scratch::path('letterhead.docx');
+
     $run = runCli([
         'to-docx', '-',
-        '--template', TemplateFactory::report(),
+        '--template', TemplateFactory::letterhead(),
+        '-o', $out,
+    ], "# X");
+
+    expect($run['code'])->toBe(Application::SUCCESS);
+    expect(TemplateFactory::bodyTextOf($out))
+        ->toContain('X')
+        ->toContain('Yours sincerely');
+});
+
+it('says which content controls a template has when asked to insist on one', function () {
+    $run = runCli([
+        'to-docx', '-',
+        '--template', TemplateFactory::noControl(),
+        '--require-control',
         '-o', Scratch::path('never'),
     ], '# X');
 
-    // Failing loudly beats producing a document full of `${...}`.
     expect($run['code'])->toBe(Application::FAILURE);
-    expect($run['err'])->toContain('The template has no "${body}" region');
-    expect($run['err'])->toContain('${summary}');
+    expect($run['err'])->toContain('no "body" content control');
+    expect($run['err'])->toContain('terms');
 });
 
 it('refuses a template that is not a document', function () {
@@ -376,22 +391,14 @@ it('finds the region in a template whose body part is not word/document.xml', fu
     expect(TemplateFactory::bodyTextOf($output))->toContain('Overview');
 });
 
-it('says when a template option is used without a template', function () {
+it('reports --define as an option it no longer has', function () {
+    // It went with the macro dialect: a value belongs to the document, under `fields:`,
+    // and a flag that fills a template was a second way to say the same thing. An
+    // unknown option says so rather than being silently ignored.
     $run = runCli(['to-docx', '-', '--define', 'a=b'], '# X');
 
     expect($run['code'])->toBe(Application::FAILURE);
-    expect($run['err'])->toContain('only means something together with --template');
-});
-
-it('rejects a define that is not a name=value pair', function () {
-    $run = runCli([
-        'to-docx', '-',
-        '--template', TemplateFactory::report(),
-        '--define', 'oops',
-    ], '# X');
-
-    expect($run['code'])->toBe(Application::FAILURE);
-    expect($run['err'])->toContain('needs a name=value pair');
+    expect($run['err'])->toContain('Unknown option "--define"');
 });
 
 // To-markdown

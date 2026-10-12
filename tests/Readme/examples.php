@@ -14,12 +14,14 @@ use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Render\LinkPlaceholder;
 use MarkdownWord\Reverse\Block;
 use MarkdownWord\Reverse\Options as ReverseOptions;
+use MarkdownWord\Template\ContentControl;
 use MarkdownWord\Template\MarkdownTemplate;
 use MarkdownWord\Text\TextExtractor;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\WordPackage;
+use MarkdownWord\Xml;
 use MarkdownWord\WordToMarkdown;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
@@ -50,28 +52,100 @@ afterEach(fn () => Upstream::restore());
  * The report template the README's template example builds, with its own styles.
  *
  * Written out rather than taken from `TemplateFactory` because the point of that
- * example is the corporate style names and the `${rows}` region; a factory
- * template would check that templates work rather than that this page's does.
+ * example is the corporate style names and the Word constructs; a factory template
+ * would check that templates work rather than that this page's does.
+ *
+ * A `MERGEFIELD` for the value and a content control for the content, which is what
+ * a template carries and what a person in Word would insert — `Ctrl+F9` and the
+ * Developer tab. Neither is written by PHPWord, so both go into the part afterwards.
  */
 function readmeReportTemplate(): string
 {
     $phpWord = new PhpWord();
-    $phpWord->addFontStyle('ReportTitle', ['bold' => true, 'size' => 20], new Paragraph());
-    $phpWord->addFontStyle('BodyText', ['size' => 11], new Paragraph());
+    $phpWord->addFontStyle('ReportTitle', ['bold' => true, 'size' => 20]);
+    $phpWord->addFontStyle('BodyText', ['size' => 11]);
 
     $section = $phpWord->addSection();
-    $section->addText('Report for ${customer}');
-    $section->addText('${body}');
-    $section->addText('${slot}');
-    $section->addText('${/body}');
-    $section->addText('${rows}');
-    $section->addText('${item}: ${price}');
-    $section->addText('${/rows}');
+    $section->addText('Report for @@customer@@');
+    $section->addText('%%body%%');
 
     $path = Scratch::path('report-template');
     IOFactory::createWriter($phpWord, 'Word2007')->save($path);
 
+    readmeEdit($path, static function (DOMDocument $dom): void {
+        $xpath = new DOMXPath($dom);
+        $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+        foreach ($xpath->query('//w:r[w:t]') ?: [] as $run) {
+            $text = $run->getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 't')->item(0);
+
+            if (!$text instanceof DOMElement || !preg_match('~@@(\w+)@@~', (string) $text->textContent, $found)) {
+                continue;
+            }
+
+            $field = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:fldSimple');
+            $field->setAttributeNS(
+                'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                'w:instr',
+                ' MERGEFIELD ' . $found[1] . ' \\* MERGEFORMAT ',
+            );
+
+            $inner = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:r');
+            $value = $dom->createElementNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'w:t');
+            $value->appendChild($dom->createTextNode('\u{ab}' . $found[1] . '\u{bb}'));
+            $inner->appendChild($value);
+            $field->appendChild($inner);
+
+            $run->parentNode?->replaceChild($field, $run);
+        }
+
+        foreach ($xpath->query('//w:p') ?: [] as $paragraph) {
+            if (trim((string) $paragraph->textContent) !== '%%body%%') {
+                continue;
+            }
+
+            // `Xml::parse()` rather than `loadXML()`: the latter returns whether it
+            // parsed, not the document, so `?->documentElement` off it is null and
+            // the control is never built.
+            $control = Xml::parse(
+                '<root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+                . 'xmlns:xml="http://www.w3.org/XML/1998/namespace">'
+                . ContentControl::markup(ContentControl::BODY) . '</root>',
+            )?->documentElement?->firstChild;
+
+            if (!$control instanceof DOMNode) {
+                throw new RuntimeException('The content control could not be built.');
+            }
+
+            $paragraph->parentNode?->replaceChild($dom->importNode($control, true), $paragraph);
+
+            break;
+        }
+    });
+
     return $path;
+}
+
+/**
+ * Edit the body part of a document in place.
+ *
+ * @param callable(DOMDocument): void $edit
+ */
+function readmeEdit(string $path, callable $edit): void
+{
+    $zip = new ZipArchive();
+    $zip->open($path);
+    $dom = new DOMDocument();
+    $dom->loadXML((string) $zip->getFromName('word/document.xml'));
+    $zip->close();
+
+    $edit($dom);
+
+    $zip = new ZipArchive();
+    $zip->open($path);
+    $zip->deleteName('word/document.xml');
+    $zip->addFromString('word/document.xml', (string) $dom->saveXML());
+    $zip->close();
 }
 
 // The ways in
@@ -328,7 +402,7 @@ it('what the round trip does not preserve', function () {
 
 it('template: a template that defines its own styles', function () {
     $template_path = readmeReportTemplate();
-    $summary = inputFile('summary.md', "# Highlights\n\n- one\n- two\n");
+    $summary = inputFile('summary.md', "---\nfields:\n  customer: Northwind Ltd\n---\n\n# Highlights\n\n- one\n- two\n");
 
     $config = Configuration::create()->withStyles([
         Styles::HEADING_1 => 'ReportTitle',
@@ -339,23 +413,18 @@ it('template: a template that defines its own styles', function () {
     $output = Scratch::path('northwind');
     $markdown = (string) file_get_contents($summary);
 
-    (new MarkdownTemplate($template_path, $config, ['customer' => 'Northwind Ltd']))
-        ->insert('body', $markdown)
-        ->repeat('rows', [
-            ['item' => 'Licence', 'price' => '1,200 EUR'],
-            ['item' => 'Support', 'price' => '300 EUR'],
-        ])
+    (new MarkdownTemplate($template_path, $config))
+        ->insert($markdown)
         ->save($output);
 
     $xml = TemplateFactory::xmlOf($output);
-    $numbering = TemplateFactory::xmlOf($output, 'word/numbering.xml');
 
+    // No `${...}` and no guillemet: a value filled and left, or a field filled and
+    // not unlinked, is a placeholder somebody can still type into.
     expect($xml)->not->toContain('${')
+        ->and($xml)->not->toContain(chr(171))
         ->and($xml)->toContain('Northwind Ltd')
-        ->and($xml)->toContain('ReportTitle')
-        ->and($xml)->toContain('1,200 EUR')
-        ->and($xml)->toContain('300 EUR')
-        ->and($numbering)->toContain('w:numFmt w:val="bullet"');
+        ->and($xml)->toContain('ReportTitle');
 });
 
 it('renderIntoContainer renders into a container you name', function () {
@@ -387,7 +456,7 @@ it('a filled-in .dotx is a document', function () {
     $output = Scratch::path('from-dotx', '.docx');
 
     (new MarkdownTemplate(TemplateFactory::dotx()))
-        ->insert('body', "# Heading\n\nbody\n")
+        ->insert("# Heading\n\nbody\n")
         ->save($output);
 
     expect(TemplateFactory::mainContentTypeOf($output))

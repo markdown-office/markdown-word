@@ -8,6 +8,7 @@ use MarkdownWord\Configuration\Options;
 use MarkdownWord\Exception\UnsupportedImageFormat;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Render\SvgRasteriser;
 
 /*
  * The vector example, checked against what it claims.
@@ -19,25 +20,26 @@ use MarkdownWord\Parser\CommonMarkParser;
  * alt text survived a change of markup, and that the reason given when there is no
  * rasteriser is about the machine rather than about the format.
  *
- * The example is skipped where `ext-imagick` is absent, and so is the part of this
+ * The example is skipped where an SVG cannot be rasterised, and so is the part of this
  * file that needs it. The message claim is checked either way, because it is a claim
  * about words rather than about a document.
  */
 
+use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 
 beforeEach(fn () => Upstream::install());
-// Every test in this file builds a document with an SVG in it, which needs something
-// to rasterise. The suite runs on a build with imagick and on one without, so the file
-// skips itself rather than each test carrying a mark that would be wrong on the build
-// that has the extension.
+// Every test in this file builds a document with an SVG *and a raster beside it* in it.
+// A build that cannot draw one falls back to the vector alone, so the two-part claim
+// cannot be checked there and the file skips itself rather than each test carrying a
+// mark that would be wrong on that build.
 //
 // `uses()->beforeEach()` rather than a bare `beforeEach(function () { $this->… })`:
 // Pest types the latter as a `PendingCalls`, where `markTestSkipped()` is not a method,
 // so the one call the file depends on is the one static analysis cannot see.
 uses()->beforeEach(function (): void {
-    if (!\extension_loaded('imagick')) {
-        test()->markTestSkipped('ext-imagick is not loaded, so no SVG can be embedded');
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so the document carries no raster');
     }
 });
 
@@ -50,7 +52,7 @@ const VECTOR_EXTENSION_URI = '{96DAC541-7B7A-43D3-8B79-37D633B846F1}';
 /** The example rendered the way `examples/build.php` renders it. */
 function vectorDocument(): array
 {
-    $target = sys_get_temp_dir() . '/example-vector.docx';
+    $target = Scratch::path('vector', '.docx');
 
     (new MarkdownToWord(
         (string) file_get_contents(VECTOR_SOURCE),
@@ -187,7 +189,7 @@ it('lays the diagram out at the size the SVG stated', function () {
 it('keeps the ratio when the cap does apply, rather than squashing the drawing', function () {
     // At 8cm the diagram is too wide, so both axes scale together. A width that was set
     // on its own would leave the height alone and stretch the picture.
-    $directory = sys_get_temp_dir() . '/example-vector-cap';
+    $directory = Scratch::path('vector-cap', '');
 
     if (!is_dir($directory)) {
         mkdir($directory, 0o777, true);
@@ -217,7 +219,7 @@ it('keeps the ratio when the cap does apply, rather than squashing the drawing',
 it('embeds an SVG through the public API, not only through the build script', function () {
     // The build script is one caller. If the API needed a path only it had, the feature
     // would not be available to anybody else.
-    $directory = sys_get_temp_dir() . '/example-vector-api';
+    $directory = Scratch::path('vector-api', '');
 
     if (!is_dir($directory)) {
         mkdir($directory, 0o777, true);

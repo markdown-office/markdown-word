@@ -11,30 +11,32 @@ use MarkdownWord\Writer\SvgPass;
 /*
  * SVG in a Word document.
  *
- * Word has held SVG since 2016 and holds it the only way it ever can: a raster beside
- * the vector, with the vector referenced from an extension on the picture. A picture
- * carrying that extension and no raster renders nothing at all, which is why this is
- * two parts and not one.
+ * Word has held SVG since 2016, as a raster beside the vector with the vector referenced
+ * from an extension on the picture. Word 2016 and later draw the vector, and recent
+ * LibreOffice does too, so the raster is there for the readers that do not — Google Docs
+ * among them, which draws nothing at all for a picture carrying only the extension. That
+ * is what `svgFallback` chooses between.
  *
  * The awkward part is that PHPWord writes images as VML, and VML has no place to hang
  * the extension on — so the picture is rewritten as DrawingML. That is why these tests
  * assert on what the picture became and not merely on whether a vector was attached.
  */
 
+use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 
 beforeEach(fn () => Upstream::install());
-// Every test in this file builds a document with an SVG in it, which needs something
-// to rasterise. The suite runs on a build with imagick and on one without, so the file
-// skips itself rather than each test carrying a mark that would be wrong on the build
-// that has the extension.
+// Every test in this file builds a document with an SVG in it *and a raster beside it*.
+// That needs a build that can actually draw one, which is not the same as having the
+// extension: a build with no SVG delegate registers the format and draws the shapes
+// without the text. The file skips itself on either.
 //
 // `uses()->beforeEach()` rather than a bare `beforeEach(function () { $this->… })`:
 // Pest types the latter as a `PendingCalls`, where `markTestSkipped()` is not a method,
 // so the one call the file depends on is the one static analysis cannot see.
 uses()->beforeEach(function (): void {
-    if (!\extension_loaded('imagick')) {
-        test()->markTestSkipped('ext-imagick is not loaded, so no SVG can be embedded');
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so no raster is written');
     }
 });
 
@@ -45,7 +47,7 @@ const SVG_EXTENSION_URI = '{96DAC541-7B7A-43D3-8B79-37D633B846F1}';
 /** An SVG with a stated size, a viewBox and text to draw. */
 function anSvg(string $name = 'diagram.svg', string $body = ''): string
 {
-    $directory = sys_get_temp_dir() . '/mdword-svg';
+    $directory = Scratch::path('svg', '');
 
     if (!is_dir($directory)) {
         mkdir($directory, 0o777, true);
@@ -68,13 +70,14 @@ function anSvg(string $name = 'diagram.svg', string $body = ''): string
  *
  * @return array{document: string, rels: string, types: string, media: array<string, string>, names: list<string>}
  */
-function renderWithSvg(string $markdown, string $basePath): array
+function renderWithSvg(string $markdown, string $basePath, string $svgFallback = 'raster'): array
 {
-    $target = sys_get_temp_dir() . '/mdword-svg-out.docx';
+    $target = Scratch::path('svg-out', '.docx');
 
     (new MarkdownToWord($markdown, Configuration::create()->withOptions([
         'images' => 'embed',
         'imageBasePath' => $basePath,
+        'svgFallback' => $svgFallback,
     ])))->save($target);
 
     $zip = new ZipArchive();
@@ -251,7 +254,8 @@ it('leaves an ordinary picture exactly as PHPWord wrote it', function () {
     // The rewrite exists for pictures that have a vector. Touching every image in
     // every document to support a format most documents do not use would be a
     // regression bought for nothing.
-    $directory = sys_get_temp_dir() . '/mdword-svg';
+    $directory = Scratch::path('plain-picture', '');
+    mkdir($directory, 0o777, true);
     imagepng(imagecreatetruecolor(20, 10), $directory . '/plain.png');
 
     $parts = renderWithSvg("![A plain picture](plain.png)\n", $directory);
@@ -263,7 +267,7 @@ it('leaves an ordinary picture exactly as PHPWord wrote it', function () {
 
 
 it('does nothing when there is no vector to attach', function () {
-    $path = sys_get_temp_dir() . '/mdword-svg-none.docx';
+    $path = Scratch::path('svg-none', '.docx');
 
     (new MarkdownToWord("# Plain\n", Configuration::create()))->save($path);
 
@@ -316,7 +320,7 @@ it('scales the height with the width when the cap applies, rather than squashing
         'imageMaxWidth' => 5.0,
     ])))->toDocx($markdown);
 
-    $path = sys_get_temp_dir() . '/mdword-svg-out.docx';
+    $path = Scratch::path('svg-out', '.docx');
     file_put_contents($path, $capped);
 
     $zip = new ZipArchive();
@@ -362,7 +366,7 @@ it('lays out a stretched SVG by its own ratio, not by the height it declares', f
         SVG);
 
     $markdown = "![A banner](banner.svg)\n";
-    $path = sys_get_temp_dir() . '/mdword-svg-banner.docx';
+    $path = Scratch::path('svg-banner', '.docx');
 
     (new MarkdownToWord($markdown, Configuration::create()->withOptions([
         'images' => 'embed',
@@ -390,7 +394,16 @@ it('scales the height with the stated width, not with the box it was drawn in', 
     // of the viewBox on its own ignores the width, so the two come out the same height
     // and the picture is stretched as it is narrowed — the one way a vector can look
     // wrong while every number in the file is individually plausible.
+    // Both pictures are written here rather than one of them being read from wherever
+    // an earlier test happened to leave it: a test that depends on another test's
+    // leftovers passes for a reason that has nothing to do with what it is checking.
     $directory = anSvg();
+    file_put_contents($directory . '/banner.svg', <<<'SVG'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <svg xmlns="http://www.w3.org/2000/svg" width="480" height="60" viewBox="0 0 480 180">
+          <rect width="480" height="180" fill="#123456"/>
+        </svg>
+        SVG);
     file_put_contents($directory . '/narrow.svg', <<<'SVG'
         <?xml version="1.0" encoding="UTF-8"?>
         <svg xmlns="http://www.w3.org/2000/svg" width="240" height="30" viewBox="0 0 480 180">

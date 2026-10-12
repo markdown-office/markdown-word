@@ -101,9 +101,10 @@ final class InlineRenderer
         }
 
         if ($node instanceof Code) {
-            // Already stripped of its delimiters by the parser, including the
-            // leading/trailing space normalisation from the spec.
-            $this->addText($node->getLiteral(), $target, $style->withCode());
+            // Already stripped of its delimiters by the parser, including the two
+            // normalisations the spec does to a code span's contents, so nothing here
+            // may collapse what is left.
+            $this->addCode($node->getLiteral(), $target, $style);
 
             return $target;
         }
@@ -281,6 +282,25 @@ final class InlineRenderer
         }
 
         $target->addText($text, $this->styles->fontFor($style));
+    }
+
+    /**
+     * Text whose whitespace is content, so none of it is collapsed.
+     *
+     * A code span keeps its spaces. CommonMark normalises exactly two things in one —
+     * line endings become spaces, and one space is taken off each end when both ends
+     * have one and the string is not all spaces — and {@see Code} arrives having
+     * already had both done to it by the parser. Collapsing what is left would change
+     * what the code says: `` `a   b` `` is three spaces and came out as one, which
+     * makes `foo(  bar)` and `foo( bar)` the same line of code and the second one
+     * usually a bug the reader is looking for.
+     *
+     * The all-spaces case is worth stating, because it is the one place the two rules
+     * disagree: `` ` ` `` is a code span holding a single space, and it is not empty.
+     */
+    private function addCode(string $text, AbstractContainer $target, InlineStyle $style): void
+    {
+        $target->addText($text, $this->styles->fontFor($style->withCode()));
     }
 
     private function isOnlyImages(Node $node): bool

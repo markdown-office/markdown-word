@@ -92,7 +92,6 @@ it('renders into the template the document names', function () {
     // default is `body`, which this template does not have.
     $run = runCli([
         'to-docx', $markdown,
-        '--region', 'summary',
         '-o', $directory . '/out.docx',
     ]);
 
@@ -165,11 +164,14 @@ it('refuses a template outside the directories a document may name', function ()
 
     $run = runCli(['to-docx', $markdown, '-o', $directory . '/out.docx']);
 
+    // Before the assertions rather than after them: a file in the system temporary
+    // directory is not covered by the per-test cleanup, so a failure here would leave
+    // one behind on every run for ever.
+    @unlink($outside);
+
     expect($run['code'])->toBe(Application::FAILURE);
     expect($run['err'])->toContain('outside the directories a document may name');
     expect(file_exists($directory . '/out.docx'))->toBeFalse();
-
-    @unlink($outside);
 });
 
 it('accepts a document pointing inside the working directory', function () {
@@ -193,7 +195,6 @@ it('accepts a document pointing inside the working directory', function () {
 
     $run = runCli([
         'to-docx', $markdown,
-        '--region', 'summary',
         '-o', $directory . '/out.docx',
     ]);
 

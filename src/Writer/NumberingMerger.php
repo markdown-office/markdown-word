@@ -155,13 +155,41 @@ final class NumberingMerger
             $elementWriter->write();
         });
 
-        return $this->remap($xmlWriter->getData());
+        return $this->compact($this->remap($xmlWriter->getData()));
+    }
+
+    /**
+     * Remove the whitespace PHPWord's element writer puts between elements.
+     *
+     * The writer emits a fragment indented for a human to read, and that is fine in a
+     * file being written once. It is not fine when the fragment is handed to something
+     * that inserts it into a document: whitespace between a `w:t` and its text *is*
+     * text to Word, so a fragment written this way puts the literal characters
+     * `<w:p>` at the start of every paragraph it was inserted into.
+     *
+     * The indent is always *across a line break*, so folding `>`-whitespace-`<` is what
+     * is wanted only when a newline is in it. A space with no newline beside it is not
+     * indentation: a soft line break in a wrapped Markdown paragraph is written as a
+     * run holding one space, and folding that too joins the two words the author wrapped
+     * between them — `revenue` and `growth` came out as `revenuegrowth`, in every
+     * document, because nothing asserted on text that had been wrapped.
+     *
+     * {@see self::remap()} preserves whitespace for the same reason.
+     */
+    private function compact(string $xml): string
+    {
+        return (string) preg_replace('~>[ \t]*\r?\n\s*<~', '><', $xml);
     }
 
     /**
      * Rewrite the numbering references in a fragment of `word/document.xml`.
      *
      * {@see self::applyTo()} replaces the provisional values with the real ones.
+     *
+     * The fragment goes through a DOM because a `w:numId` may be split across runs by
+     * whatever built the document, and a string replacement would only find the ones
+     * that are whole. It comes back out of `saveXML()` rather than the string it went
+     * in as, and {@see self::compact()} removes what that adds.
      */
     public function remap(string $xml): string
     {
@@ -188,11 +216,18 @@ final class NumberingMerger
             }
         }
 
+        $dom->formatOutput = false;
+        $dom->preserveWhiteSpace = true;
+
         $out = '';
         foreach ($dom->documentElement?->childNodes ?? [] as $child) {
             $out .= $dom->saveXML($child);
         }
 
+        // The indent that came in is left for {@see self::compact()}, which is the one
+        // place that knows how to tell an indent from a space a sentence needs. Doing it
+        // here as well meant this copy went on stripping spaces that were content, and
+        // the two copies drifted apart the moment either was fixed.
         return $out;
     }
 

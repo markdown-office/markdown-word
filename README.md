@@ -450,8 +450,10 @@ into one never prints a line of this kind.
 
 **Only Word packages are read back.** `WordToMarkdown` reads a `.docx` and a `.dotx`;
 handing it an `.odt` is not supported, and neither is an `.rtf`. A `.dotx` read back is
-its unfilled content — the `${…}` markers are text, and that is the honest answer to
-be asked for one that has not been filled in.
+whatever it currently holds, which for an unfilled template is its own text, the
+placeholder inside the content control, and the cached results Word keeps beside each
+field. Those are text, and reading them back is the honest answer to be asked for a
+template that has not been filled in.
 
 **A template is a `.docx` or a `.dotx`.** PHPWord's template processor reads that
 package and nothing else, so `mdword to-odt --template` is refused rather than half
@@ -459,7 +461,7 @@ attempted. A `.dotx` is the same package with its body declared as a template's,
 whatever it is rendered into, the result is a document — see [Word
 templates](#word-templates).
 
-**An SVG needs `ext-imagick` whichever format it is going to.** The raster beside
+**An SVG needs `ext-imagick` unless `svgFallback` is `none`.** The raster beside
 the vector is drawn by something, and without it an SVG raises and says so rather
 than going in silently flattened.
 
@@ -513,11 +515,10 @@ The options both directions share:
 | `-c, --config <file.php>` | a file returning the styles and options to use |
 | `--theme <name>` | a named look to draw in; a `styles:` block still wins over it |
 | `-t, --template <file.docx\|.dotx>` | render into a Word template rather than a new document |
-| `--region <name>` | the template region to fill in, `body` by default |
-| `--define <name=value>` | a value for a single-line placeholder; repeatable |
 | `--images <mode>` | `embed`, `placeholder` or `skip` |
 | `--no-images` | shorthand for `--images skip` |
 | `--image-base <dir>` | where relative image paths resolve from |
+| `--svg-fallback <mode>` | `raster` writes a raster beside each SVG, `none` writes the vector alone |
 | `--table-width <n>` | table width in fiftieths of a percent; `5000` is full width |
 | `--plain` | no code colouring, no quote style, no table borders, no added spacing |
 
@@ -560,9 +561,10 @@ nothing can embed: the message is printed as it stands, with no class name and n
 line from this repository, because it is the caller's mistake to fix and not a defect.
 Exit status is 1.
 
-A mistake is reported in a sentence, with what to do about it, and the exit code
-is non-zero — a wrong `--region` names the regions the template does have rather
-than producing a document full of `${...}`.
+A mistake is reported in a sentence, with what to do about it, and the exit code is
+non-zero — a template with nowhere for the content names the controls it does have,
+rather than silently appending the body below a letterhead's signature block where it
+would look like a finished document.
 
 ### The phar
 
@@ -609,6 +611,17 @@ are both accepted, and which one it is makes no difference to the result: **a fi
 template is always a document.** See [What a `.dotx` costs](#what-a-dotx-costs) for
 why that is worth saying.
 
+Everything a template says is something Word already understands, because a template
+comes from Word and anything else would have to be invented here:
+
+| | |
+| --- | --- |
+| A value | a **`MERGEFIELD`**, the field a person inserts with `Ctrl+F9` |
+| A place for the content | a **rich-text content control**, named `body` |
+
+There is no third thing. A row of records is a table in the Markdown, and the template
+styles it like any other content — which is why there is no loop to explain.
+
 ```php
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
@@ -620,18 +633,40 @@ $config = Configuration::create()->withStyles([
     Styles::BLOCK_QUOTE => 'PullQuote',
 ]);
 
-$template = new MarkdownTemplate('report-template.docx', $config, [
-    'customer' => 'Northwind Ltd',
-]);
-
-$template
-    ->insert('body', file_get_contents('summary.md'))
-    ->repeat('rows', [
-        ['item' => 'Licence', 'price' => '1,200 EUR'],
-        ['item' => 'Support', 'price' => '300 EUR'],
-    ])
+(new MarkdownTemplate('report-template.docx', $config))
+    ->insert(file_get_contents('summary.md'))
     ->save('northwind.docx');
 ```
+
+`summary.md` carries its own values, so the document and everything in it travel
+together:
+
+```markdown
+---
+fields:
+  customer: Northwind Ltd
+---
+
+# Highlights
+
+- one
+- two
+```
+
+**`body` is this library's convention, not Word's.** ECMA-376 §17.5.2.36 defines a
+content control's `w:tag` as "an arbitrary string which applications can associate
+with a structured document tag", reserves no value for it, and Word never reads one —
+it round-trips it and leaves it alone. So the name collides with nothing Word
+recognises, and no standard is being missed by not matching one. A template that
+names its control something else is asked for that name:
+`insert($markdown, 'letter')`. Nobody else does this: the templating libraries that
+exist either use plain text delimiters (`{name}` in docxtemplater, `{{ var }}` in
+python-docx-template) or invent their own prefix, and none of them claims `body`.
+
+**Filled fields are unlinked.** The value stays and the field goes, which is what
+Word's own *Finish & Merge → Edit Individual Documents* produces and what a finished
+document wants: nothing to refresh with `F9`, and a value that can hold `&` or `<`
+without becoming an instruction.
 
 ### What a `.dotx` costs
 
@@ -666,33 +701,63 @@ when the renderer goes.
 
 ### The template contract
 
-A `${name}` macro is for a **single-line value**:
+A template says two things, and both are Word constructs:
+
+- **A value** is a `MERGEFIELD`. Insert one with `Ctrl+F9`, name it `customer`, and
+  the document supplies `customer` under `fields:`.
+- **A place for the content** is a rich-text **content control**, inserted from the
+  Developer tab. Its *tag* names it — `body` unless `insert()` is told otherwise —
+  because the tag is what a program reads and the alias is the visible label somebody
+  renames while working on the template.
+
+A template with no control is not a failure — it is the ordinary case. Nobody making a
+company letterhead inserts a content control, so a template with one is one this
+library's generator wrote, and refusing the rest would leave it able to use only the
+templates it wrote itself. **Any `.dotx` works.** Filling the fields and placing the
+content are separate: a letterhead with `MERGEFIELD`s for the client and no control at
+all gets both — the values filled, and the prose appended.
+
+Where the content goes without a control is at the end of the body, before the final
+`w:sectPr`. Before, because a `w:sectPr` must be the last child of a `w:body` and
+content after it belongs to no section — it would carry none of the margins, header,
+footer or page numbering that section defines, which for a letterhead is all of the
+letterhead. The cost is that a template ending in a signature block gets the body below
+it. A template that cares where the content lands says so, with a control, and then the
+control decides.
+
+No other tool has a rule to copy here. docxtemplater, python-docx-template,
+docx-templates and Word's own mail merge all leave a template with no placeholder
+exactly as they found it and insert nothing, so the document opens cleanly and contains
+none of the caller's content. Where a pipeline would rather know than have it appended,
+ask:
+
+```php
+use MarkdownWord\Template\ContentFallback;
+
+(new MarkdownTemplate('letterhead.dotx'))
+    ->contentFallback(ContentFallback::Error)
+    ->insert($markdown)
+    ->save('letter.docx');
+```
+
+```sh
+mdword to-docx letterhead.dotx notes.md --require-control
+```
+
+Either raises a `NoContentControl` naming the controls the template *does* have — a
+letterhead whose control is called `terms` is one tag away from working, and a message
+saying only that it has no `body` reads as though it has none.
 
 ```
-Report for ${customer}
+Report for «client»          ← a MERGEFIELD, filled and then unlinked
+┌ body ──────────────────┐
+│ Click here to enter…   │  ← a content control, replaced and then removed
+└───────────────────────┘
 ```
 
-Markdown needs a **region** — a `${name}` marker, a `${slot}` paragraph, and a
-matching `${/name}` marker. The region is cloned once per rendered block and each
-clone's slot is replaced:
-
-```
-${body}
-${slot}
-${/body}
-```
-
-A region whose macros are ordinary names repeats once per row instead:
-
-```
-${rows}
-${item}: ${price}
-${/rows}
-```
-
-`MarkdownTemplate::processor()` returns PHPWord's own `TemplateProcessor` for
-anything this class does not wrap — replacing images, applying an XSL style sheet
-and so on.
+The `«»` Word shows around a field is what a template carries before it is filled, not
+what a finished document has: fields are unlinked, so nothing in the output is a
+placeholder anyone could still type into.
 
 Two things are carried across into the template that a naive copy would lose, and
 that the library therefore rebuilds on the way out:
@@ -849,7 +914,7 @@ a path lands*, not where it was written from: a document in `docs/` naming a tem
 one directory up is inside the working directory and is a template, not an escape.
 
 ```sh
-$ mdword to-docx notes.md --region summary   # template_file: report.dotx, beside notes.md
+$ mdword to-docx notes.md      # template_file: report.dotx, beside notes.md
 $ mdword to-docx notes.md --template other.dotx   # the flag outranks the block
 ```
 
@@ -1099,32 +1164,65 @@ vector referenced from an extension on the same picture element.
 ```
 
 `rId7` is the PNG, `rId8` is the SVG, and both are in `word/media/`. A 2016-or-later
-Word scales the vector like one; an older one draws the raster. The raster is not
-optional in the sense of "used only if nothing better is available" — **every** reader
-draws it unless it knows to prefer the vector, and a picture carrying the `svgBlip`
-with no raster behind it renders *nothing at all*. So an SVG has to be rasterised on
-the way in.
+Word scales the vector like one; an older one draws the raster.
 
-That needs `ext-imagick`, which is **optional**. Where it is absent, an SVG raises
-and says so:
+The raster is there for the readers that cannot take the vector — **Google Docs among
+them**, which draws a picture carrying only the `svgBlip` as nothing at all. It is not
+optional in the sense of "used only if nothing better is available": every reader draws
+the `a:blip` unless it knows to prefer the vector, so a picture carrying the extension
+with no raster behind it renders nothing in all of them.
+
+Which of those two outcomes a document gets is `svgFallback`:
+
+| `svgFallback` | Written as `.docx` | Needs `ext-imagick` | Drawn by |
+| --- | --- | --- | --- |
+| `raster` *(default)* | raster beside the vector | yes | every reader |
+| `none` | the vector alone | no | Word 2016+, recent LibreOffice |
+
+`r:embed` is optional on `a:blip`, so `none` is a shape Word opens: the blip carries
+the extension and nothing else. It is the smaller document and the one that puts no
+rasteriser on the default path, and it costs the readers in the second column their
+pictures. Choose it when you know what will open the file.
+
+**The option is about `.docx`, because only `.docx` keeps the vector.** A raster is what
+an `.odt` or an `.rtf` has to draw the picture from, so those two always want one whatever
+this is set to, and where no usable rasteriser is installed they refuse an SVG rather than
+write a picture that is one transparent pixel.
+
+`raster` needs `ext-imagick`, which is **optional**. Where there is no usable
+rasteriser, the vector is written on its own rather than the conversion refused — a
+document whose readers may miss one picture beats no document — and the run says so
+through `pendingLosses()`:
+
+```
+a reader that does not prefer the vector draws nothing where an SVG was
+```
+
+The capability is tested by drawing a letter rather than by asking ImageMagick whether
+it has an SVG delegate, because a build without one still registers the format: it
+answers yes, then hands the file to its own renderer and draws the shapes without the
+words. That is the one outcome worse than either alternative, because it does not fail.
+A build that cannot draw text gets the vector alone rather than a picture missing it.
+
+Two things still raise, because both are about the file rather than the host. A file
+that holds no SVG whatever it is called, and one that states no `width`, `height` or
+`viewBox` to place it at:
 
 ```
 Cannot embed "assets/diagram.svg": Word can hold an SVG, but only beside a raster of
-it, so an SVG needs rasterising before it can go in — and this PHP has no SVG
-rasteriser, and without one there is no picture to put beside the vector. Install
-ext-imagick, or convert the file to PNG yourself.
+it, so an SVG needs rasterising before it can go in — and it could not be embedded
+because it states no width, height or viewBox, so there is nothing to place it at.
 ```
-
-The reason is the rasteriser, not the format. An earlier version of this message said
-SVG "is not a format this library can put into a Word document", which was false and
-sent a reader to check something that was never wrong.
 
 Two things are worth knowing about the mechanics. PHPWord writes images as VML, which
 has nowhere to hang an extension on, so a picture with a vector is rewritten as
 DrawingML — the form Word writes today — while every other image keeps PHPWord's
-markup untouched. And the picture is sized from the SVG's own dimensions rather than
-from the raster's, because PHPWord reads an image's pixels as points and the raster is
-the SVG at 96dpi: a 480-unit diagram would otherwise be laid out a third too large.
+markup untouched. And the picture is found by its position among the document's
+images, the same way its alt text is, rather than by the bytes of the raster beside it:
+PHPWord names media parts as it writes them, so a part name says nothing about which
+picture became it. The size comes from the SVG's own dimensions rather than the
+raster's, because PHPWord reads an image's pixels as points and the raster is the SVG at
+96dpi: a 480-unit diagram would otherwise be laid out a third too large.
 
 **A file that is there and cannot be used at all is refused.** A truncated download, a
 format this build has no decoder for: `Exception\UnsupportedImageFormat`, naming the
@@ -1385,10 +1483,9 @@ php smoke.php build/mdword.phar
   touched; every other image keeps the markup PHPWord wrote. The description
   crosses with it, from `o:title` to `wp:docPr/@descr`, because moving between
   the two without carrying it would delete the alt text.
-- **SVG needs `ext-imagick`, which is optional.** Word holds a vector only
-  beside a raster of it and draws nothing at all without one, so something has to
-  produce the raster. Without the extension an SVG raises and names the
-  rasteriser as the reason, rather than going in flattened.
+- **A raster beside an SVG needs `ext-imagick`, which is optional.** Without a
+  usable one the vector is written alone and `pendingLosses()` says what that
+  costs, rather than the conversion being refused over a picture.
 - **A document in memory is written to the system temp directory to be read
   back**, because `ext-zip` only opens files. It is removed once the archive is
   closed. The library does not write anywhere near its own install directory, so

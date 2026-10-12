@@ -7,10 +7,24 @@ any code.
 php examples/build.php
 ```
 
-The Markdown sources are in `markdown/`, the results in `out/`. Each document has
-a `.png` of its first page beside it if LibreOffice is installed, so the output
-can be checked without opening Word; where a stem has more than one format behind
-it, the format goes into the preview's name as well.
+The Markdown sources are in `markdown/`, the Word templates in `templates/`, and
+everything the build generates in `out/`:
+
+```
+out/
+  documents/     every document above, plus the Markdown the round trip produces
+  previews/      a .png of each document's first page
+```
+
+Previews need LibreOffice; without it the documents still build and the script says
+so rather than failing. Where a stem has more than one format behind it, the format
+goes into the preview's name as well.
+
+`out/` is emptied at the start of every build. It holds nothing that is not made
+here, and a build that only writes what it still names leaves behind every name it
+has stopped naming — which is how a template written in the `${…}` dialect that has
+since been removed came to sit in it, under a number the numbering has since moved
+past.
 
 | File | What it shows |
 | --- | --- |
@@ -23,22 +37,23 @@ it, the format goes into the preview's name as well.
 | `07-no-decoration.docx` | The kitchen sink with every aesthetic default switched off, next to `01`. |
 | `08-house-style.docx` | The kitchen sink in a custom house style defined in code. Compare with `01`. |
 | `09-extended-parser.docx` | Footnotes and description lists, via `CommonMarkParser::extended()`. |
-| `10-template.docx` | Markdown rendered into a Word template: a repeated region, a Markdown region, and substituted values. |
+| `10-template.docx` | Markdown rendered into a Word template: a `MERGEFIELD` filled from the document's own `fields:`, and a content control standing where the content goes. |
 | `11-frontmatter.docx` | A `---` block read as configuration: the heading sizes, the code and link fonts and the table borders all come out of it. |
 | `12-frontmatter-none.docx` | The same Markdown with no block, for the pair. |
 | `13-frontmatter-override.docx` | The same block, outranked by the configuration passed in code. |
-| `21-dotx-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the template that is a template](#the-template-that-is-a-template). |
-| `21-dotx-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |
 | `15-images-embed.docx` | Images, embedded: relative paths resolved through `imageBasePath`, `imageMaxWidth`, a WebP converted into the document, and the alt-text fallback. |
 | `15-images-placeholder.docx` | The same source with `images: placeholder` — the alt text, then the path. |
 | `15-images-skip.docx` | The same source with `images: skip` — no pictures and no captions. |
 | `16-styled-tables.docx` | `styles.table`, `styles.tableHeaderRow` and `styles.tableCell` from the block, with `tableWidth` and `tableHeaderBold`. |
 | `17-borderless-tables.docx` | `tableBorders`, `tableHeaderBold` and `tableWidth` with no style slot at all. |
+| `18-round-trip.md` | `01-kitchen-sink.docx` read back into Markdown, for comparing the two side by side. |
 | `19-vector.docx` | An SVG embedded as a **vector** beside its raster, which is the only way Word holds one. Not built where `ext-imagick` is absent; the build says so rather than failing. |
 | `20-formats.docx` | One page holding every construct the three output formats are asked about, as the `.docx` the other two are measured against. |
 | `20-formats.odt` | The same page as an OpenDocument Text. The headings, the quote and the spacing are the same as in the `.docx`; the table has no borders, its header row is not bold, and the ordered list comes out bulleted. |
 | `20-formats.rtf` | The same page as Rich Text. There is no list in it at all, the code block has no background and no colour, and there is no rule under the `---`. |
-| `18-round-trip.md` | `01-kitchen-sink.docx` read back into Markdown, for comparing the two side by side. |
+| `22-corporate-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the templates](#the-templates). |
+| `22-corporate-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |
+| `23-plain-letterhead.docx` | The same report into a template that is a logo and **nothing else** — no styles, and no content control either. The content is appended because the template names no place for it. Compare with `22`. |
 
 Numbering is one sequence and nothing shares a number. `markdown/14-rejected.md` is
 not in this table because `build.php` does not build it — converting it is the failure
@@ -303,59 +318,79 @@ preserves because the runs are written with `xml:space="preserve"`.
 inside it and not the markup, which is what the same Markdown looks like in a
 browser.
 
-## The template
+## The templates
 
-`build.php` builds `out/template-invoice.docx` and fills it in, so you can open
-the template next to the result. It has three placeholder kinds:
+Three Word templates live in `templates/`, all of them `.dotx` and all of them
+committed, so a fresh clone can open them without running anything:
+
+| Template | What it carries |
+| --- | --- |
+| `meridian-qbr.dotx` | The corporate letterhead: the logo in the header, six `MERGEFIELD`s, a body content control, and the house fonts and sizes. |
+| `plain-letterhead.dotx` | A logo and **nothing else** — no styles, and no content control. Nobody making a letterhead inserts one, which is what makes this the case the fallback exists for. |
+| `invoice.dotx` | Two font styles, an invoice heading, two `MERGEFIELD`s and a body control. Small, because it carries no logo. |
+
+Every one says the same two things, and both are things Word already understands:
 
 ```
-Report for ${number}                 ← a single value
+No. { MERGEFIELD number } ·   Issued for { MERGEFIELD customer }
 
-${lines}
-${description} — ${amount}           ← repeated once per row
-${/lines}
-
-${terms}
-${slot}                              ← Markdown, one block per clone
-${/terms}
+┌ { w:sdt, tag=body } ─────────────────────┐
+│ Click here to enter text.                │   ← replaced, then removed
+└──────────────────────────────────────────┘
 ```
 
-A `${name}` macro is for a single-line value. A region needs a matching
-`${/name}` and a `${slot}` paragraph; the renderer clones the region once per
-rendered block and replaces the slot in each copy. In a repeating region the
-macros keep their plain names — the renderer adds the `#1`, `#2` index.
+`10-template.docx` is `invoice.dotx` filled in, so you can open the template and the
+result next to each other.
 
-One trap if you build templates in code rather than in Word: PHPWord's second
-argument to `addText()` is a *character* style. A paragraph style goes in the
-third, or Word will ignore it.
+Rebuilding them is a separate step:
 
-## The template that is a template
+```sh
+php examples/build.php --write-templates
+```
 
-`build.php` builds `out/template-report.docx`, converts it to
-`out/template-report.dotx`, and renders the same Markdown into each:
+It is separate because it is not repeatable. `docProps/core.xml` carries the time a
+document was written, so two runs a minute apart differ there and nowhere else — a
+build that rewrote a committed binary every run would leave the working tree
+permanently dirty for a difference nobody can see. The trade is that a change to
+`buildInvoiceTemplate()` and friends does not reach the committed files until this is
+run, and the flag says so rather than pretending otherwise.
+
+One trap if you build a template in code rather than in Word: PHPWord's second
+argument to `addText()` is a *character* style. A paragraph style goes in the third,
+or Word will ignore it.
+
+## One template, two types
+
+`php examples/build.php` renders the same Markdown through `meridian-qbr.dotx` and
+through an identical copy of it typed as a `.docx`:
 
 | | |
 | --- | --- |
-| `21-dotx-report.docx` | rendered through `template-report.dotx` |
-| `21-dotx-report.docx-template.docx` | rendered through `template-report.docx` |
+| `22-corporate-report.docx` | rendered through `templates/meridian-qbr.dotx` |
+| `22-corporate-report.docx-template.docx` | rendered through the `.docx` twin |
 
 Open the two results side by side. The words, the styles and the layout are
-identical, because which kind of template it is makes no difference to the
-result. What it does change is what the result *is*: both are documents. A
-`.dotx` and a `.docx` differ by one line of `[Content_Types].xml`, and Word opens
-a package typed as a template by creating a *new* document from it — so a
-filled-in template that kept its own type is not a document, whatever it was
-saved as.
+identical, because which kind of template it is makes no difference to the result.
+What it does change is what the result *is*: both are documents. A `.dotx` and a
+`.docx` differ by one line of `[Content_Types].xml`, and Word opens a package typed
+as a template by creating a *new* document from it — so a filled-in template that
+kept its own type is not a document, whatever it was saved as.
 
-The `.dotx` is worth opening too: it is the template, with its masthead, its
-rules and its `${…}` regions unfilled.
+> **They are not byte-for-byte equal, and could not be.** Two runs of the *same*
+> template differ too: `word/numbering.xml` carries a `w:nsid` per abstract numbering
+> definition, which is a fresh value every run and which Word uses to recognise that
+> two definitions are the same across documents. Nothing about it reaches the page.
+> Every other part of the two archives is identical, which is the comparison worth
+> making.
 
-> The name of a package decides nothing, and that is worth being careful about
-> when building one. `asTemplate()` writes the type and `assertPackageType()`
-> then checks each file carries the type its name promises — the build stops if
-> a `.dotx` comes out a document or the other way round. Getting the conversion
-> backwards leaves both files working and both of them wrong: a `.dotx` Word
-> opens as an ordinary file, and a `.docx` it opens by spawning a new document.
+The template itself is worth opening: it is the template, with its masthead, its logo
+and its body control unfilled.
+
+> **The name of a package decides nothing.** `assertPackageType()` checks each
+> file carries the type its name promises, and the build stops otherwise —
+> because getting the conversion backwards leaves both files working and both of
+> them wrong: a `.dotx` Word opens as an ordinary file, and a `.docx` it opens
+> by spawning a new document. Neither complains.
 
 It is a report for a fictional consultancy, because a template that drives the
 body is only visible when there is a body worth looking at. The template defines

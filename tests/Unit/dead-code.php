@@ -134,6 +134,7 @@ it('does not claim again what the code does not do', function (string $claim) {
     'a theme file could exfiltrate through document metadata' => 'carried would be copied into `docProps/core.xml`',
     'a path a document wrote was checked the same way an image path is' => 'the same question an image path asks',
     'a theme the caller never overrode silently replaced an earlier one' => 'so the second theme is applied',
+    'a template with no content control is refused' => 'refused rather than filled at the end',
     'an unquoted colour is an integer the loader has to turn back into a string' => '000000 arrives as `0`',
     // True of the .docx writer and false of the .odt one, which writes the name
     // as the `text:list-style` its lists refer to. Stated once as the .docx

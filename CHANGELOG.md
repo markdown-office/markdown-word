@@ -8,6 +8,184 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **An SVG can be written without a raster beside it**, under `svgFallback`, on the
+  command line as `--svg-fallback`:
+
+  ```markdown
+  ---
+  svgFallback: none
+  ---
+  ```
+
+  `none` writes the vector alone. `raster` — the default — writes a raster of it as
+  well, for the readers that cannot take a vector.
+
+  Word 2016 and later draw a picture carrying only the `asvg:svgBlip` extension, with
+  no raster behind it, and so does recent LibreOffice. The raster is there for the
+  rest: **Google Docs does not read the extension** and draws such a picture as
+  nothing at all, which is why this is an option and not the default.
+
+  `r:embed` is optional on `a:blip`, so a document with the vector alone is one Word
+  opens. It is smaller, and it puts `ext-imagick` off the path entirely for a build
+  that has no usable rasteriser.
+
+  The option is about `.docx`, because only `.docx` keeps the vector. A raster is what
+  an `.odt` or an `.rtf` draws the picture from, so those two want one whatever this
+  is set to.
+
+### Fixed
+
+- **A build that cannot rasterise an SVG no longer says it can.** The capability was
+  read from ImageMagick's format registry, which a build with no SVG delegate still
+  registers: it answered yes, drew the shapes, dropped every `<text>` in the picture,
+  and raised nothing. A reader that does not prefer the vector — an older Word, Google
+  Docs — was handed a picture with its words missing. The question is now settled by
+  drawing a letter and looking at the result, because that is the part such a build
+  loses.
+
+- **An SVG no longer goes in silently when there is no rasteriser.** It is written on
+  its own rather than refused, and `pendingLosses()` says what that costs:
+
+  ```
+  the vector was written with no raster beside it, so a reader that does not prefer
+  the vector draws nothing where an SVG was
+  ```
+
+- **A vector was attached to the wrong document.** The pairing between a picture and
+  its SVG was by position, and positions were counted across a whole converter rather
+  than per document. A second document written through one converter was handed the
+  first one's vectors, which were then attached to whatever picture happened to be at
+  that index — including a document with no SVG in it at all, which lost a photograph
+  and gained a diagram nobody asked for.
+
+- **Two refusals that were accidents are refusals now.** A file holding no SVG whatever
+  it is called, and one stating no `width`, `height` or `viewBox`, were both caught by
+  the rasteriser declining them. Nothing checked either, so a build without one wrote a
+  part that was not a vector into the document, and placed a diagram at an assumed
+  288pt.
+
+### Changed
+
+- **A template is filled with Word's own constructs.** A value is a `MERGEFIELD` —
+  the field a person inserts with `Ctrl+F9` — and the place for the content is a
+  rich-text content control from the Developer tab. `${name}`, `${/name}` and
+  `${slot}` are gone, and with them `--define` and `--region`: there is no longer a
+  dialect of this library's own for a template to be written in.
+
+  **This is a breaking change.** A template written for the markers stops working,
+  and `MarkdownTemplate::insert()` takes the Markdown alone rather than a region name
+  and it. Nothing is deprecated first — the markers were never anything but this
+  library's, and supporting both would mean two ways to fill a template forever.
+
+  A filled field is **unlinked**: the value stays and the field goes, which is what
+  Word's own *Finish & Merge* produces and what a finished document wants. Only
+  `MERGEFIELD` is filled — a document is full of `PAGE`, `TOC` and `REF` fields that
+  are its own business, and a template that filled `PAGE` from a frontmatter block
+  would produce wrong page numbers. Headers and footers are filled too, because a
+  letterhead puts the client's name in a header.
+
+  `repeat()` is gone with it. A row-cloning primitive was a second dialect, and a
+  list of records is a table in the Markdown, which the template styles like any
+  other content.
+
+- **Values come out of the document**, under `fields:` in the block it already had:
+
+  ```markdown
+  ---
+  fields:
+    client: Northwind Ltd
+  ---
+
+  # Highlights
+  ```
+
+  A document whose client is in a PHP array is a document whose client is in two
+  places, and changing one does not change the other. `MarkdownTemplate`'s parser
+  carries `FrontMatterExtension` now, which is the opposite of `MarkdownToWord`'s:
+  there the block is configuration a caller may not have written, and here it is
+  where the values are.
+
+  `MarkdownToWord::renderIntoContainer()` accepts an already-parsed document, so a
+  template reads the block off one parse rather than parsing the same text twice.
+
+### Fixed
+
+- **A code span lost its spaces.** `` `a   b` `` came out as `a b`, and `` `foo(  bar)` ``
+  as `foo( bar)`. CommonMark normalises exactly two things inside a code span — line
+  endings become spaces, and one space comes off each end when both ends have one — and
+  the parser has done both by the time the node reaches the renderer. Collapsing what
+  was left changed what the code said, which makes the two-space version and the
+  one-space version the same line and the difference is usually the bug being looked
+  for. Ordinary text is still collapsed, as a browser does; a code block never went
+  through that path.
+
+- **The tests wrote scratch files into the system temporary directory**, where
+  nothing removes them: 845 empty files and 557 zip-bomb scratch files accumulated,
+  and both grew on every run. `tempnam()` creates a real file, so the two calls that
+  appended `.php` to it were unlinking a path they had never been given. The scratch
+  directories and files now go to `tmp/pest`, which the suite empties after every
+  test, and a child process told to be small is given `-d sys_temp_dir` pointing there
+  — a PHP fatal skips destructors, so a child that dies of the memory limit leaves
+  whatever it had written.
+
+  One SVG test was reading a fixture another test happened to leave in the shared
+  scratch directory; it now writes its own.
+
+- **A soft line break in a wrapped paragraph lost its space.** Markdown is habitually
+  hard-wrapped by hand, and every wrap point joined two words together:
+  `revenue` and `growth` came out as `revenuegrowth`, `in January` as `inJanuary`.
+  The cause was the fix above: the writer that folds out a fragment's indentation also
+  folded `>`, any whitespace, `<`, and a soft break is written as a run holding exactly
+  one space. It now folds only whitespace that has a newline in it, which is the only
+  kind that is ever an indent.
+
+  Every document was affected, not only the ones rendered through a template. Nothing
+  caught it, because every assertion was on the *words* and every word was right —
+  they were merely adjacent to the wrong word.
+
+- **A rendered block written into a template arrived as text.** PHPWord's element
+  writer emits a fragment indented for a human to read, and whitespace between a
+  `w:t` and its text *is* text to Word: every paragraph in the document opened with
+  the literal characters `<w:p>`. No text-level assertion could see it, because the
+  words after it were exactly right.
+
+### Changed
+
+- **Any `.dotx` now works.** The content control is optional. A template with no `body`
+  control takes the content at the end of its body instead of being refused, which is
+  what makes the library usable against a template it did not write: nobody making a
+  company letterhead inserts a content control, so requiring one left it able to use
+  only the templates its own generator produced. Filling `MERGEFIELD`s and placing the
+  content are independent — a letterhead with fields and no control gets both.
+
+  The end of the body is before the final `w:sectPr` rather than after it. A
+  `w:sectPr` has to be the last child of a `w:body` or Word rejects the file, and
+  content after it belongs to no section, so it would carry none of the margins,
+  header, footer or page numbering the template's last section defines.
+
+  This is a behaviour change for anyone relying on `NoContentControl`. `ContentFallback`
+  chooses between the two: `Append` (the default) or `Error`, which raises as before
+  and names the controls the template does have. `mdword to-docx` reaches it with
+  `--require-control`.
+
+  `ContentControl::fill()` returns `bool` where it returned `void` — whether it found a
+  control to fill. It no longer throws `NoContentControl` itself; deciding what an
+  absent control means is the caller's, and it now has the answer to decide on.
+
+- **`examples/out/` is emptied at the start of every build**, and holds only
+  `documents/` and `previews/`. A build that wrote only what it still named left
+  behind every name it had stopped naming, which is how a template written in the
+  removed `${…}` dialect came to sit in it under a number the numbering had moved
+  past. The three generated templates moved to `examples/templates/` as proper
+  `.dotx` files, and the intermediates that used to land in `out/` are now built in
+  the system temporary directory and removed when the run ends — a scratch directory
+  per preview was leaking one directory into `/tmp` on every run, forever.
+
+  `php examples/build.php --write-template` is now `--write-templates` and rebuilds
+  all three.
+
+### Added
+
 - **`*.dotx` templates.** `--template`, `MarkdownTemplate` and `template_file:` all
   accept a Word template as well as a Word document. Which of the two it is makes no
   difference to the result: **a filled-in template is always a document.** A `.dotx`

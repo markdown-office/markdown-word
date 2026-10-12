@@ -50,5 +50,10 @@
 *.swp
 *~
 
+# Word's owner file, written beside a document while it is open and removed when it
+# closes. One was committed by accident, from `examples/templates`, which is the only
+# directory in the repository a person has a reason to open a document in.
+~$*
+
 # Parallel agent worktrees
 .worktrees/
