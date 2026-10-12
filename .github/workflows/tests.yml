@@ -217,6 +217,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes librsvg2-bin fonts-dejavu-core
 
+      - name: What the rasteriser is doing
+        run: |
+          echo "rsvg-convert: $(command -v rsvg-convert || echo MISSING)"
+          php -r '
+            printf("imagick: %s\n", phpversion("imagick") ?: "not loaded");
+            printf("svg format registered: %s\n", in_array("SVG", Imagick::queryFormats(), true) ? "yes" : "no");
+            foreach (Imagick::queryFormats("*SVG*") as $f) { printf("  format: %s %s\n", $f, Imagick::getVersion()["versionString"]); }
+            $svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"20\"><text x=\"2\" y=\"15\" font-size=\"14\" fill=\"#000\">W</text></svg>";
+            try {
+              $i = new Imagick();
+              $i->setBackgroundColor(new ImagickPixel("transparent"));
+              $i->readImageBlob($svg);
+              printf("render: %dx%d, histogram entries %d\n", $i->getImageWidth(), $i->getImageHeight(), count($i->getImageHistogram()));
+            } catch (Throwable $e) {
+              printf("render threw: %s\n", $e->getMessage());
+            }
+          '
+
       - name: The rasteriser works here
         run: |
           php -r '
