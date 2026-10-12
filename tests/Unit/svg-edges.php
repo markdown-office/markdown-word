@@ -6,7 +6,6 @@ use MarkdownWord\Configuration;
 use MarkdownWord\Exception\MalformedDocument;
 use MarkdownWord\Exception\UnsupportedImageFormat;
 use MarkdownWord\MarkdownToWord;
-use MarkdownWord\Render\SvgAttachmentCollector;
 use MarkdownWord\Render\SvgRasteriser;
 use MarkdownWord\Writer\SvgPass;
 
@@ -68,9 +67,9 @@ function documentWithOnePicture(string $basePath, string $markdown = "![Alt](pic
     return $target;
 }
 
-it('ignores an attachment whose raster is not in the archive', function () {
-    // The hash is how the vector is matched to its picture. An attachment that matches
-    // nothing is not an error — the picture may have been dropped for being remote or
+it('ignores an attachment whose picture is not in the archive', function () {
+    // The position is how the vector is matched to its picture. An attachment that points
+    // at nothing is not an error — the picture may have been dropped for being remote or
     // missing — but it must not stop the ones that did match from being written.
     $directory = scratchDirectory('missing');
     imagepng(imagecreatetruecolor(10, 10), $directory . '/picture.png');
@@ -78,28 +77,25 @@ it('ignores an attachment whose raster is not in the archive', function () {
     $path = documentWithOnePicture($directory);
 
     $attached = (new SvgPass())->applyTo($path, [
-        ['fallback' => sha1('bytes that are in no document'), 'vector' => '<svg xmlns="x"/>'],
+        ['position' => 99, 'name' => 'image9.svg', 'vector' => '<svg xmlns="x"/>', 'raster' => true],
     ]);
 
     expect($attached)->toBe(0)
         ->and((string) file_get_contents($path))->toStartWith('PK');
 });
 
-it('attaches a vector to a picture it finds by its bytes', function () {
-    // The pass is given a hash, not a position, so this exercises it the way the
-    // renderer uses it: against a document whose picture is still the VML PHPWord
-    // wrote. Applying it twice to a converted picture is a different thing entirely and
-    // correctly does nothing, because the VML it looks for is gone.
+it('attaches a vector to the picture at the position it was given', function () {
+    // The pass is given a position, so this exercises it the way the renderer uses it:
+    // against a document whose picture is still the VML PHPWord wrote. Applying it twice
+    // to a converted picture is a different thing entirely and correctly does nothing,
+    // because the VML it looks for is gone.
     $directory = scratchDirectory('recognised');
     imagepng(imagecreatetruecolor(12, 12), $directory . '/picture.png');
 
     $path = documentWithOnePicture($directory);
-    $rasterHash = rasterHashIn($path);
-
-    expect($rasterHash)->not->toBe('');
 
     $attached = (new SvgPass())->applyTo($path, [
-        ['fallback' => $rasterHash, 'vector' => svgSource()],
+        ['position' => 0, 'name' => 'image1.svg', 'vector' => svgSource(), 'raster' => true],
     ]);
 
     expect($attached)->toBe(1)
@@ -109,15 +105,40 @@ it('attaches a vector to a picture it finds by its bytes', function () {
     @unlink($path);
 });
 
+it('drops the raster it was given nothing to point at', function () {
+    $directory = scratchDirectory('noplaceholder');
+    imagepng(imagecreatetruecolor(12, 12), $directory . '/picture.png');
+
+    $path = documentWithOnePicture($directory);
+    $before = mediaPartsIn($path);
+
+    (new SvgPass())->applyTo($path, [
+        ['position' => 0, 'name' => 'image1.svg', 'vector' => svgSource(), 'raster' => false],
+    ]);
+
+    $after = mediaPartsIn($path);
+    $body = partOf($path, 'word/document.xml');
+
+    // The blip carries the extension and nothing else, which is what a document written
+    // with `svgFallback: none` looks like: Word 2016 draws the vector, and there is no
+    // raster in the file for a reader that cannot to fall back on.
+    expect($body)->toContain('<a:blip><a:extLst>')
+        ->and($body)->not->toContain('<a:blip r:embed')
+        ->and($after)->toBe(['word/media/image1.svg'])
+        ->and(array_diff($before, $after))->not->toBe([]);
+
+    @unlink($path);
+});
+
 it('does nothing on a second pass, because the VML it looks for is already gone', function () {
     $directory = scratchDirectory('twice');
     imagepng(imagecreatetruecolor(12, 12), $directory . '/picture.png');
 
     $path = documentWithOnePicture($directory);
-    $hash = rasterHashIn($path);
+    $attachment = ['position' => 0, 'name' => 'image1.svg', 'vector' => svgSource(), 'raster' => true];
 
-    expect((new SvgPass())->applyTo($path, [['fallback' => $hash, 'vector' => svgSource()]]))->toBe(1)
-        ->and((new SvgPass())->applyTo($path, [['fallback' => $hash, 'vector' => svgSource()]]))->toBe(0);
+    expect((new SvgPass())->applyTo($path, [$attachment]))->toBe(1)
+        ->and((new SvgPass())->applyTo($path, [$attachment]))->toBe(0);
 });
 
 it('says so when the archive is not one', function () {
@@ -125,7 +146,7 @@ it('says so when the archive is not one', function () {
     file_put_contents($path, 'this is not a zip archive');
 
     expect(fn () => (new SvgPass())->applyTo($path, [
-        ['fallback' => 'x', 'vector' => '<svg xmlns="x"/>'],
+        ['position' => 0, 'name' => 'image1.svg', 'vector' => '<svg xmlns="x"/>', 'raster' => true],
     ]))->toThrow(MalformedDocument::class, 'as a zip archive');
 
     @unlink($path);
@@ -136,14 +157,11 @@ it('declares the content type only once, however many vectors are attached', fun
 
     file_put_contents($directory . '/diagram.svg', svgSource());
 
-    $probe = documentWithOnePicture($directory, "![Alt](diagram.svg)\n");
-    $hash = rasterHashIn($probe);
-    @unlink($probe);
-
     $target = documentWithOnePicture($directory, "![Alt](diagram.svg)\n");
+    $attachment = ['position' => 0, 'name' => 'image1.svg', 'vector' => svgSource(), 'raster' => true];
 
-    (new SvgPass())->applyTo($target, [['fallback' => $hash, 'vector' => svgSource()]]);
-    (new SvgPass())->applyTo($target, [['fallback' => $hash, 'vector' => svgSource()]]);
+    (new SvgPass())->applyTo($target, [$attachment]);
+    (new SvgPass())->applyTo($target, [$attachment]);
 
     $types = partOf($target, '[Content_Types].xml');
 
@@ -172,11 +190,16 @@ it('refuses an SVG it cannot read, and says the file rather than the format is t
 
     $markdown = "![Alt](broken.svg)\n";
 
+    // The reason, not the preamble every message of this kind shares. A file that is not
+    // a vector and a vector that states no size are both refused here, and the fixes are
+    // nothing alike: one is to export the file properly, the other to give the drawing a
+    // size. Reading the file before it is measured is what tells them apart.
     expect(fn () => (new MarkdownToWord($markdown, Configuration::create()->withOptions([
         'images' => 'embed',
         'imageBasePath' => $directory,
     ])))->toDocx($markdown))
-        ->toThrow(UnsupportedImageFormat::class, 'Word can hold an SVG');
+        ->toThrow(UnsupportedImageFormat::class, 'it holds no SVG, whatever it is called')
+        ->not->toThrow(UnsupportedImageFormat::class, 'states no width');
 });
 
 it('reports a rasteriser that is present but cannot draw the file', function () {
@@ -368,6 +391,15 @@ it('refuses a picture whose shape states no size, because nothing can draw it', 
     // size to rasterise at: the rasteriser is asked for a picture it cannot make, and
     // the only honest outcome is a refusal naming the machine. Silently substituting a
     // size here would produce a document with a diagram in it at a scale nobody chose.
+    //
+    // A build with no rasteriser is never asked the question, so it has no answer to
+    // refuse with: there is no picture to make and the vector goes in at the size the
+    // file does state, which for this file is none, and {@see \MarkdownWord\Render\SvgRasteriser::intrinsicSize()}
+    // says what it does about that.
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so it is never asked for one');
+    }
+
     $directory = scratchDirectory('sizeless');
     file_put_contents($directory . '/bare.svg', '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>');
 
@@ -399,25 +431,25 @@ function svgSource(string $width = '240', string $height = '120'): string
         SVG;
 }
 
-/** The SHA-1 of the raster an SVG left in an archive. */
-function rasterHashIn(string $path): string
+/** Every part under `word/media/`, so a pass that drops one can be seen to have. */
+function mediaPartsIn(string $path): array
 {
     $zip = new ZipArchive();
     $zip->open($path);
 
-    $hash = '';
+    $found = [];
 
     for ($index = 0; $index < $zip->numFiles; $index++) {
         $name = (string) $zip->getNameIndex($index);
 
-        if (str_starts_with($name, 'word/media/') && str_ends_with($name, '.png')) {
-            $hash = SvgAttachmentCollector::fingerprint((string) $zip->getFromName($name));
+        if (str_starts_with($name, 'word/media/')) {
+            $found[] = $name;
         }
     }
 
     $zip->close();
 
-    return $hash;
+    return $found;
 }
 
 /** @return list<string> */
@@ -617,14 +649,36 @@ it('reports the extension when a file is not an image and has none to fall back 
         ->toThrow(UnsupportedImageFormat::class);
 });
 
-it('turns an imagick build without the SVG delegate away, rather than half-way', function () {
-    // `available()` checks that the format is registered and not merely that the class
-    // exists: a build can have the extension and still not read an SVG. Detecting that
-    // here is what turns a confusing failure on the first picture into a clear one on
-    // the first conversion.
-    $registered = \in_array('SVG', \Imagick::queryFormats(), true);
+it('turns an imagick build that cannot draw a letter away, rather than half-way', function () {
+    // The format being registered proves nothing: a build with no SVG delegate registers
+    // `SVG` and hands the file to its own renderer, which draws the shapes and drops
+    // every `<text>` in it. That is the worst outcome of the three, because it does not
+    // fail — it produces a picture missing its words — so the probe has to draw one and
+    // look at the result.
+    $glyph = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" viewBox="0 0 40 20">'
+        . '<text x="2" y="15" font-size="14" fill="#000000">W</text></svg>';
 
-    expect(SvgRasteriser::available())->toBe($registered);
+    if (!\extension_loaded('imagick')) {
+        expect(SvgRasteriser::available())->toBeFalse();
+
+        return;
+    }
+
+    $image = new \Imagick();
+    $image->setBackgroundColor(new \ImagickPixel('transparent'));
+    $image->readImageBlob($glyph);
+    $drew = false;
+
+    foreach ($image->getImageHistogram() as $colour) {
+        if ($colour->getColorValue(\Imagick::COLOR_ALPHA) > 0.0) {
+            $drew = true;
+        }
+    }
+
+    $image->clear();
+
+    // Whatever this build does with a glyph, the probe has to agree with it.
+    expect(SvgRasteriser::available())->toBe($drew);
 });
 
 it('reports no rasteriser on a build that has none', function () {

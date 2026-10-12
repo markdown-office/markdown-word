@@ -6,6 +6,64 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **An SVG can be written without a raster beside it**, under `svgFallback`, on the
+  command line as `--svg-fallback`:
+
+  ```markdown
+  ---
+  svgFallback: none
+  ---
+  ```
+
+  `none` writes the vector alone. `raster` — the default — writes a raster of it as
+  well, for the readers that cannot take a vector.
+
+  Word 2016 and later draw a picture carrying only the `asvg:svgBlip` extension, with
+  no raster behind it, and so does recent LibreOffice. The raster is there for the
+  rest: **Google Docs does not read the extension** and draws such a picture as
+  nothing at all, which is why this is an option and not the default.
+
+  `r:embed` is optional on `a:blip`, so a document with the vector alone is one Word
+  opens. It is smaller, and it puts `ext-imagick` off the path entirely for a build
+  that has no usable rasteriser.
+
+  The option is about `.docx`, because only `.docx` keeps the vector. A raster is what
+  an `.odt` or an `.rtf` draws the picture from, so those two want one whatever this
+  is set to.
+
+### Fixed
+
+- **A build that cannot rasterise an SVG no longer says it can.** The capability was
+  read from ImageMagick's format registry, which a build with no SVG delegate still
+  registers: it answered yes, drew the shapes, dropped every `<text>` in the picture,
+  and raised nothing. A reader that does not prefer the vector — an older Word, Google
+  Docs — was handed a picture with its words missing. The question is now settled by
+  drawing a letter and looking at the result, because that is the part such a build
+  loses.
+
+- **An SVG no longer goes in silently when there is no rasteriser.** It is written on
+  its own rather than refused, and `pendingLosses()` says what that costs:
+
+  ```
+  the vector was written with no raster beside it, so a reader that does not prefer
+  the vector draws nothing where an SVG was
+  ```
+
+- **A vector was attached to the wrong document.** The pairing between a picture and
+  its SVG was by position, and positions were counted across a whole converter rather
+  than per document. A second document written through one converter was handed the
+  first one's vectors, which were then attached to whatever picture happened to be at
+  that index — including a document with no SVG in it at all, which lost a photograph
+  and gained a diagram nobody asked for.
+
+- **Two refusals that were accidents are refusals now.** A file holding no SVG whatever
+  it is called, and one stating no `width`, `height` or `viewBox`, were both caught by
+  the rasteriser declining them. Nothing checked either, so a build without one wrote a
+  part that was not a vector into the document, and placed a diagram at an assumed
+  288pt.
+
 ### Changed
 
 - **A template is filled with Word's own constructs.** A value is a `MERGEFIELD` —

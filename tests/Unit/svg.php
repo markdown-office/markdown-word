@@ -11,10 +11,11 @@ use MarkdownWord\Writer\SvgPass;
 /*
  * SVG in a Word document.
  *
- * Word has held SVG since 2016 and holds it the only way it ever can: a raster beside
- * the vector, with the vector referenced from an extension on the picture. A picture
- * carrying that extension and no raster renders nothing at all, which is why this is
- * two parts and not one.
+ * Word has held SVG since 2016, as a raster beside the vector with the vector referenced
+ * from an extension on the picture. Word 2016 and later draw the vector, and recent
+ * LibreOffice does too, so the raster is there for the readers that do not — Google Docs
+ * among them, which draws nothing at all for a picture carrying only the extension. That
+ * is what `svgFallback` chooses between.
  *
  * The awkward part is that PHPWord writes images as VML, and VML has no place to hang
  * the extension on — so the picture is rewritten as DrawingML. That is why these tests
@@ -25,17 +26,17 @@ use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 
 beforeEach(fn () => Upstream::install());
-// Every test in this file builds a document with an SVG in it, which needs something
-// to rasterise. The suite runs on a build with imagick and on one without, so the file
-// skips itself rather than each test carrying a mark that would be wrong on the build
-// that has the extension.
+// Every test in this file builds a document with an SVG in it *and a raster beside it*.
+// That needs a build that can actually draw one, which is not the same as having the
+// extension: a build with no SVG delegate registers the format and draws the shapes
+// without the text. The file skips itself on either.
 //
 // `uses()->beforeEach()` rather than a bare `beforeEach(function () { $this->… })`:
 // Pest types the latter as a `PendingCalls`, where `markTestSkipped()` is not a method,
 // so the one call the file depends on is the one static analysis cannot see.
 uses()->beforeEach(function (): void {
-    if (!\extension_loaded('imagick')) {
-        test()->markTestSkipped('ext-imagick is not loaded, so no SVG can be embedded');
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so no raster is written');
     }
 });
 
@@ -69,13 +70,14 @@ function anSvg(string $name = 'diagram.svg', string $body = ''): string
  *
  * @return array{document: string, rels: string, types: string, media: array<string, string>, names: list<string>}
  */
-function renderWithSvg(string $markdown, string $basePath): array
+function renderWithSvg(string $markdown, string $basePath, string $svgFallback = 'raster'): array
 {
     $target = Scratch::path('svg-out', '.docx');
 
     (new MarkdownToWord($markdown, Configuration::create()->withOptions([
         'images' => 'embed',
         'imageBasePath' => $basePath,
+        'svgFallback' => $svgFallback,
     ])))->save($target);
 
     $zip = new ZipArchive();

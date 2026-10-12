@@ -202,6 +202,48 @@ jobs:
       - name: Install
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      # The SVG tests skip themselves on a build that cannot rasterise, which is right
+      # but quiet: a runner that lost its SVG delegate would skip a few dozen tests and
+      # the run would still be green. Asserted here rather than left to be noticed in
+      # the skip count, because a suite that stopped testing the rasteriser is worse
+      # than one that failed.
+      #
+      # `librsvg2-bin` is what ImageMagick uses as its SVG delegate. Without it the
+      # runner falls back to ImageMagick's own renderer, which registers the format and
+      # then drops the text out of every picture — so the tests below were checking a
+      # rasteriser that was quietly producing half a picture.
+      - name: Install an SVG delegate
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes librsvg2-bin fonts-dejavu-core
+
+      - name: What the rasteriser here can do
+        # Not a gate. It reports, because the SVG tests skip themselves on a host that
+        # cannot rasterise, and a skip that nobody reads is how a suite stops testing the
+        # thing it is for. This runner's ImageMagick has no librsvg coder — installing
+        # librsvg2-bin does not give it one — so it draws the shapes and drops the text,
+        # and the vector tests skip here.
+        #
+        # Before `SvgRasteriser::available()` learned to draw a letter rather than ask
+        # ImageMagick whether the format was registered, this host answered yes and the
+        # suite passed over a raster with every word missing from it.
+        run: |
+          echo "rsvg-convert: $(command -v rsvg-convert || echo MISSING)"
+          php -r '
+            printf("imagick extension: %s\n", phpversion("imagick") ?: "not loaded");
+            $svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"20\"><text x=\"2\" y=\"15\" font-size=\"14\" fill=\"#000\">W</text></svg>";
+            try {
+              $i = new Imagick();
+              $i->setBackgroundColor(new ImagickPixel("transparent"));
+              $i->readImageBlob($svg);
+              $ink = 0;
+              foreach ($i->getImageHistogram() as $c) { if ($c->getColorValue(Imagick::COLOR_ALPHA) > 0.0) { $ink++; } }
+              printf("a letter renders: %s (%d inked colours)\n", $ink > 0 ? "yes" : "NO — the SVG tests will skip", $ink);
+            } catch (Throwable $e) {
+              printf("a letter renders: NO — threw %s\n", $e->getMessage());
+            }
+          '
+
       - name: Test
         run: vendor/bin/pest
 

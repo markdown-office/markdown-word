@@ -461,7 +461,7 @@ attempted. A `.dotx` is the same package with its body declared as a template's,
 whatever it is rendered into, the result is a document — see [Word
 templates](#word-templates).
 
-**An SVG needs `ext-imagick` whichever format it is going to.** The raster beside
+**An SVG needs `ext-imagick` unless `svgFallback` is `none`.** The raster beside
 the vector is drawn by something, and without it an SVG raises and says so rather
 than going in silently flattened.
 
@@ -518,6 +518,7 @@ The options both directions share:
 | `--images <mode>` | `embed`, `placeholder` or `skip` |
 | `--no-images` | shorthand for `--images skip` |
 | `--image-base <dir>` | where relative image paths resolve from |
+| `--svg-fallback <mode>` | `raster` writes a raster beside each SVG, `none` writes the vector alone |
 | `--table-width <n>` | table width in fiftieths of a percent; `5000` is full width |
 | `--plain` | no code colouring, no quote style, no table borders, no added spacing |
 
@@ -1163,32 +1164,65 @@ vector referenced from an extension on the same picture element.
 ```
 
 `rId7` is the PNG, `rId8` is the SVG, and both are in `word/media/`. A 2016-or-later
-Word scales the vector like one; an older one draws the raster. The raster is not
-optional in the sense of "used only if nothing better is available" — **every** reader
-draws it unless it knows to prefer the vector, and a picture carrying the `svgBlip`
-with no raster behind it renders *nothing at all*. So an SVG has to be rasterised on
-the way in.
+Word scales the vector like one; an older one draws the raster.
 
-That needs `ext-imagick`, which is **optional**. Where it is absent, an SVG raises
-and says so:
+The raster is there for the readers that cannot take the vector — **Google Docs among
+them**, which draws a picture carrying only the `svgBlip` as nothing at all. It is not
+optional in the sense of "used only if nothing better is available": every reader draws
+the `a:blip` unless it knows to prefer the vector, so a picture carrying the extension
+with no raster behind it renders nothing in all of them.
+
+Which of those two outcomes a document gets is `svgFallback`:
+
+| `svgFallback` | Written as `.docx` | Needs `ext-imagick` | Drawn by |
+| --- | --- | --- | --- |
+| `raster` *(default)* | raster beside the vector | yes | every reader |
+| `none` | the vector alone | no | Word 2016+, recent LibreOffice |
+
+`r:embed` is optional on `a:blip`, so `none` is a shape Word opens: the blip carries
+the extension and nothing else. It is the smaller document and the one that puts no
+rasteriser on the default path, and it costs the readers in the second column their
+pictures. Choose it when you know what will open the file.
+
+**The option is about `.docx`, because only `.docx` keeps the vector.** A raster is what
+an `.odt` or an `.rtf` has to draw the picture from, so those two always want one whatever
+this is set to, and where no usable rasteriser is installed they refuse an SVG rather than
+write a picture that is one transparent pixel.
+
+`raster` needs `ext-imagick`, which is **optional**. Where there is no usable
+rasteriser, the vector is written on its own rather than the conversion refused — a
+document whose readers may miss one picture beats no document — and the run says so
+through `pendingLosses()`:
+
+```
+a reader that does not prefer the vector draws nothing where an SVG was
+```
+
+The capability is tested by drawing a letter rather than by asking ImageMagick whether
+it has an SVG delegate, because a build without one still registers the format: it
+answers yes, then hands the file to its own renderer and draws the shapes without the
+words. That is the one outcome worse than either alternative, because it does not fail.
+A build that cannot draw text gets the vector alone rather than a picture missing it.
+
+Two things still raise, because both are about the file rather than the host. A file
+that holds no SVG whatever it is called, and one that states no `width`, `height` or
+`viewBox` to place it at:
 
 ```
 Cannot embed "assets/diagram.svg": Word can hold an SVG, but only beside a raster of
-it, so an SVG needs rasterising before it can go in — and this PHP has no SVG
-rasteriser, and without one there is no picture to put beside the vector. Install
-ext-imagick, or convert the file to PNG yourself.
+it, so an SVG needs rasterising before it can go in — and it could not be embedded
+because it states no width, height or viewBox, so there is nothing to place it at.
 ```
-
-The reason is the rasteriser, not the format. An earlier version of this message said
-SVG "is not a format this library can put into a Word document", which was false and
-sent a reader to check something that was never wrong.
 
 Two things are worth knowing about the mechanics. PHPWord writes images as VML, which
 has nowhere to hang an extension on, so a picture with a vector is rewritten as
 DrawingML — the form Word writes today — while every other image keeps PHPWord's
-markup untouched. And the picture is sized from the SVG's own dimensions rather than
-from the raster's, because PHPWord reads an image's pixels as points and the raster is
-the SVG at 96dpi: a 480-unit diagram would otherwise be laid out a third too large.
+markup untouched. And the picture is found by its position among the document's
+images, the same way its alt text is, rather than by the bytes of the raster beside it:
+PHPWord names media parts as it writes them, so a part name says nothing about which
+picture became it. The size comes from the SVG's own dimensions rather than the
+raster's, because PHPWord reads an image's pixels as points and the raster is the SVG at
+96dpi: a 480-unit diagram would otherwise be laid out a third too large.
 
 **A file that is there and cannot be used at all is refused.** A truncated download, a
 format this build has no decoder for: `Exception\UnsupportedImageFormat`, naming the
@@ -1449,10 +1483,9 @@ php smoke.php build/mdword.phar
   touched; every other image keeps the markup PHPWord wrote. The description
   crosses with it, from `o:title` to `wp:docPr/@descr`, because moving between
   the two without carrying it would delete the alt text.
-- **SVG needs `ext-imagick`, which is optional.** Word holds a vector only
-  beside a raster of it and draws nothing at all without one, so something has to
-  produce the raster. Without the extension an SVG raises and names the
-  rasteriser as the reason, rather than going in flattened.
+- **A raster beside an SVG needs `ext-imagick`, which is optional.** Without a
+  usable one the vector is written alone and `pendingLosses()` says what that
+  costs, rather than the conversion being refused over a picture.
 - **A document in memory is written to the system temp directory to be read
   back**, because `ext-zip` only opens files. It is removed once the archive is
   closed. The library does not write anywhere near its own install directory, so

@@ -220,6 +220,10 @@ class ToDocx extends BaseCommand
             $overrides['imageBasePath'] = (string) $command->value('image-base');
         }
 
+        if ($command->value('svg-fallback') !== null) {
+            $overrides['svgFallback'] = (string) $command->value('svg-fallback');
+        }
+
         if ($command->value('table-width') !== null) {
             $overrides['tableWidth'] = self::tableWidth((string) $command->value('table-width'));
         }
@@ -372,7 +376,7 @@ class ToDocx extends BaseCommand
     public static function spec(): array
     {
         return [
-            'values' => ['output', 'config', 'template', 'theme', 'images', 'image-base', 'table-width', 'to'],
+'values' => ['output', 'config', 'template', 'theme', 'images', 'image-base', 'svg-fallback', 'table-width', 'to'],
             'flags' => ['help', 'no-images', 'plain', 'require-control'],
             'repeated' => [],
             'aliases' => ['o' => 'output', 't' => 'template', 'c' => 'config', 'h' => 'help'],
@@ -393,6 +397,7 @@ class ToDocx extends BaseCommand
             ['--images <mode>', 'embed, placeholder or skip'],
             ['--no-images', 'shorthand for --images skip'],
             ['--image-base <dir>', 'where relative image paths resolve from'],
+            ['--svg-fallback <mode>', 'raster for readers that cannot take a vector, or none for those that can'],
             ['--table-width <n>', 'table width in fiftieths of a percent; 5000 is full width'],
             ['--plain', 'no code colouring, no quote style, no table borders, no added spacing'],
             ['--to <format>', 'which way to convert; detected from the file otherwise'],

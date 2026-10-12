@@ -42,6 +42,18 @@ final class ImageDescriptionCollector
     }
 
     /**
+     * How many images have been added since the last {@see self::take()}.
+     *
+     * The index the next image takes in the document being rendered. The whole count
+     * would be that index only for the first document, and {@see SvgAttachmentCollector}
+     * matches on it one document at a time.
+     */
+    public function countPending(): int
+    {
+        return \count($this->descriptions) - $this->offset;
+    }
+
+    /**
      * Whether any image has been given alt text at all.
      *
      * A separate question from {@see self::take()}, which would consume the batch

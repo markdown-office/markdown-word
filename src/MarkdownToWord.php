@@ -263,6 +263,8 @@ final class MarkdownToWord implements Converter
             );
         }
 
+        $this->format = Format::Docx;
+
         return $this->write(Format::Docx, $this->toPhpWord(Input::markdown($this->source)), $target);
     }
 
@@ -292,6 +294,9 @@ final class MarkdownToWord implements Converter
                 . 'or to ' . self::class . '::toDocx().',
             );
         }
+
+        // Before the render, for the reason {@see self::to()} gives.
+        $this->format = $format;
 
         return $this->write($format, $this->toPhpWord(Input::markdown($this->source)), $target);
     }
@@ -344,6 +349,12 @@ final class MarkdownToWord implements Converter
      */
     public function to(Format $format, string $markdown, ?PhpWord $phpWord = null): string
     {
+        // Recorded before the document is rendered rather than in {@see self::write()},
+        // because what a picture is allowed to be depends on the format: a `.docx` can
+        // carry the vector and so may take a placeholder beside it, and a format that
+        // drops the vector has only the picture left to draw.
+        $this->format = $format;
+
         return $this->write($format, $this->toPhpWord($markdown, $phpWord), null);
     }
 
@@ -403,7 +414,18 @@ final class MarkdownToWord implements Converter
             return [];
         }
 
-        return $this->format->losses($this->survey);
+        $losses = $this->format->losses($this->survey);
+
+        // A vector written with no raster beside it is carried perfectly well and still
+        // costs something: every reader that does not prefer the vector draws nothing
+        // where the picture was. Said here rather than left for the reader of the
+        // finished document to work out.
+        if ($this->survey->isVectorOnly()) {
+            $losses[] = new Loss('svg-fallback',
+                'the vector was written with no raster beside it, so a reader that does not prefer the vector draws nothing where an SVG was');
+        }
+
+        return $losses;
     }
 
     /**
@@ -448,7 +470,7 @@ final class MarkdownToWord implements Converter
 
         $inlines = new InlineRenderer(
             $styles,
-            new ImageResolver($config->getOptions(), $this->images, $this->conversions, $this->vectors),
+            new ImageResolver($config->getOptions(), $this->images, $this->conversions, $this->vectors, $this->format),
             $this->links,
             $html,
             $config->getOptions()->deferredHyperlinks,

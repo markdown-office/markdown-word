@@ -424,6 +424,7 @@ final class Validator
             'hardBreak' => ValueShape::oneOf($given, [Options::BREAK_REMOVE, Options::BREAK_LINE, Options::BREAK_PARAGRAPH]),
             'html' => ValueShape::oneOf($given, [Options::HTML_STRIP, Options::HTML_PRESERVE, Options::HTML_DROP]),
             'images' => ValueShape::oneOf($given, [Options::IMAGE_EMBED, Options::IMAGE_PLACEHOLDER, Options::IMAGE_SKIP]),
+            'svgFallback' => ValueShape::oneOf($given, [Options::SVG_FALLBACK_RASTER, Options::SVG_FALLBACK_NONE]),
             'orderedListSuffix' => ValueShape::oneOf($given, ['tab', 'space', 'nothing']),
             'thematicBreak' => ValueShape::oneOf($given, ['border', 'text']),
             'maxHeadingLevel' => ValueShape::between($given, 1, 6),

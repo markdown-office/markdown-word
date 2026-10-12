@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Render\SvgRasteriser;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 
@@ -14,17 +15,17 @@ use MarkdownWord\Tests\Support\Upstream;
  * reader cannot see without opening the file at a large zoom, so the claim is
  * checked against the archive rather than against how the document looks.
  *
- * Every test here needs something to rasterise, and the suite runs on a build with
- * imagick and on one without, so the file skips itself rather than each test
- * carrying a mark that would be wrong on the build that has the extension.
+ * Every test here needs a raster written beside the vector, so the file skips itself on
+ * a build that cannot draw one — which is not only a build without the extension, but
+ * also one whose SVG delegate is missing.
  */
 
 beforeEach(fn () => Upstream::install());
 afterEach(fn () => Upstream::restore());
 
 uses()->beforeEach(function (): void {
-    if (!\extension_loaded('imagick')) {
-        test()->markTestSkipped('ext-imagick is not loaded, so no SVG can be embedded');
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so no raster is written');
     }
 });
 
