@@ -8,6 +8,7 @@ use MarkdownWord\Console\Command\ToDocx;
 use MarkdownWord\Console\Command\ToMarkdown;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use MarkdownWord\WordPackage;
 
 /*
  * The `mdword` command.
@@ -338,6 +339,41 @@ it('refuses a template that is not a document', function () {
 
     expect($run['code'])->toBe(Application::FAILURE);
     expect($run['err'])->toContain('could not be opened');
+    // The two kinds of Word package, since refusing either would be the wrong answer
+    // for the second of them.
+    expect($run['err'])->toContain('.docx or .dotx');
+});
+
+it('renders into a .dotx and writes a document out', function () {
+    $output = Scratch::path('from-dotx', '.docx');
+
+    $run = runCli([
+        'to-docx', '-',
+        '--template', TemplateFactory::dotx(),
+        '-o', $output,
+    ], "## Overview\n\nRevenue **grew**.\n");
+
+    expect($run['code'])->toBe(Application::SUCCESS);
+    // The extension says document and the package has to agree with it: Word opens a
+    // package typed as a template by creating a new document from it.
+    expect(TemplateFactory::mainContentTypeOf($output))
+        ->toBe(WordPackage::DOCUMENT_MAIN);
+    expect(TemplateFactory::bodyTextOf($output))->toContain('Overview');
+});
+
+it('finds the region in a template whose body part is not word/document.xml', function () {
+    $output = Scratch::path('from-odd-dotx', '.docx');
+
+    $run = runCli([
+        'to-docx', '-',
+        '--template', TemplateFactory::dotx('document22.xml'),
+        '-o', $output,
+    ], "## Overview\n\nRevenue **grew**.\n");
+
+    // The check read word/document.xml by name and found no ${body} in a part
+    // nothing pointed at, so a template that was entirely usable was refused.
+    expect($run['code'])->toBe(Application::SUCCESS);
+    expect(TemplateFactory::bodyTextOf($output))->toContain('Overview');
 });
 
 it('says when a template option is used without a template', function () {

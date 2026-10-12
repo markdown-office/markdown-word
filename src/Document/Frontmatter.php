@@ -20,9 +20,10 @@ use MarkdownWord\Exception\InvalidConfigurationValue;
  *
  * Two shapes live in the block and are kept apart on purpose. `options` and `styles`
  * are {@see \MarkdownWord\Configuration} and are handed to it as-is. `template_file`
- * and `theme_file` name a document or a deck and mean nothing to a Word conversion, so
- * they are read here and used by whoever renders — mixing them into `Options` would put
- * a key in the configuration that no renderer looks at.
+ * and `theme_file` name a file rather than a setting, and mean nothing to a Word
+ * conversion, so they are read here and resolved beside the other configuration —
+ * mixing them into `Options` would put a key in the configuration that no renderer
+ * looks at, and leave a path unchecked.
  *
  * The block is also where the source is: {@see self::lineOf()} answers where in a
  * file a given key sits, which is what lets a mistake in it be reported as "line 7"
@@ -166,6 +167,31 @@ final class Frontmatter
     }
 
     /**
+     * The template a document names for itself in its `---` block, if it names one.
+     *
+     * A path rather than a name, because a template is a file and a document that
+     * travels on its own has to be able to say which. It is not folded into
+     * `toConfigurationArray()` because nothing in {@see \MarkdownWord\Configuration}
+     * reads a path: the renderer asks for it beside the other configuration, where it
+     * can be resolved and held to a directory rather than passed along as a string
+     * nobody has checked — see {@see \MarkdownWord\Template\TemplateFile}.
+     *
+     * Null when the block names no template, which is the ordinary case and not a
+     * failure. Returned as written, because resolving it is a filesystem operation
+     * and the resolver is the thing that knows where a document may point.
+     */
+    public function templateFile(): ?string
+    {
+        $value = $this->getString('template_file');
+
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        return trim($value);
+    }
+
+/**
      * The part of the block that configures the conversion.
      *
      * Only the two sub-keys {@see \MarkdownWord\Configuration} understands are passed

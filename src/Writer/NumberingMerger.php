@@ -9,6 +9,7 @@ use DOMElement;
 use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\MalformedDocument;
 use MarkdownWord\Exception\UnsupportedElement;
+use MarkdownWord\WordPackage;
 use MarkdownWord\Xml;
 use PhpOffice\PhpWord\Element\AbstractElement;
 use PhpOffice\PhpWord\IOFactory;
@@ -33,7 +34,6 @@ final class NumberingMerger
     private const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
     private const NUMBERING_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
     private const NUMBERING_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
-    private const DOCUMENT_PATH = 'word/document.xml';
 
     /**
      * The lowest `w:numId` this merger writes into a document.
@@ -316,7 +316,8 @@ final class NumberingMerger
      */
     private function retargetDocument(ZipArchive $zip): void
     {
-        $document = $zip->getFromName(self::DOCUMENT_PATH);
+        $body = WordPackage::bodyPart($zip);
+        $document = $zip->getFromName($body);
 
         if ($document === false || !str_contains($document, 'w:numId')) {
             return;
@@ -355,8 +356,8 @@ final class NumberingMerger
             return;
         }
 
-        $zip->deleteName(self::DOCUMENT_PATH);
-        $zip->addFromString(self::DOCUMENT_PATH, (string) $dom?->saveXML());
+        $zip->deleteName($body);
+        $zip->addFromString($body, (string) $dom?->saveXML());
     }
 
     private function numberingPart(ZipArchive $zip): DOMDocument
@@ -425,7 +426,7 @@ final class NumberingMerger
      */
     private function declareRelationship(ZipArchive $zip): void
     {
-        $xml = $zip->getFromName('word/_rels/document.xml.rels');
+        $xml = $zip->getFromName(WordPackage::relationshipsFor(WordPackage::bodyPart($zip)));
 
         if ($xml === false) {
             return;
@@ -467,8 +468,9 @@ final class NumberingMerger
         $relationship->setAttribute('Target', 'numbering.xml');
         $dom->documentElement?->appendChild($relationship);
 
-        $zip->deleteName('word/_rels/document.xml.rels');
-        $zip->addFromString('word/_rels/document.xml.rels', (string) $dom->saveXML());
+        $relsPath = WordPackage::relationshipsFor(WordPackage::bodyPart($zip));
+        $zip->deleteName($relsPath);
+        $zip->addFromString($relsPath, (string) $dom->saveXML());
     }
 
     private function readScratchNumbering(): ?DOMDocument

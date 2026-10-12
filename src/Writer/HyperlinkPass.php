@@ -6,15 +6,22 @@ namespace MarkdownWord\Writer;
 
 use MarkdownWord\Exception\MalformedDocument;
 use MarkdownWord\Exception\UnreadableDocument;
+use MarkdownWord\WordPackage;
 use MarkdownWord\Xml;
 
 use MarkdownWord\Render\LinkPlaceholder;
 use ZipArchive;
 
 /**
- * Rewrites `word/document.xml` inside a `.docx`, replacing the placeholder runs
- * emitted for links whose label contains emphasis with genuine `w:hyperlink`
- * elements, and adding the matching relationships.
+ * Rewrites the body part of a `.docx`, replacing the placeholder runs emitted for
+ * links whose label contains emphasis with genuine `w:hyperlink` elements, and
+ * adding the matching relationships.
+ *
+ * The part is the one {@see WordPackage::bodyPart()} names rather than
+ * `word/document.xml`, because that name is conventional and not guaranteed: a
+ * package whose body is `word/document22.xml` would otherwise have its links
+ * rewritten into a part no reader opens, and the placeholders left where the links
+ * were.
  *
  * The rewrite goes through `DOMDocument` rather than string replacement, so
  * document content that happens to look like a placeholder cannot confuse it.
@@ -28,9 +35,7 @@ final class HyperlinkPass
 {
     private const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     private const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-    private const RELS_PATH = 'word/_rels/document.xml.rels';
     private const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
-    private const DOCUMENT_PATH = 'word/document.xml';
 
     /**
      * @param list<array{placeholder: string, url: string, title: ?string, runs: list<array{text: string, style: array<string, mixed>}>}> $payloads
@@ -48,20 +53,26 @@ final class HyperlinkPass
         }
 
         try {
-            $document = $zip->getFromName(self::DOCUMENT_PATH);
-            $rels = $zip->getFromName(self::RELS_PATH);
+            $body = WordPackage::bodyPart($zip);
+            $relsPath = WordPackage::relationshipsFor($body);
+
+            $document = $zip->getFromName($body);
+            $rels = $zip->getFromName($relsPath);
 
             if ($document === false || $rels === false) {
-                throw new MalformedDocument('The document is missing word/document.xml or its relationship part.');
+                throw new MalformedDocument(sprintf(
+                    'The document is missing %s or its relationship part.',
+                    $body,
+                ));
             }
 
             $nextId = $this->nextRelationshipId($rels);
-            $updated = $this->transform($document, $rels, $nextId);
+            $updated = $this->transform($document, $rels, $nextId, $body);
 
-            $zip->deleteName(self::DOCUMENT_PATH);
-            $zip->addFromString(self::DOCUMENT_PATH, $updated['document']);
-            $zip->deleteName(self::RELS_PATH);
-            $zip->addFromString(self::RELS_PATH, $updated['rels']);
+            $zip->deleteName($body);
+            $zip->addFromString($body, $updated['document']);
+            $zip->deleteName($relsPath);
+            $zip->addFromString($relsPath, $updated['rels']);
         } finally {
             $zip->close();
         }
@@ -70,19 +81,19 @@ final class HyperlinkPass
     /**
      * @return array{document: string, rels: string}
      */
-    private function transform(string $documentXml, string $relsXml, int $nextId): array
+    private function transform(string $documentXml, string $relsXml, int $nextId, string $body): array
     {
         $index = [];
         foreach ($this->payloads as $payload) {
             $index[$payload['placeholder']] = $payload;
         }
 
-        $dom = $this->loadDom($documentXml);
+        $dom = $this->loadDom($documentXml, $body);
         $xpath = new \DOMXPath($dom);
         $xpath->registerNamespace('w', self::W_NS);
 
         $counter = $nextId;
-        $rels = $this->loadRels($relsXml);
+        $rels = $this->loadRels($relsXml, WordPackage::relationshipsFor($body));
 
         foreach ($xpath->query('//w:t') ?: [] as $textNode) {
             /** @var \DOMElement $textNode */
@@ -211,14 +222,14 @@ final class HyperlinkPass
         return $properties;
     }
 
-    private function loadDom(string $xml): \DOMDocument
+    private function loadDom(string $xml, string $part): \DOMDocument
     {
-        return Xml::parseOrFail($xml, 'word/document.xml is not valid XML.');
+        return Xml::parseOrFail($xml, sprintf('%s is not valid XML.', $part));
     }
 
-    private function loadRels(string $xml): \DOMDocument
+    private function loadRels(string $xml, string $part): \DOMDocument
     {
-        return Xml::parseOrFail($xml, 'word/_rels/document.xml.rels is not valid XML.');
+        return Xml::parseOrFail($xml, sprintf('%s is not valid XML.', $part));
     }
 
     private function saveXml(\DOMDocument $dom): string

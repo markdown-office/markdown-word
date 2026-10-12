@@ -8,6 +8,7 @@ use DOMDocument;
 use DOMElement;
 use DOMXPath;
 use MarkdownWord\Exception\MalformedDocument;
+use MarkdownWord\WordPackage;
 use MarkdownWord\Render\SvgAttachmentCollector;
 use ZipArchive;
 
@@ -56,8 +57,6 @@ final class SvgPass
     private const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
     private const IMAGE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image';
 
-    private const RELS_PATH = 'word/_rels/document.xml.rels';
-    private const DOCUMENT_PATH = 'word/document.xml';
     private const CONTENT_TYPES_PATH = '[Content_Types].xml';
     private const MEDIA_PREFIX = 'word/media/';
 
@@ -87,8 +86,11 @@ final class SvgPass
         }
 
         try {
-            $rels = $this->load((string) $zip->getFromName(self::RELS_PATH), self::RELS_PATH);
-            $document = $this->load((string) $zip->getFromName(self::DOCUMENT_PATH), self::DOCUMENT_PATH);
+            $body = WordPackage::bodyPart($zip);
+            $relsPath = WordPackage::relationshipsFor($body);
+
+            $rels = $this->load((string) $zip->getFromName($relsPath), $relsPath);
+            $document = $this->load((string) $zip->getFromName($body), $body);
 
             $byHash = $this->rastersByHash($zip);
             $this->nextDrawingId = $this->highestDrawingId($document) + 1;
@@ -141,10 +143,10 @@ final class SvgPass
             // argument read afterwards is an empty string rather than the part.
             $contentTypes = $this->declareSvgContentType((string) $zip->getFromName(self::CONTENT_TYPES_PATH));
 
-            $zip->deleteName(self::DOCUMENT_PATH);
-            $zip->addFromString(self::DOCUMENT_PATH, (string) $document->saveXML());
-            $zip->deleteName(self::RELS_PATH);
-            $zip->addFromString(self::RELS_PATH, (string) $rels->saveXML());
+            $zip->deleteName($body);
+            $zip->addFromString($body, (string) $document->saveXML());
+            $zip->deleteName($relsPath);
+            $zip->addFromString($relsPath, (string) $rels->saveXML());
             $zip->deleteName(self::CONTENT_TYPES_PATH);
             $zip->addFromString(self::CONTENT_TYPES_PATH, $contentTypes);
 

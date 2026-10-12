@@ -72,6 +72,34 @@ it('code font is configurable', function () {
     expect($runs[0]['font']['size'] ?? null)->toBe(11);
 });
 
+it('a code font named as a style reaches a code block', function () {
+    // The way a template supplies its own typeface: a name rather than properties.
+    // PHPWord puts a string style on a run as an `rStyle` reference, which is the
+    // only way a name reaches a run at all — so a name that goes through a property
+    // array is lost. It reached an inline span and not the block, because the block
+    // merged the two and the inline one did not, and the block came out in the
+    // body's typeface with nothing to say so.
+    $config = Configuration::create()->withStyles([Styles::CODE_FONT => 'CorpCode']);
+
+    $runs = renderRuns(renderElements("```\nx\n```\n", $config)[0]);
+
+    expect($runs[0]['font'] ?? null)->toBe('CorpCode');
+});
+
+it('a code block takes the font half of its own style over the named code font', function () {
+    // The block's own font slot wins over the code span's, as it does for properties.
+    // A name and a property cannot both be applied to one run, so the block's half is
+    // what the run gets.
+    $config = Configuration::create()->withStyles([
+        Styles::CODE_FONT => 'CorpCode',
+        Styles::CODE_BLOCK => ['name' => 'Fira Code'],
+    ]);
+
+    $runs = renderRuns(renderElements("```\nx\n```\n", $config)[0]);
+
+    expect($runs[0]['font']['name'] ?? null)->toBe('Fira Code');
+});
+
 it('block quote is indented', function () {
     // The default quote style is a named Word style, so the indentation comes
     // from an explicit inline style instead.

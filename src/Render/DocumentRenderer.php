@@ -246,10 +246,20 @@ final class DocumentRenderer
 
         // A code block's own font slot wins over the code span font, so a
         // configured `codeBlock` style can change the typeface of the block.
-        $font = array_merge(
-            (array) $this->styles->fontFor(new InlineStyle(code: true)),
-            ParagraphStyle::fontPart($this->styles->slot(Styles::CODE_BLOCK)),
-        );
+        $span = $this->styles->fontFor(new InlineStyle(code: true));
+        $block = ParagraphStyle::fontPart($this->styles->slot(Styles::CODE_BLOCK));
+
+        // A `codeFont` given as a style *name* is not a set of properties to merge.
+        // PHPWord applies a string style to a run as an `rStyle` reference, which is
+        // the only way a name can reach a run at all — casting it to an array gives
+        // `['MrdCode']`, whose key `0` is not a property, so the name is dropped and
+        // the block comes out in the body's typeface. An inline code span takes the
+        // same name straight through and works, which is what makes this easy to miss.
+        $font = match (true) {
+            $block !== [] => array_merge(is_string($span) ? [] : (array) $span, $block),
+            is_string($span) => $span,
+            default => (array) $span,
+        };
 
         foreach (explode("\n", $literal) as $line) {
             $run = $target->addTextRun($paragraphStyle);

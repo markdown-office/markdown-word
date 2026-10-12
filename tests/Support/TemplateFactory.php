@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Tests\Support;
 
+use MarkdownWord\WordPackage;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use RuntimeException;
@@ -121,6 +122,118 @@ final class TemplateFactory
         return $levels;
     }
 
+    /**
+     * A real `.dotx` — the same document with its body declared as a template's.
+     *
+     * Built rather than checked in, because a `.dotx` is a `.docx` with one line of
+     * `[Content_Types].xml` changed and there is nothing in that line a binary
+     * fixture would show a reader.
+     *
+     * @param string $mainPart The name the body part is given inside the archive.
+     *        `document22.xml` is what documents from Word Online carry, and it is the
+     *        case a lookup that assumes `document.xml` gets wrong.
+     * @param string $source The template to convert; the default is the plain
+     *        `${body}` region, and {@see self::report()} is the one carrying text of
+     *        its own — which is what lets a test tell a document rendered into a
+     *        template from the same Markdown rendered into nothing.
+     */
+    public static function dotx(
+        string $mainPart = 'document.xml',
+        string $name = 'dotx',
+        ?string $source = null,
+    ): string {
+        $source ??= self::placeholder();
+        $path = Scratch::path($name . '-' . $mainPart . '.dotx');
+
+        $zip = new ZipArchive();
+        $zip->open($source);
+
+        try {
+            $declared = $zip->getFromName('[Content_Types].xml');
+            $document = $zip->getFromName('word/document.xml');
+            $rels = $zip->getFromName('word/_rels/document.xml.rels');
+            $root = $zip->getFromName('_rels/.rels');
+        } finally {
+            $zip->close();
+        }
+
+        copy($source, $path);
+
+        $out = new ZipArchive();
+        $out->open($path);
+
+        // Renaming the body means renaming what points at it too, or the package is
+        // one no reader can follow the body into.
+        if ($mainPart !== 'document.xml') {
+            $out->deleteName('word/document.xml');
+            $out->addFromString('word/' . $mainPart, $document);
+            $out->deleteName('word/_rels/document.xml.rels');
+            $out->addFromString(
+                'word/_rels/' . $mainPart . '.rels',
+                str_replace('document.xml', $mainPart, $rels),
+            );
+            $out->deleteName('_rels/.rels');
+            $out->addFromString('_rels/.rels', str_replace('word/document.xml', 'word/' . $mainPart, $root));
+
+            $declared = str_replace('/word/document.xml', '/word/' . $mainPart, $declared);
+        }
+
+        $out->deleteName('[Content_Types].xml');
+        $out->addFromString('[Content_Types].xml', str_replace(
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml',
+            $declared,
+        ));
+        $out->close();
+
+        return $path;
+    }
+
+    /**
+     * The content type a finished document declares for its body part.
+     *
+     * What a reader decides a file is by, and the reason a filled-in `.dotx` is
+     * not a document while every word in it is exactly where it should be.
+     */
+    public static function mainContentTypeOf(string $docx): string
+    {
+        $xml = self::xmlOf($docx, '[Content_Types].xml');
+
+        preg_match('~PartName="/word/document[^"]*" ContentType="([^"]*)"~', $xml, $matches);
+
+        return $matches[1] ?? '';
+    }
+
+    /** Whether the archive holds a part by that name. */
+    public static function hasPart(string $docx, string $part): bool
+    {
+        $zip = new ZipArchive();
+        $opened = $zip->open($docx) === true;
+        $found = $opened && $zip->locateName($part) !== false;
+        $zip->close();
+
+        return $found;
+    }
+
+    /**
+     * The text of whichever part holds the body, read through the declarations.
+     *
+     * {@see self::textOf()} reads `word/document.xml` directly, which is right for
+     * the documents this library writes and wrong for a package that calls its body
+     * something else — which is the whole of what these tests are about.
+     */
+    public static function bodyTextOf(string $docx): string
+    {
+        $xpath = self::xpathOf($docx);
+
+        $parts = [];
+        foreach ($xpath->query('//w:p') ?: [] as $paragraph) {
+            $parts[] = trim(self::textIn($xpath, $paragraph));
+        }
+
+        return trim(implode("\n", $parts));
+    }
+
     private static function write(PhpWord $phpWord, string $name): string
     {
         $path = Scratch::path($name);
@@ -213,7 +326,7 @@ final class TemplateFactory
     {
         $dom = new \DOMDocument();
         libxml_use_internal_errors(true);
-        $dom->loadXML(self::read($docx, 'word/document.xml'), LIBXML_NOCDATA);
+        $dom->loadXML(self::read($docx, WordPackage::mainPartOf($docx)), LIBXML_NOCDATA);
         libxml_clear_errors();
 
         $xpath = new \DOMXPath($dom);
