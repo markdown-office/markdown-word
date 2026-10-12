@@ -130,21 +130,36 @@ final class ImageResolver
      * there for the readers that do not — Google Docs among them — and a build asked
      * for `none` never needs one, which is what takes the rasteriser off the default path.
      *
-     * @throws UnsupportedImageFormat when a raster was asked for and this PHP cannot
-     *         produce one, or when the file cannot be read back as a vector.
+     * @throws UnsupportedImageFormat when the file claims to be a vector and is not one.
      */
     private function embedSvg(string $path, AbstractContainer $target, int $position): void
     {
         $wantsRaster = $this->options->svgFallback === Options::SVG_FALLBACK_RASTER;
 
-        if ($wantsRaster && !SvgRasteriser::available()) {
-            throw UnsupportedImageFormat::svg($path);
+        // Asked for the size before anything else, because a file that states none has no
+        // honest size to be placed at. {@see SvgRasteriser::intrinsicSize()} would answer
+        // with a guess for the sake of a caller who can see the guess being made.
+        if (!SvgRasteriser::declaresSize($path)) {
+            throw UnsupportedImageFormat::svg($path, 'it states no width, height or viewBox, so there is nothing to place it at');
         }
 
-        $raster = $wantsRaster ? SvgRasteriser::toPng($path) : PlaceholderRaster::bytes();
+        // Asked for a raster and this build cannot draw one, the vector is written on its
+        // own rather than the conversion refused. A document with a picture in it beats a
+        // document nobody has, and {@see \MarkdownWord\MarkdownToWord::pendingLosses()}
+        // says what the older readers will be missing. A file that is not an SVG is the
+        // other matter, and still raises: that one is the caller's file, not this host.
+        if ($wantsRaster && !SvgRasteriser::available()) {
+            $wantsRaster = false;
+        }
 
-        if ($raster === null) {
-            throw UnsupportedImageFormat::svg($path, 'this PHP could not read it as one');
+        if ($wantsRaster) {
+            $raster = SvgRasteriser::toPng($path);
+
+            if ($raster === null) {
+                throw UnsupportedImageFormat::svg($path, 'this PHP could not read it as one');
+            }
+        } else {
+            $raster = PlaceholderRaster::bytes();
         }
 
         $original = $this->readVector($path);
@@ -203,17 +218,26 @@ final class ImageResolver
             throw UnsupportedImageFormat::svg($path, 'it could not be read back');
         }
 
-        if (\strtolower(\pathinfo($path, PATHINFO_EXTENSION)) !== 'svgz') {
-            return $bytes;
+        if (\strtolower(\pathinfo($path, PATHINFO_EXTENSION)) === 'svgz') {
+            $inflated = @gzdecode($bytes);
+
+            if ($inflated === false) {
+                throw UnsupportedImageFormat::svg($path, 'it is named as a compressed SVG but could not be unpacked');
+            }
+
+            $bytes = $inflated;
         }
 
-        $inflated = @gzdecode($bytes);
-
-        if ($inflated === false) {
-            throw UnsupportedImageFormat::svg($path, 'it is named as a compressed SVG but could not be unpacked');
+        // Read here rather than left to the rasteriser to object. A file is routed to this
+        // method on its name when its bytes do not say otherwise, and with `svgFallback: none`
+        // nothing downstream would notice — the document would carry a part named `.svg`
+        // that no reader can draw, which is the exact thing this library is meant not to
+        // do quietly.
+        if (\preg_match('~<svg[\s>]~i', $bytes) !== 1) {
+            throw UnsupportedImageFormat::svg($path, 'it holds no SVG, whatever it is called');
         }
 
-        return $inflated;
+        return $bytes;
     }
 
     /**

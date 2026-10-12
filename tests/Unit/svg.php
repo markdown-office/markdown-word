@@ -25,17 +25,17 @@ use MarkdownWord\Writer\SvgPass;
 use MarkdownWord\Tests\Support\Upstream;
 
 beforeEach(fn () => Upstream::install());
-// Every test in this file builds a document with an SVG in it, which needs something
-// to rasterise. The suite runs on a build with imagick and on one without, so the file
-// skips itself rather than each test carrying a mark that would be wrong on the build
-// that has the extension.
+// Every test in this file builds a document with an SVG in it *and a raster beside it*.
+// That needs a build that can actually draw one, which is not the same as having the
+// extension: a build with no SVG delegate registers the format and draws the shapes
+// without the text. The file skips itself on either.
 //
 // `uses()->beforeEach()` rather than a bare `beforeEach(function () { $this->… })`:
 // Pest types the latter as a `PendingCalls`, where `markTestSkipped()` is not a method,
 // so the one call the file depends on is the one static analysis cannot see.
 uses()->beforeEach(function (): void {
-    if (!\extension_loaded('imagick')) {
-        test()->markTestSkipped('ext-imagick is not loaded, so no SVG can be embedded');
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so no raster is written');
     }
 });
 

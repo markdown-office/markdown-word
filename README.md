@@ -1183,19 +1183,30 @@ the extension and nothing else. It is the smaller document and the one that puts
 rasteriser on the default path, and it costs the readers in the second column their
 pictures. Choose it when you know what will open the file.
 
-`raster` needs `ext-imagick`, which is **optional**. Where it is absent, an SVG raises
-and says so:
+`raster` needs `ext-imagick`, which is **optional**. Where there is no usable
+rasteriser, the vector is written on its own rather than the conversion refused — a
+document whose readers may miss one picture beats no document — and the run says so
+through `pendingLosses()`:
+
+```
+a reader that does not prefer the vector draws nothing where an SVG was
+```
+
+The capability is tested by drawing a letter rather than by asking ImageMagick whether
+it has an SVG delegate, because a build without one still registers the format: it
+answers yes, then hands the file to its own renderer and draws the shapes without the
+words. That is the one outcome worse than either alternative, because it does not fail.
+A build that cannot draw text gets the vector alone rather than a picture missing it.
+
+Two things still raise, because both are about the file rather than the host. A file
+that holds no SVG whatever it is called, and one that states no `width`, `height` or
+`viewBox` to place it at:
 
 ```
 Cannot embed "assets/diagram.svg": Word can hold an SVG, but only beside a raster of
-it, so an SVG needs rasterising before it can go in — and this PHP has no SVG
-rasteriser, and without one there is no picture to put beside the vector. Install
-ext-imagick, or convert the file to PNG yourself.
+it, so an SVG needs rasterising before it can go in — and it could not be embedded
+because it states no width, height or viewBox, so there is nothing to place it at.
 ```
-
-The reason is the rasteriser, not the format. An earlier version of this message said
-SVG "is not a format this library can put into a Word document", which was false and
-sent a reader to check something that was never wrong.
 
 Two things are worth knowing about the mechanics. PHPWord writes images as VML, which
 has nowhere to hang an extension on, so a picture with a vector is rewritten as
@@ -1466,10 +1477,9 @@ php smoke.php build/mdword.phar
   touched; every other image keeps the markup PHPWord wrote. The description
   crosses with it, from `o:title` to `wp:docPr/@descr`, because moving between
   the two without carrying it would delete the alt text.
-- **SVG needs `ext-imagick`, which is optional.** Word holds a vector only
-  beside a raster of it and draws nothing at all without one, so something has to
-  produce the raster. Without the extension an SVG raises and names the
-  rasteriser as the reason, rather than going in flattened.
+- **A raster beside an SVG needs `ext-imagick`, which is optional.** Without a
+  usable one the vector is written alone and `pendingLosses()` says what that
+  costs, rather than the conversion being refused over a picture.
 - **A document in memory is written to the system temp directory to be read
   back**, because `ext-zip` only opens files. It is removed once the archive is
   closed. The library does not write anywhere near its own install directory, so

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use MarkdownWord\Configuration;
 use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Render\SvgRasteriser;
 use MarkdownWord\Tests\Support\Upstream;
 
 beforeEach(fn () => Upstream::install());
@@ -81,6 +82,21 @@ function renderFallback(string $markdown, string $basePath, string $mode): array
     return $parts + ['media' => $media, 'names' => $names];
 }
 
+/** The body part of a document held in memory. */
+function bodyOf(string $bytes): string
+{
+    $path = sys_get_temp_dir() . '/mdword-fallback-body.docx';
+    file_put_contents($path, $bytes);
+
+    $zip = new ZipArchive();
+    $zip->open($path);
+    $body = (string) $zip->getFromName('word/document.xml');
+    $zip->close();
+    @unlink($path);
+
+    return $body;
+}
+
 /** @return list<string> */
 function mediaNamed(array $media, string $extension): array
 {
@@ -90,7 +106,11 @@ function mediaNamed(array $media, string $extension): array
     ));
 }
 
-it('writes a raster beside the vector by default', function () {
+it('writes a raster beside the vector by default, when this build can draw one', function () {
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so there is no raster to write');
+    }
+
     $base = svgBase('diagram.svg');
 
     $parts = renderFallback("![A](diagram.svg)\n", $base, 'raster');
@@ -98,6 +118,33 @@ it('writes a raster beside the vector by default', function () {
     expect(mediaNamed($parts['media'], '.png'))->toHaveCount(1)
         ->and(mediaNamed($parts['media'], '.svg'))->toHaveCount(1)
         ->and($parts['document'])->toContain('<a:blip r:embed=');
+
+    @unlink($base . '/diagram.svg');
+    @rmdir($base);
+});
+
+it('falls back to the vector alone, and says so, on a build that cannot rasterise', function () {
+    // The alternative was refusing the conversion, which loses the whole document over a
+    // picture. A document whose readers may miss one image beats no document, and
+    // `pendingLosses()` is where the cost is stated rather than left to be discovered.
+    if (SvgRasteriser::available()) {
+        test()->markTestSkipped('this build can rasterise an SVG, so nothing is lost');
+    }
+
+    $base = svgBase('diagram.svg');
+
+    $converter = new MarkdownToWord("![A](diagram.svg)\n", Configuration::create()->withOptions([
+        'images' => 'embed',
+        'imageBasePath' => $base,
+        // Asked for explicitly, so that a degrade here is the answer to a real request
+        // rather than to the default.
+        'svgFallback' => 'raster',
+    ]));
+    $converter->toDocx("![A](diagram.svg)\n");
+
+    $losses = implode("\n", array_map(strval(...), $converter->pendingLosses()));
+
+    expect($losses)->toContain('the vector was written with no raster beside it');
 
     @unlink($base . '/diagram.svg');
     @rmdir($base);
@@ -137,6 +184,37 @@ it('gives each vector its own part, referenced by the picture it belongs to', fu
 
     @unlink($base . '/one.svg');
     @unlink($base . '/two.svg');
+    @rmdir($base);
+});
+
+it('attaches only this document\'s vectors to it', function () {
+    // The collector outlives a single document, as the description collector does, and a
+    // vector carries the position of its picture. A second document handed the first
+    // one's would be given a vector it never mentioned, on whatever picture happened to
+    // be at that index — which for a document of plain images is the first of them.
+    $base = svgBase('diagram.svg');
+    imagepng(imagecreatetruecolor(40, 30), $base . '/photo.png');
+
+    $converter = new MarkdownToWord(null, Configuration::create()->withOptions([
+        'images' => 'embed',
+        'imageBasePath' => $base,
+        'svgFallback' => 'none',
+    ]));
+
+    $converter->toDocx("![Vector](diagram.svg)\n");
+    $afterPlain = bodyOf($converter->toDocx("Just a photo.\n\n![Photo](photo.png)\n"));
+    $afterMixed = bodyOf($converter->toDocx("![Vector](diagram.svg)\n\n![Photo](photo.png)\n"));
+
+    // The document with no SVG in it is left as PHPWord wrote it, and the one after it
+    // keeps its vector on the vector rather than losing it to the picture beside it.
+    expect(substr_count($afterPlain, 'svgBlip'))->toBe(0)
+        ->and(substr_count($afterPlain, '<w:drawing>'))->toBe(0)
+        ->and(substr_count($afterMixed, 'svgBlip'))->toBe(1)
+        ->and(substr_count($afterMixed, '<w:drawing>'))->toBe(1)
+        ->and(substr_count($afterMixed, '<w:pict>'))->toBe(1);
+
+    @unlink($base . '/diagram.svg');
+    @unlink($base . '/photo.png');
     @rmdir($base);
 });
 

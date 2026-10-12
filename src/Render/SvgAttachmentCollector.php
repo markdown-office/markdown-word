@@ -26,6 +26,10 @@ final class SvgAttachmentCollector
     /** @var list<array{position: int, name: string, vector: string, raster: bool}> */
     private array $attachments = [];
 
+    private int $offset = 0;
+
+    private bool $lastBatchWithoutRaster = false;
+
     /**
      * @param int    $position the picture's index among the images added so far
      * @param string $name     the part name the vector takes in the archive
@@ -43,40 +47,72 @@ final class SvgAttachmentCollector
     }
 
     /**
+     * One document's vectors: a document is written as soon as its elements are
+     * complete, so a batch ends there.
+     *
+     * Without this a second document written through the same converter would be handed
+     * the first one's vectors, and because they carry a position they would be attached
+     * to whatever picture happened to be at that index — a vector this document never
+     * mentioned, on a picture that had nothing to do with it.
+     *
      * @return list<array{position: int, name: string, vector: string, raster: bool}>
      */
-    public function all(): array
+    public function take(): array
     {
-        return $this->attachments;
-    }
+        $batch = \array_slice($this->attachments, $this->offset);
+        $this->offset = \count($this->attachments);
+        $this->lastBatchWithoutRaster = false;
 
-    /**
-     * Whether an SVG has been embedded as a vector at all.
-     *
-     * A separate question from {@see self::all()}, which a writer that cannot reattach
-     * the vector never asks. Only {@see \MarkdownWord\Writer\SvgPass} can put it back,
-     * so a writer that never calls it loses something, and {@see \MarkdownWord\Format}
-     * has to be able to say so.
-     */
-    public function anyAttached(): bool
-    {
-        return $this->attachments !== [];
-    }
-
-    /**
-     * Whether every vector in the batch has a raster behind it.
-     *
-     * A document that mixes the two is one whose older readers see some of its pictures
-     * and not others, which is worse than either arrangement on its own.
-     */
-    public function allHaveRasters(): bool
-    {
-        foreach ($this->attachments as $attachment) {
+        foreach ($batch as $attachment) {
             if ($attachment['raster'] === false) {
-                return false;
+                $this->lastBatchWithoutRaster = true;
+
+                break;
             }
         }
 
-        return true;
+        return $batch;
+    }
+
+    /**
+     * Whether the batch just taken has a vector with no raster behind it.
+     *
+     * A separate question from {@see self::take()}, which a caller asking whether this
+     * document is compatible with an older reader asks after the document is written and
+     * the batch is gone.
+     */
+    public function lastBatchWithoutRaster(): bool
+    {
+        return $this->lastBatchWithoutRaster;
+    }
+
+    /**
+     * Whether a vector in the document being rendered has no raster behind it.
+     *
+     * {@see \MarkdownWord\Writer\Survey} is asked before the document is written, so it
+     * wants the batch that has not been taken yet.
+     */
+    public function pendingWithoutRaster(): bool
+    {
+        foreach (\array_slice($this->attachments, $this->offset) as $attachment) {
+            if ($attachment['raster'] === false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether any vector is waiting to be attached to the document being rendered.
+     *
+     * {@see self::lastBatchWithoutRaster()} answers the same question about the batch
+     * already taken, which is the document that was written rather than the one being
+     * built. {@see \MarkdownWord\Writer\Survey} is asked before the write, so it wants
+     * this one.
+     */
+    public function pendingAnyAttached(): bool
+    {
+        return \count($this->attachments) > $this->offset;
     }
 }

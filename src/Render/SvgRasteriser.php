@@ -46,12 +46,21 @@ final class SvgRasteriser
     private const ASSUMED_POINTS = 288.0;
 
     /**
-     * Whether this PHP can rasterise an SVG.
+     * Whether this PHP can rasterise an SVG well enough to be worth trying.
      *
-     * The extension being loaded is not enough: a build without the SVG delegate
-     * registers the format and then fails to read it, which would turn a missing
-     * capability into a confusing failure on the first picture instead of on the
-     * first conversion.
+     * The extension being loaded is not enough, and neither is the format being
+     * registered: a build with no SVG delegate registers `SVG` anyway and hands the file
+     * to its own renderer, which draws the shapes and drops every `<text>` in it. That
+     * build is the worst of the three outcomes — it does not fail, it produces a picture
+     * that is missing its words — so the question is not whether the format is there but
+     * whether drawing this actually puts ink on the page.
+     *
+     * The probe draws a glyph, because a glyph is the part a fallback renderer loses.
+     * A rectangle would pass on a build that cannot draw a letter, which is the build
+     * this exists to catch.
+     *
+     * Asked once per SVG rather than once per conversion, so the answer is kept: the
+     * capability is a property of the process, not of the file.
      */
     public static function available(): bool
     {
@@ -59,11 +68,85 @@ final class SvgRasteriser
             return false;
         }
 
+        return self::$available ??= self::probe();
+    }
+
+    /** @var bool|null */
+    private static ?bool $available = null;
+
+    private static function probe(): bool
+    {
+        $image = new Imagick();
+
         try {
-            return \in_array('SVG', \Imagick::queryFormats(), true);
+            $image->setBackgroundColor(new \ImagickPixel('transparent'));
+            $image->readImageBlob(self::PROBE_SVG);
+            $image->setImageFormat('png32');
+
+            return self::hasInk($image);
         } catch (Throwable) {
             return false;
+        } finally {
+            $image->clear();
         }
+    }
+
+    /**
+     * An SVG whose only content is a letter.
+     *
+     * Nothing but `<text>`, so a render that comes back empty is a render that lost the
+     * text rather than one that happened to draw a white shape on white.
+     */
+    private const PROBE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" viewBox="0 0 40 20">'
+        . '<text x="2" y="15" font-size="14" fill="#000000">W</text>'
+        . '</svg>';
+
+    /**
+     * Whether anything in the picture was drawn.
+     *
+     * A histogram rather than a pixel: one transparent pixel and one black pixel differ
+     * by their colour, and reading every pixel of a large image to find out would make
+     * the probe cost more than the conversion it is guarding.
+     */
+    private static function hasInk(Imagick $image): bool
+    {
+        if ($image->getImageWidth() < 1 || $image->getImageHeight() < 1) {
+            return false;
+        }
+
+        foreach ($image->getImageHistogram() as $colour) {
+            if ($colour instanceof \ImagickPixel && $colour->getColorValue(Imagick::COLOR_ALPHA) > 0.0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the file says how big it is.
+     *
+     * {@see self::intrinsicSize()} answers with a figure either way, and the figure it
+     * makes up is only right for a picture the caller has already been told about. A
+     * document is not: a diagram placed at a size nobody chose is a document with
+     * something in it that the author did not ask for, which is why the renderer asks
+     * this first and refuses rather than taking the guess.
+     */
+    public static function declaresSize(string $path): bool
+    {
+        $root = self::rootElement($path);
+
+        if ($root === null) {
+            return false;
+        }
+
+        if (self::toPoints($root->getAttribute('width')) !== null
+            || self::toPoints($root->getAttribute('height')) !== null
+        ) {
+            return true;
+        }
+
+        return $root->hasAttribute('viewBox');
     }
 
     /**
@@ -145,6 +228,19 @@ final class SvgRasteriser
 
         if ($markup === false || $markup === '') {
             return null;
+        }
+
+        // A `.svgz` is the same document gzipped, so it has to be opened before it can be
+        // read. Asking the reader here is also what ImageMagick does with the file, which
+        // is why the raster it produces and the size worked out here describe one picture.
+        if (\strtolower(\pathinfo($path, PATHINFO_EXTENSION)) === 'svgz') {
+            $inflated = @gzdecode($markup);
+
+            if ($inflated === false) {
+                return null;
+            }
+
+            $markup = $inflated;
         }
 
         // `LIBXML_NONET` for the reason `src/Xml.php` gives: a document should not

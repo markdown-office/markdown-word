@@ -381,6 +381,15 @@ it('refuses a picture whose shape states no size, because nothing can draw it', 
     // size to rasterise at: the rasteriser is asked for a picture it cannot make, and
     // the only honest outcome is a refusal naming the machine. Silently substituting a
     // size here would produce a document with a diagram in it at a scale nobody chose.
+    //
+    // A build with no rasteriser is never asked the question, so it has no answer to
+    // refuse with: there is no picture to make and the vector goes in at the size the
+    // file does state, which for this file is none, and {@see \MarkdownWord\Render\SvgRasteriser::intrinsicSize()}
+    // says what it does about that.
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so it is never asked for one');
+    }
+
     $directory = scratchDirectory('sizeless');
     file_put_contents($directory . '/bare.svg', '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>');
 
@@ -630,14 +639,36 @@ it('reports the extension when a file is not an image and has none to fall back 
         ->toThrow(UnsupportedImageFormat::class);
 });
 
-it('turns an imagick build without the SVG delegate away, rather than half-way', function () {
-    // `available()` checks that the format is registered and not merely that the class
-    // exists: a build can have the extension and still not read an SVG. Detecting that
-    // here is what turns a confusing failure on the first picture into a clear one on
-    // the first conversion.
-    $registered = \in_array('SVG', \Imagick::queryFormats(), true);
+it('turns an imagick build that cannot draw a letter away, rather than half-way', function () {
+    // The format being registered proves nothing: a build with no SVG delegate registers
+    // `SVG` and hands the file to its own renderer, which draws the shapes and drops
+    // every `<text>` in it. That is the worst outcome of the three, because it does not
+    // fail — it produces a picture missing its words — so the probe has to draw one and
+    // look at the result.
+    $glyph = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" viewBox="0 0 40 20">'
+        . '<text x="2" y="15" font-size="14" fill="#000000">W</text></svg>';
 
-    expect(SvgRasteriser::available())->toBe($registered);
+    if (!\extension_loaded('imagick')) {
+        expect(SvgRasteriser::available())->toBeFalse();
+
+        return;
+    }
+
+    $image = new \Imagick();
+    $image->setBackgroundColor(new \ImagickPixel('transparent'));
+    $image->readImageBlob($glyph);
+    $drew = false;
+
+    foreach ($image->getImageHistogram() as $colour) {
+        if ($colour->getColorValue(\Imagick::COLOR_ALPHA) > 0.0) {
+            $drew = true;
+        }
+    }
+
+    $image->clear();
+
+    // Whatever this build does with a glyph, the probe has to agree with it.
+    expect(SvgRasteriser::available())->toBe($drew);
 });
 
 it('reports no rasteriser on a build that has none', function () {

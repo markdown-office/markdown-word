@@ -123,7 +123,7 @@ final class DocxWriter
             (new ImageDescriptionPass($descriptions))->applyTo($docxPath);
         }
 
-        $attachments = $vectors?->all() ?? [];
+        $attachments = $vectors?->take() ?? [];
 
         if ($attachments !== []) {
             (new SvgPass())->applyTo($docxPath, $attachments);

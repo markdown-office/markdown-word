@@ -8,6 +8,7 @@ use MarkdownWord\Configuration\Options;
 use MarkdownWord\Exception\UnsupportedImageFormat;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Render\SvgRasteriser;
 
 /*
  * The vector example, checked against what it claims.
@@ -19,7 +20,7 @@ use MarkdownWord\Parser\CommonMarkParser;
  * alt text survived a change of markup, and that the reason given when there is no
  * rasteriser is about the machine rather than about the format.
  *
- * The example is skipped where `ext-imagick` is absent, and so is the part of this
+ * The example is skipped where an SVG cannot be rasterised, and so is the part of this
  * file that needs it. The message claim is checked either way, because it is a claim
  * about words rather than about a document.
  */
@@ -27,17 +28,17 @@ use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Tests\Support\Upstream;
 
 beforeEach(fn () => Upstream::install());
-// Every test in this file builds a document with an SVG in it, which needs something
-// to rasterise. The suite runs on a build with imagick and on one without, so the file
-// skips itself rather than each test carrying a mark that would be wrong on the build
-// that has the extension.
+// Every test in this file builds a document with an SVG *and a raster beside it* in it.
+// A build that cannot draw one falls back to the vector alone, so the two-part claim
+// cannot be checked there and the file skips itself rather than each test carrying a
+// mark that would be wrong on that build.
 //
 // `uses()->beforeEach()` rather than a bare `beforeEach(function () { $this->… })`:
 // Pest types the latter as a `PendingCalls`, where `markTestSkipped()` is not a method,
 // so the one call the file depends on is the one static analysis cannot see.
 uses()->beforeEach(function (): void {
-    if (!\extension_loaded('imagick')) {
-        test()->markTestSkipped('ext-imagick is not loaded, so no SVG can be embedded');
+    if (!SvgRasteriser::available()) {
+        test()->markTestSkipped('this build cannot rasterise an SVG, so the document carries no raster');
     }
 });
 

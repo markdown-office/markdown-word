@@ -39,6 +39,8 @@ final class Survey
     /** @var array<string, true> */
     private array $used = [];
 
+    private bool $vectorOnly = false;
+
     /**
      * Private so that {@see self::of()} is the only way to get one.
      *
@@ -66,11 +68,26 @@ final class Survey
             $survey->used['image-alt-text'] = true;
         }
 
-        if ($vectors?->anyAttached() === true) {
+        if ($vectors?->pendingAnyAttached() === true) {
             $survey->used['svg-vector'] = true;
         }
 
+        $survey->vectorOnly = $vectors?->pendingWithoutRaster() === true;
+
         return $survey;
+    }
+
+    /**
+     * Whether the document has a vector with no raster beside it.
+     *
+     * Not a {@see self::FEATURES} key, because it is not a property of the format: the
+     * writer carried the vector perfectly well. It is a property of this document, and it
+     * is asked about here rather than recorded as a feature so that
+     * {@see \MarkdownWord\Format} does not answer for it.
+     */
+    public function isVectorOnly(): bool
+    {
+        return $this->vectorOnly;
     }
 
     public function uses(string $feature): bool

@@ -403,7 +403,18 @@ final class MarkdownToWord implements Converter
             return [];
         }
 
-        return $this->format->losses($this->survey);
+        $losses = $this->format->losses($this->survey);
+
+        // A vector written with no raster beside it is carried perfectly well and still
+        // costs something: every reader that does not prefer the vector draws nothing
+        // where the picture was. Said here rather than left for the reader of the
+        // finished document to work out.
+        if ($this->survey->isVectorOnly()) {
+            $losses[] = new Loss('svg-fallback',
+                'the vector was written with no raster beside it, so a reader that does not prefer the vector draws nothing where an SVG was');
+        }
+
+        return $losses;
     }
 
     /**

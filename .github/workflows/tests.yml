@@ -202,6 +202,23 @@ jobs:
       - name: Install
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      # The SVG tests skip themselves on a build that cannot rasterise, which is right
+      # but quiet: a runner that lost its SVG delegate would skip a few dozen tests and
+      # the run would still be green. Asserted here rather than left to be noticed in
+      # the skip count, because a suite that stopped testing the rasteriser is worse
+      # than one that failed.
+      - name: The rasteriser works here
+        run: |
+          php -r '
+            require "vendor/autoload.php";
+            use MarkdownWord\Render\SvgRasteriser;
+            if (!SvgRasteriser::available()) {
+              fwrite(STDERR, "this runner cannot rasterise an SVG, so the vector tests would all skip\n");
+              exit(1);
+            }
+            echo "rasteriser ok\n";
+          '
+
       - name: Test
         run: vendor/bin/pest
 
