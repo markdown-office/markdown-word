@@ -450,8 +450,10 @@ into one never prints a line of this kind.
 
 **Only Word packages are read back.** `WordToMarkdown` reads a `.docx` and a `.dotx`;
 handing it an `.odt` is not supported, and neither is an `.rtf`. A `.dotx` read back is
-its unfilled content — the `${…}` markers are text, and that is the honest answer to
-be asked for one that has not been filled in.
+whatever it currently holds, which for an unfilled template is its own text, the
+placeholder inside the content control, and the cached results Word keeps beside each
+field. Those are text, and reading them back is the honest answer to be asked for a
+template that has not been filled in.
 
 **A template is a `.docx` or a `.dotx`.** PHPWord's template processor reads that
 package and nothing else, so `mdword to-odt --template` is refused rather than half
@@ -558,10 +560,10 @@ nothing can embed: the message is printed as it stands, with no class name and n
 line from this repository, because it is the caller's mistake to fix and not a defect.
 Exit status is 1.
 
-A mistake is reported in a sentence, with what to do about it, and the exit code
-is non-zero — a template with nowhere for the content names the controls it does
-have rather
-than producing a document full of `${...}`.
+A mistake is reported in a sentence, with what to do about it, and the exit code is
+non-zero — a template with nowhere for the content names the controls it does have,
+rather than silently appending the body below a letterhead's signature block where it
+would look like a finished document.
 
 ### The phar
 
@@ -649,6 +651,16 @@ fields:
 - one
 - two
 ```
+
+**`body` is this library's convention, not Word's.** ECMA-376 §17.5.2.36 defines a
+content control's `w:tag` as "an arbitrary string which applications can associate
+with a structured document tag", reserves no value for it, and Word never reads one —
+it round-trips it and leaves it alone. So the name collides with nothing Word
+recognises, and no standard is being missed by not matching one. A template that
+names its control something else is asked for that name:
+`insert($markdown, 'letter')`. Nobody else does this: the templating libraries that
+exist either use plain text delimiters (`{name}` in docxtemplater, `{{ var }}` in
+python-docx-template) or invent their own prefix, and none of them claims `body`.
 
 **Filled fields are unlinked.** The value stays and the field goes, which is what
 Word's own *Finish & Merge → Edit Individual Documents* produces and what a finished

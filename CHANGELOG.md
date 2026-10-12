@@ -52,11 +52,37 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A soft line break in a wrapped paragraph lost its space.** Markdown is habitually
+  hard-wrapped by hand, and every wrap point joined two words together:
+  `revenue` and `growth` came out as `revenuegrowth`, `in January` as `inJanuary`.
+  The cause was the fix above: the writer that folds out a fragment's indentation also
+  folded `>`, any whitespace, `<`, and a soft break is written as a run holding exactly
+  one space. It now folds only whitespace that has a newline in it, which is the only
+  kind that is ever an indent.
+
+  Every document was affected, not only the ones rendered through a template. Nothing
+  caught it, because every assertion was on the *words* and every word was right —
+  they were merely adjacent to the wrong word.
+
 - **A rendered block written into a template arrived as text.** PHPWord's element
   writer emits a fragment indented for a human to read, and whitespace between a
   `w:t` and its text *is* text to Word: every paragraph in the document opened with
   the literal characters `<w:p>`. No text-level assertion could see it, because the
   words after it were exactly right.
+
+### Changed
+
+- **`examples/out/` is emptied at the start of every build**, and holds only
+  `documents/` and `previews/`. A build that wrote only what it still named left
+  behind every name it had stopped naming, which is how a template written in the
+  removed `${…}` dialect came to sit in it under a number the numbering had moved
+  past. The three generated templates moved to `examples/templates/` as proper
+  `.dotx` files, and the intermediates that used to land in `out/` are now built in
+  the system temporary directory and removed when the run ends — a scratch directory
+  per preview was leaking one directory into `/tmp` on every run, forever.
+
+  `php examples/build.php --write-template` is now `--write-templates` and rebuilds
+  all three.
 
 ### Added
 

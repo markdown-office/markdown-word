@@ -45,6 +45,14 @@ use ZipArchive;
  * one they will rename while editing the template, whereas the tag is what a program
  * reads. A template that has both is written by something that knows the difference.
  *
+ * `body` is this library's choice of value and not a convention anyone else shares.
+ * ECMA-376 §17.5.2.36 defines `w:tag` as "an arbitrary string which applications can
+ * associate with a structured document tag", reserves no value for it, and Word itself
+ * never reads one — it round-trips it. So the name collides with nothing Word
+ * recognises, and nothing standard is being missed by not matching one. The templates
+ * that use it are named in `examples/templates/`, and each is a `.dotx` a person can
+ * open to see what a control looks like before writing their own.
+ *
  * The content control goes once the content is in, for the same reason a filled field
  * is unlinked: a finished document should hold no leftover placeholder, and one left
  * behind invites somebody to type into it.

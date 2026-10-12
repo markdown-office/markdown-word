@@ -85,28 +85,80 @@ const CONTROL_PLACEHOLDER = '%%body-control%%';
 
 $root = __DIR__;
 $out = $root . '/out';
+$docs = $out . '/documents';
+$previews = $out . '/previews';
 $assets = $root . '/markdown/assets';
 $templates = $root . '/templates';
 
-@mkdir($out, 0o777, true);
+// Everything in `out/` is produced by this script and nothing else, and it is
+// gitignored besides, so it starts empty. A build that only writes what it still names
+// leaves behind every name it has stopped naming, which is how the directory came to
+// hold a template written in the `${…}` dialect that has since been removed, under a
+// number the numbering has since moved past.
+emptyDirectory($out);
+
+@mkdir($docs, 0o777, true);
+@mkdir($previews, 0o777, true);
 @mkdir($assets, 0o777, true);
 @mkdir($templates, 0o777, true);
 
-// `--write-template` rebuilds `templates/meridian-qbr.dotx` and stops. The template is
-// committed rather than built, because it is the one file here a reader opens in Word
-// rather than a build product — and this is how it is changed, so the generator and
-// the committed copy cannot drift apart without anyone editing a zip by hand.
-if (in_array('--write-template', $argv ?? [], true)) {
-    $asDocument = $templates . '/meridian-qbr' . DOCX_EXTENSION;
-    $asTemplate = $templates . '/meridian-qbr.dotx';
+// Where a template is built before it is typed, and where the `.docx` twin is written
+// for the one comparison that needs it. Both are intermediates: a reader who opened
+// them would see something that looks like an example and is not one.
+$scratch = sys_get_temp_dir() . '/mdword-examples-' . bin2hex(random_bytes(6));
+@mkdir($scratch, 0o777, true);
 
-    buildReportTemplate($asDocument);
-    asTemplate($asDocument, $asTemplate);
-    @unlink($asDocument);
+register_shutdown_function(static function () use ($scratch): void {
+    emptyDirectory($scratch);
+});
 
-    printf("Wrote %s\n", $asTemplate);
+// The three Word templates the examples render into, all in `templates/` and all named
+// as the `.dotx` they are.
+//
+// They are committed rather than built, so that a fresh clone can open them without
+// running Composer, PHP or having LibreOffice installed. They are also *generated*, so
+// that nobody has to edit a zip by hand: `--write-templates` rebuilds all three, and a
+// plain build never touches them.
+//
+// Regenerating is a separate step because it is not repeatable: `docProps/core.xml`
+// carries the time a document was written, so two runs a minute apart differ there and
+// nowhere else, and a build that rewrote a committed binary on every run would leave
+// the working tree permanently dirty for a difference nobody can see.
+$templatePaths = [
+    'invoice' => $templates . '/invoice.dotx',
+    'meridian-qbr' => $templates . '/meridian-qbr.dotx',
+    'plain-letterhead' => $templates . '/plain-letterhead.dotx',
+];
+
+if (in_array('--write-templates', $argv ?? [], true)) {
+    $build = [
+        'invoice' => 'buildInvoiceTemplate',
+        'meridian-qbr' => 'buildReportTemplate',
+        'plain-letterhead' => 'buildPlainTemplate',
+    ];
+
+    foreach ($build as $name => $builder) {
+        $asDocument = $scratch . '/' . $name . DOCX_EXTENSION;
+
+        $builder($asDocument);
+        asTemplate($asDocument, $templatePaths[$name]);
+
+        printf("Wrote %s\n", $templatePaths[$name]);
+    }
 
     exit(0);
+}
+
+$missing = array_keys(array_filter($templatePaths, static fn (string $t): bool => !is_file($t)));
+
+if ($missing !== []) {
+    fprintf(
+        STDERR,
+        "Missing template(s): %s\nRun `php examples/build.php --write-templates` to build them.\n",
+        implode(', ', $missing),
+    );
+
+    exit(1);
 }
 
 logo($assets . '/logo.png');
@@ -133,7 +185,7 @@ foreach ([
         'imageBasePath' => $root . '/markdown',
     ]);
 
-    $path = $out . '/' . $name . DOCX_EXTENSION;
+    $path = $docs . '/' . $name . DOCX_EXTENSION;
     (new MarkdownToWord($markdown, $config))->save($path);
 
     $built[] = [$name, $description, $path];
@@ -143,7 +195,7 @@ foreach ([
 //
 // Shows what the configuration controls, side by side with the default.
 
-$path = $out . '/07-no-decoration' . DOCX_EXTENSION;
+$path = $docs . '/07-no-decoration' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/01-kitchen-sink.md'),
     Configuration::create()->withoutDecoration(),
@@ -152,7 +204,7 @@ $built[] = ['07-no-decoration', 'The kitchen sink with every default switched of
 
 // A house style, defined in code
 
-$path = $out . '/08-house-style' . DOCX_EXTENSION;
+$path = $docs . '/08-house-style' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/01-kitchen-sink.md'),
     houseStyle(),
@@ -161,7 +213,7 @@ $built[] = ['08-house-style', 'The kitchen sink in a custom house style.', $path
 
 // The same source, with the extras a README tends to use
 
-$path = $out . '/09-extended-parser' . DOCX_EXTENSION;
+$path = $docs . '/09-extended-parser' . DOCX_EXTENSION;
 (new MarkdownToWord(
     "# With the extended parser\n\n"
     . "Footnotes[^1] and description lists are available here.\n\n"
@@ -175,12 +227,9 @@ $built[] = ['09-extended-parser', 'Footnotes and description lists.', $path];
 
 // A Word template
 
-$templatePath = $out . '/template-invoice' . DOCX_EXTENSION;
-$outputPath = $out . '/10-template' . DOCX_EXTENSION;
+$outputPath = $docs . '/10-template' . DOCX_EXTENSION;
 
-buildInvoiceTemplate($templatePath);
-
-(new MarkdownTemplate($templatePath, houseStyle()))
+(new MarkdownTemplate($templatePaths['invoice'], houseStyle()))
     ->insert(
         "---\nfields:\n  number: INV-2024-0042\n  customer: Northwind Ltd\n---\n\n"
         . "| Description | Amount |\n| --- | ---: |\n"
@@ -210,7 +259,7 @@ $frontmatterParser = new CommonMarkParser([
 ]);
 
 // 11 — the block is read, and it configures the render.
-$path = $out . '/11-frontmatter' . DOCX_EXTENSION;
+$path = $docs . '/11-frontmatter' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/11-frontmatter.md'),
     Configuration::create(),
@@ -219,7 +268,7 @@ $path = $out . '/11-frontmatter' . DOCX_EXTENSION;
 $built[] = ['11-frontmatter', 'Frontmatter configuring the conversion.', $path];
 
 // 12 — the same Markdown with no block, for the pair.
-$path = $out . '/12-frontmatter-none' . DOCX_EXTENSION;
+$path = $docs . '/12-frontmatter-none' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/12-frontmatter-none.md'),
     Configuration::create(),
@@ -228,7 +277,7 @@ $path = $out . '/12-frontmatter-none' . DOCX_EXTENSION;
 $built[] = ['12-frontmatter-none', 'The same Markdown with no frontmatter.', $path];
 
 // 13 — the block is outranked by the configuration passed in code.
-$path = $out . '/13-frontmatter-override' . DOCX_EXTENSION;
+$path = $docs . '/13-frontmatter-override' . DOCX_EXTENSION;
 (new MarkdownToWord(
     (string) file_get_contents($root . '/markdown/13-frontmatter-override.md'),
     // Deliberately the opposite of the block: no borders, no heading cap, a plain
@@ -268,15 +317,15 @@ $built[] = ['13-frontmatter-override', 'Frontmatter outranked by the configurati
 // in the repository is one too many.
 //
 // Two documents come out of them, from the same Markdown, and they are worth opening
-// side by side. `21-dotx-report.docx` is rendered through the `.dotx` and
-// `21-dotx-report.docx-template.docx` through the `.docx`; the words, the formatting
+// side by side. `22-corporate-report.docx` is rendered through the `.dotx` and
+// `22-corporate-report.docx-template.docx` through the `.docx`; the words, the formatting
 // and the styles are the same in both, because which kind of template it is makes no
 // difference to the result. What it does change is what the result *is* — both are
 // documents, because a filled-in template that kept its own type would open by
 // creating a new document from itself rather than opening.
 
-$dotxPath = $root . '/templates/meridian-qbr.dotx';
-$docxTemplatePath = $out . '/meridian-qbr' . DOCX_EXTENSION;
+$dotxPath = $templatePaths['meridian-qbr'];
+$docxTemplatePath = $scratch . '/meridian-qbr' . DOCX_EXTENSION;
 
 asDocument($dotxPath, $docxTemplatePath);
 
@@ -296,7 +345,7 @@ foreach ([
     '22-corporate-report' => $dotxPath,
     '22-corporate-report.docx-template' => $docxTemplatePath,
 ] as $name => $template) {
-    $path = $out . '/' . $name . DOCX_EXTENSION;
+    $path = $docs . '/' . $name . DOCX_EXTENSION;
 
     (new MarkdownTemplate($template, reportStyle()))
         ->insert($corporateMarkdown)
@@ -312,12 +361,9 @@ foreach ([
 // The plain template: an ordinary Word document with nothing but the body control and
 // the logo, which is what most templates actually are. Everything else about the
 // appearance comes from the library's built-in look rather than from the file.
-$plainPath = $out . '/23-plain-letterhead' . DOCX_EXTENSION;
-$plainSource = $out . '/plain-letterhead-source' . DOCX_EXTENSION;
+$plainPath = $docs . '/23-plain-letterhead' . DOCX_EXTENSION;
 
-buildPlainTemplate($plainSource);
-
-(new MarkdownTemplate($plainSource))
+(new MarkdownTemplate($templatePaths['plain-letterhead']))
     ->insert($corporateMarkdown)
     ->save($plainPath);
 
@@ -339,7 +385,7 @@ foreach ([
     'placeholder' => Options::IMAGE_PLACEHOLDER,
     'skip' => Options::IMAGE_SKIP,
 ] as $mode => $value) {
-    $path = $out . '/15-images-' . $mode . DOCX_EXTENSION;
+    $path = $docs . '/15-images-' . $mode . DOCX_EXTENSION;
     (new MarkdownToWord(
         $images,
         Configuration::create()->withOptions([
@@ -358,7 +404,7 @@ foreach ([
     '16-styled-tables' => 'Table style slots from the frontmatter.',
     '17-borderless-tables' => 'The table options, with no style slot.',
 ] as $name => $description) {
-    $path = $out . '/' . $name . DOCX_EXTENSION;
+    $path = $docs . '/' . $name . DOCX_EXTENSION;
     (new MarkdownToWord(
         (string) file_get_contents($root . '/markdown/' . $name . '.md'),
         Configuration::create(),
@@ -374,7 +420,7 @@ foreach ([
 // and an example that cannot be built on somebody's machine is worse than one that
 // says why it was skipped.
 if (\extension_loaded('imagick')) {
-    $path = $out . '/19-vector' . DOCX_EXTENSION;
+    $path = $docs . '/19-vector' . DOCX_EXTENSION;
     // The same base path the other examples get: without it a relative source path
     // resolves against the working directory and the picture is not found, which
     // falls back to the alt text and produces a document with no picture in it.
@@ -394,13 +440,13 @@ if (\extension_loaded('imagick')) {
 // The way back
 
 
-$roundTripped = (new WordToMarkdown($out . '/01-kitchen-sink' . DOCX_EXTENSION))->convert();
-file_put_contents($out . '/18-round-trip.md', $roundTripped);
+$roundTripped = (new WordToMarkdown($docs . '/01-kitchen-sink' . DOCX_EXTENSION))->convert();
+file_put_contents($docs . '/18-round-trip.md', $roundTripped);
 
 $built[] = [
     '18-round-trip',
     'The kitchen sink read back out of 01-kitchen-sink.docx.',
-    $out . '/18-round-trip.md',
+    $docs . '/18-round-trip.md',
 ];
 
 // The other two output formats
@@ -416,7 +462,7 @@ $built[] = [
 $formats = (string) file_get_contents($root . '/markdown/20-formats.md');
 
 foreach (Format::cases() as $format) {
-    $path = $out . '/20-formats' . $format->extension();
+    $path = $docs . '/20-formats' . $format->extension();
     $converter = new MarkdownToWord($formats, Configuration::create()->withOptions([
         'images' => Options::IMAGE_EMBED,
         'imageBasePath' => $root . '/markdown',
@@ -433,15 +479,15 @@ foreach (Format::cases() as $format) {
 
 // Report
 
-echo "\nBuilt:\n\n";
+echo "\nBuilt, into out/documents/:\n\n";
 
 foreach ($built as [$name, $description, $path]) {
-    printf("  %-22s %s\n", basename($path), $description);
+    printf("  %-34s %s\n", basename($path), $description);
 }
 
 echo "\n";
 
-renderPreviews($built);
+renderPreviews($built, $previews);
 
 /**
  * The report template's own styles, pointed at by name.
@@ -1195,7 +1241,7 @@ function logo(string $path): void
 /**
  * Render the first page of each document so the result can be eyeballed.
  */
-function renderPreviews(array $built): void
+function renderPreviews(array $built, string $previews): void
 {
     $soffice = locateLibreOffice();
 
@@ -1205,53 +1251,67 @@ function renderPreviews(array $built): void
         return;
     }
 
-    // Every format the examples write, so the comparison page can be looked at as
-    // well as read. The round trip is Markdown and has no first page to look at.
-    $documents = ['docx', 'odt', 'rtf'];
-    $rendered = 0;
+    // Every format the examples write, so the comparison page can be looked at as well
+    // as read. The round trip is Markdown and has no first page to look at.
+    $renderable = ['docx', 'odt', 'rtf'];
 
-    foreach ($built as [, , $path]) {
-        $extension = pathinfo($path, PATHINFO_EXTENSION);
+    // One directory for the run, emptied between documents rather than one per document.
+    //
+    // LibreOffice names its output after the file it was given, so the three formats
+    // behind `20-formats` each write `20-formats.png` into whatever directory they were
+    // given: in one shared directory each overwrites the last, and the one left standing
+    // would stand for all three — the opposite of what the comparison page is for. A
+    // directory per document solves that and leaks one directory into the system temp
+    // folder on every run of the script, forever, which is what a scratch directory is
+    // for.
+    $scratch = sys_get_temp_dir() . '/mdword-preview-' . bin2hex(random_bytes(6));
 
-        if (!in_array($extension, $documents, true)) {
-            continue;
-        }
+    if (!is_dir($scratch) && !mkdir($scratch, 0o777, true) && !is_dir($scratch)) {
+        echo "A temporary directory could not be made, so no preview images were produced.\n";
 
-        // Into a directory of its own, because LibreOffice names its output after
-        // the file it was given: three documents sharing a stem would otherwise
-        // each overwrite the last one's preview, and the one left standing would
-        // stand for all three — the opposite of what the comparison page is for.
-        $scratch = sys_get_temp_dir() . '/mdword-preview-' . bin2hex(random_bytes(6));
-
-        if (!is_dir($scratch) && !mkdir($scratch, 0o777, true) && !is_dir($scratch)) {
-            continue;
-        }
-
-        exec(sprintf(
-            '%s --headless --convert-to png --outdir %s %s 2>/dev/null',
-            escapeshellcmd($soffice),
-            escapeshellarg($scratch),
-            escapeshellarg($path),
-        ), $output, $status);
-
-        if ($status === 0 && movePreview($scratch, $path, $extension)) {
-            $rendered++;
-        }
-
-        $output = [];
+        return;
     }
 
-    printf("Rendered %d preview image(s) next to the documents.\n", $rendered);
+    $rendered = 0;
+
+    try {
+        foreach ($built as [, , $path]) {
+            $extension = pathinfo($path, PATHINFO_EXTENSION);
+
+            if (!in_array($extension, $renderable, true)) {
+                continue;
+            }
+
+            emptyDirectory($scratch);
+
+            exec(sprintf(
+                '%s --headless --convert-to png --outdir %s %s 2>/dev/null',
+                escapeshellcmd($soffice),
+                escapeshellarg($scratch),
+                escapeshellarg($path),
+            ), $output, $status);
+
+            if ($status === 0 && movePreview($scratch, $previews, $path, $extension)) {
+                $rendered++;
+            }
+
+            $output = [];
+        }
+    } finally {
+        emptyDirectory($scratch);
+    }
+
+    printf("Rendered %d preview image(s) into out/previews/.\n", $rendered);
 }
 
 /**
- * Put a document's preview image beside it, under a name of its own.
+ * Put a document's preview image in the previews directory, under a name of its own.
  *
  * The format goes into the name wherever it is not the default, so the `.docx` is
  * `20-formats.png` and its two siblings are `20-formats.odt.png` and
  * `20-formats.rtf.png`.
  */
-function movePreview(string $scratch, string $path, string $extension): bool
+function movePreview(string $scratch, string $previews, string $path, string $extension): bool
 {
     $stem = (string) preg_replace('/\.[^.]+$/', '', $path);
     $produced = $scratch . '/' . basename($stem) . '.png';
@@ -1260,9 +1320,46 @@ function movePreview(string $scratch, string $path, string $extension): bool
         return false;
     }
 
-    $wanted = $extension === 'docx' ? $stem . '.png' : $stem . '.' . $extension . '.png';
+    $name = $extension === 'docx'
+        ? basename($stem) . '.png'
+        : basename($stem) . '.' . $extension . '.png';
 
-    return rename($produced, $wanted);
+    return rename($produced, $previews . '/' . $name);
+}
+
+/**
+ * Delete a directory and everything in it.
+ *
+ * `out/` is where the build puts its output and nowhere else, so emptying it first is
+ * what keeps a file whose example has been renamed or removed from outliving it.
+ *
+ * Word's owner file is deleted with everything else rather than treated as a reason to
+ * stop. It is written beside a document while it is open and removed when it closes,
+ * which in practice means it is usually left behind: a build that refused on finding one
+ * would never run again, and the eight of them that were sitting in `out/` were all
+ * from documents closed hours earlier.
+ */
+function emptyDirectory(string $path): void
+{
+    if (!is_dir($path)) {
+        return;
+    }
+
+    $entries = array_values(array_diff(scandir($path) ?: [], ['.', '..']));
+
+    foreach ($entries as $entry) {
+        $child = $path . '/' . $entry;
+
+        if (is_dir($child) && !is_link($child)) {
+            emptyDirectory($child);
+
+            continue;
+        }
+
+        @unlink($child);
+    }
+
+    @rmdir($path);
 }
 
 function locateLibreOffice(): ?string
