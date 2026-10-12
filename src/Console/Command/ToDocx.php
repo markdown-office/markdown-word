@@ -12,6 +12,7 @@ use MarkdownWord\Console\ConsoleException;
 use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Format;
 use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Template\ContentFallback;
 use MarkdownWord\Template\TemplateFile;
 use MarkdownWord\WordPackage;
 use ZipArchive;
@@ -345,6 +346,13 @@ class ToDocx extends BaseCommand
         $template = $this->application->template($path, $config, [], $overrides, $command->value('theme'));
         $template->insert($markdown);
 
+        // A template with no place for the content takes it at the end, which is what
+        // makes any `.dotx` usable. A pipeline that would rather know than have it
+        // appended below a signature block asks for that here.
+        if ($command->flag('require-control')) {
+            $template->contentFallback(ContentFallback::Error);
+        }
+
         // Filling the document is the slow part of a run.
         $this->guardAgainstOverwrite($input, $output);
 
@@ -365,7 +373,7 @@ class ToDocx extends BaseCommand
     {
         return [
             'values' => ['output', 'config', 'template', 'theme', 'images', 'image-base', 'table-width', 'to'],
-            'flags' => ['help', 'no-images', 'plain'],
+            'flags' => ['help', 'no-images', 'plain', 'require-control'],
             'repeated' => [],
             'aliases' => ['o' => 'output', 't' => 'template', 'c' => 'config', 'h' => 'help'],
         ];
@@ -381,6 +389,7 @@ class ToDocx extends BaseCommand
             ['-c, --config <file.php>', 'a file returning the styles and options to use'],
             ['--theme <name>', 'a named look to draw in; a styles: block still wins over it'],
             ['-t, --template <file.docx|.dotx>', 'render into a Word template rather than a new document'],
+            ['--require-control', 'refuse a template that has no content control, instead of appending to it'],
             ['--images <mode>', 'embed, placeholder or skip'],
             ['--no-images', 'shorthand for --images skip'],
             ['--image-base <dir>', 'where relative image paths resolve from'],

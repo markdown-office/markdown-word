@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Template\ContentFallback;
 use MarkdownWord\Template\MarkdownTemplate;
 use MarkdownWord\Exception\NoContentControl;
 use MarkdownWord\Exception\TemplateNotFound;
@@ -168,14 +169,70 @@ it('a repeated row is written as a table in the Markdown', function () {
     expect(TemplateFactory::xmlOf($output))->toContain('<w:tbl>');
 });
 
-it('a template with nowhere for the content says so, and names what it has', function () {
-    // The alternative is content silently landing at the end of the document, above a
-    // letterhead's own signature block, which looks like a finished document.
+it('appends the content when the template names no place for it', function () {
+    // The case that decides whether the library is any use against a template it did
+    // not write: a letterhead made in Word has no control to find, because nobody
+    // making one inserts a content control.
+    $output = renderTemplate(
+        TemplateFactory::letterhead(),
+        [],
+        static fn (MarkdownTemplate $t) => $t->insert("# X"),
+    );
+
+    expect(TemplateFactory::bodyTextOf($output))
+        ->toContain('X')
+        ->toContain('Yours sincerely');
+});
+
+it('appends below the template’s own closing matter, which is the whole trade', function () {
+    // Documented rather than avoided, because the alternative is a document with none of
+    // the caller's content in it. A template that cares about the position says where it
+    // is, with a control, and then the content goes there instead.
+    $output = renderTemplate(
+        TemplateFactory::letterhead(),
+        [],
+        static fn (MarkdownTemplate $t) => $t->insert("# X"),
+    );
+
+    $text = TemplateFactory::bodyTextOf($output);
+
+    expect(strpos($text, 'Yours sincerely'))
+        ->toBeLessThan(strpos($text, 'X') ?: PHP_INT_MAX);
+});
+
+it('still fills the fields in a template that names no place', function () {
+    // The two are separate: a template can have values and no region, and refusing it
+    // for the region would throw away the fields it does have.
+    $output = renderTemplate(
+        TemplateFactory::letterhead(),
+        ['client' => 'Contoso Industrial', 'reference' => 'REF-9'],
+        static fn (MarkdownTemplate $t) => $t->insert("# X"),
+    );
+
+    $text = TemplateFactory::bodyTextOf($output);
+
+    expect($text)
+        ->toContain('Contoso Industrial')
+        ->toContain('REF-9')
+        ->not->toContain('«client»')
+        ->not->toContain('«reference»');
+});
+
+it('a template with nowhere for the content says so when asked to insist', function () {
     $renderer = new MarkdownTemplate(TemplateFactory::noControl());
-    $renderer->insert('# X');
+    $renderer->insert('# X')->contentFallback(ContentFallback::Error);
 
     expect(fn () => saveTemplate($renderer, Scratch::path('never')))
         ->toThrow(NoContentControl::class, 'It does have: terms');
+});
+
+it('a template with no control at all is still refused when asked to insist', function () {
+    $renderer = new MarkdownTemplate(TemplateFactory::letterhead());
+    $renderer->insert('# X')->contentFallback(ContentFallback::Error);
+
+    // Naming what it does have is the difference between "one tag away" and "nowhere".
+    expect(fn () => saveTemplate($renderer, Scratch::path('never')))
+        ->toThrow(NoContentControl::class);
 });
 
 it('plain hyperlinks survive template insertion', function () {

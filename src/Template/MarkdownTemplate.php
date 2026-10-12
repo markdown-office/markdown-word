@@ -9,6 +9,7 @@ use League\CommonMark\Node\Block\Document;
 use MarkdownWord\Configuration;
 use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\FileNotWritable;
+use MarkdownWord\Exception\NoContentControl;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Exception\TemplateNotFound;
 use MarkdownWord\Parser\CommonMarkParser;
@@ -36,10 +37,17 @@ use PhpOffice\PhpWord\TemplateProcessor;
  *   hold whole paragraphs where the author chose. {@see ContentControl} fills it and
  *   removes it.
  *
- * A template that is not there is a {@see TemplateNotFound}; a template that names no
- * place for the content is a {@see \MarkdownWord\Exception\NoContentControl}, which
- * names the controls it does have. Every other way this can fail is a
- * {@see FileNotWritable} — the template was fine and the machine was not.
+ * The control is optional, because a template need not be one this library's generator
+ * wrote. A letterhead a company made in Word to be filled in by a person has fields and
+ * no control, and refusing those would leave the library able to use only the templates
+ * it wrote itself. A template with no control of that name takes the content at the end
+ * of its body, or says so and refuses, per {@see ContentFallback}. Filling the fields is
+ * independent of it: a template can have values and nowhere to put the prose.
+ *
+ * A template that is not there is a {@see TemplateNotFound}. Every other way this can
+ * fail is a {@see FileNotWritable} — the template was fine and the machine was not —
+ * except {@see NoContentControl}, which is the template's to fix and is off unless asked
+ * for.
  *
  * The staged document is moved into place rather than written there, so the
  * template on disk is never opened for writing: a path that is a hard link to it
@@ -65,6 +73,9 @@ final class MarkdownTemplate
 
     /** Which content control the content goes into, named by the template. */
     private string $control = ContentControl::BODY;
+
+    /** Where the content goes when the template has no control of that name. */
+    private ContentFallback $fallback = ContentFallback::Append;
 
     /**
      * @param array<string, string|int|float> $values Values for the template's fields, for
@@ -155,6 +166,24 @@ final class MarkdownTemplate
     }
 
     /**
+     * Where the content goes when the template names no place for it.
+     *
+     * {@see ContentFallback::Append} by default, because a template written for this
+     * library carries the control and a template a company made in Word to be filled in
+     * by a person does not, and a library that only worked with the first kind would be
+     * no use against the second.
+     *
+     * @throws NoContentControl when {@see ContentFallback::Error} is chosen and the
+     *         template has no control of the name {@see self::insert()} was given.
+     */
+    public function contentFallback(ContentFallback $fallback = ContentFallback::Append): self
+    {
+        $this->fallback = $fallback;
+
+        return $this;
+    }
+
+/**
      * Render the Markdown, ready for {@see self::save()} to write where the template says.
      *
      * Separate from the write because the content goes into the *finished* document: the
@@ -203,8 +232,8 @@ final class MarkdownTemplate
      *
      * @throws FileNotWritable when the document cannot be staged, its directory
      *         cannot be made, or the result cannot be written.
-     * @throws \MarkdownWord\Exception\NoContentControl when the template has nowhere
-     *         to put the content.
+     * @throws NoContentControl under {@see ContentFallback::Error}, when the template
+     *         has nowhere to put the content.
      */
     public function save(string $path): void
     {
@@ -222,8 +251,8 @@ final class MarkdownTemplate
      * The raw bytes of the resulting document.
      *
      * @throws FileNotWritable when the document cannot be staged or read back.
-     * @throws \MarkdownWord\Exception\NoContentControl when the template has nowhere
-     *         to put the content.
+     * @throws NoContentControl under {@see ContentFallback::Error}, when the template
+     *         has nowhere to put the content.
      */
     public function toString(): string
     {
@@ -261,8 +290,8 @@ final class MarkdownTemplate
      *    paragraph the earlier steps created.
      *
      * @throws FileNotWritable when a pass cannot write the staged document.
-     * @throws \MarkdownWord\Exception\NoContentControl when the template has nowhere to
-     *         put the content.
+     * @throws NoContentControl under {@see ContentFallback::Error}, when the template
+     *         has nowhere to put the content.
      */
     private function finish(string $temp): void
     {
@@ -271,14 +300,14 @@ final class MarkdownTemplate
         });
 
         if ($this->content !== null) {
-            (new ContentControl())->fill(
-                $temp,
-                $this->control,
-                array_map(
-                    fn (AbstractElement $element): string => $this->numbering->renderElement($element),
-                    $this->content,
-                ),
+            $blocks = array_map(
+                fn (AbstractElement $element): string => $this->numbering->renderElement($element),
+                $this->content,
             );
+
+            $control = new ContentControl();
+
+            $this->place($temp, $control, $blocks);
         }
 
         $payloads = $this->converter->pendingHyperlinks();
@@ -292,6 +321,30 @@ final class MarkdownTemplate
         }
 
         (new WordFields($this->fields))->applyTo($temp);
+    }
+
+    /**
+     * Put the content where the template says, or where it says nothing means.
+     *
+     * @param list<string> $blocks The rendered blocks. They are rendered once here and
+     *        passed down rather than rendered again per branch, because rendering is
+     *        what assigns the numbering references and doing it twice would give each
+     *        block the second pass's references.
+     *
+     * @throws NoContentControl under {@see ContentFallback::Error}, when the template
+     *         has no control of that name to fill.
+     */
+    private function place(string $temp, ContentControl $control, array $blocks): void
+    {
+        if ($control->fill($temp, $this->control, $blocks)) {
+            return;
+        }
+
+        if ($this->fallback === ContentFallback::Error) {
+            throw new NoContentControl($this->control, $control->tagsIn($temp));
+        }
+
+        $control->appendTo($temp, $blocks);
     }
 
     /**

@@ -367,7 +367,7 @@ $plainPath = $docs . '/23-plain-letterhead' . DOCX_EXTENSION;
     ->insert($corporateMarkdown)
     ->save($plainPath);
 
-$built[] = ['23-plain-letterhead', 'The same report into a plain template: a logo and a body control, nothing else.', $plainPath];
+$built[] = ['23-plain-letterhead', 'The same report into a template that names no place for it: a logo and nothing else.', $plainPath];
 
 // Images
 //
@@ -777,11 +777,12 @@ function buildPlainTemplate(string $path): void
 
     addLogo($section);
 
-    $section->addText(CONTROL_PLACEHOLDER);
-
+    // No content control, and that is the point: this is what a letterhead somebody
+    // made in Word to be filled in by a person looks like, because nobody making one
+    // inserts a control. The two template examples are a pair for exactly that reason —
+    // `22-corporate-report` is rendered through one that names where the content goes,
+    // `23-plain-letterhead` through one that does not.
     IOFactory::createWriter($phpWord, 'Word2007')->save($path);
-
-    controlIn($path, ContentControl::BODY);
 }
 
 /**

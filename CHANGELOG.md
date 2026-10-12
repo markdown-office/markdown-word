@@ -72,6 +72,23 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Any `.dotx` now works.** The content control is optional. A template with no `body`
+  control takes the content at the end of its body instead of being refused, which is
+  what makes the library usable against a template it did not write: nobody making a
+  company letterhead inserts a content control, so requiring one left it able to use
+  only the templates its own generator produced. Filling `MERGEFIELD`s and placing the
+  content are independent — a letterhead with fields and no control gets both.
+
+  The end of the body is before the final `w:sectPr` rather than after it. A
+  `w:sectPr` has to be the last child of a `w:body` or Word rejects the file, and
+  content after it belongs to no section, so it would carry none of the margins,
+  header, footer or page numbering the template's last section defines.
+
+  This is a behaviour change for anyone relying on `NoContentControl`. `ContentFallback`
+  chooses between the two: `Append` (the default) or `Error`, which raises as before
+  and names the controls the template does have. `mdword to-docx` reaches it with
+  `--require-control`.
+
 - **`examples/out/` is emptied at the start of every build**, and holds only
   `documents/` and `previews/`. A build that wrote only what it still named left
   behind every name it had stopped naming, which is how a template written in the

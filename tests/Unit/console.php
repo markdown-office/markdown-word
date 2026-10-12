@@ -316,12 +316,28 @@ it('resolves the named theme on the template path, and says so when it cannot', 
     expect($run['err'])->toContain('no-such-theme');
 });
 
-it('says which content controls a template has when it has no "body"', function () {
-    // A template with no place for the content would otherwise receive it at the end of
-    // the document, below its own signature block, and the result would look finished.
+it('renders into a template that has no content control at all', function () {
+    // The default is what makes any `.dotx` usable, so the command line has to reach
+    // it too: a letterhead nobody put a control in is the ordinary case now.
+    $out = Scratch::path('letterhead.docx');
+
+    $run = runCli([
+        'to-docx', '-',
+        '--template', TemplateFactory::letterhead(),
+        '-o', $out,
+    ], "# X");
+
+    expect($run['code'])->toBe(Application::SUCCESS);
+    expect(TemplateFactory::bodyTextOf($out))
+        ->toContain('X')
+        ->toContain('Yours sincerely');
+});
+
+it('says which content controls a template has when asked to insist on one', function () {
     $run = runCli([
         'to-docx', '-',
         '--template', TemplateFactory::noControl(),
+        '--require-control',
         '-o', Scratch::path('never'),
     ], '# X');
 

@@ -665,8 +665,7 @@ python-docx-template) or invent their own prefix, and none of them claims `body`
 **Filled fields are unlinked.** The value stays and the field goes, which is what
 Word's own *Finish & Merge → Edit Individual Documents* produces and what a finished
 document wants: nothing to refresh with `F9`, and a value that can hold `&` or `<`
-without becoming an instruction. A template with no `body` control is a
-`NoContentControl`, which names the controls it does have.
+without becoming an instruction.
 
 ### What a `.dotx` costs
 
@@ -710,9 +709,43 @@ A template says two things, and both are Word constructs:
   because the tag is what a program reads and the alias is the visible label somebody
   renames while working on the template.
 
-A template with no body control is refused rather than filled at the end of the
-document. A letterhead whose closing line and signature block come last would
-otherwise receive the body above them, and the result looks like a finished document.
+A template with no control is not a failure — it is the ordinary case. Nobody making a
+company letterhead inserts a content control, so a template with one is one this
+library's generator wrote, and refusing the rest would leave it able to use only the
+templates it wrote itself. **Any `.dotx` works.** Filling the fields and placing the
+content are separate: a letterhead with `MERGEFIELD`s for the client and no control at
+all gets both — the values filled, and the prose appended.
+
+Where the content goes without a control is at the end of the body, before the final
+`w:sectPr`. Before, because a `w:sectPr` must be the last child of a `w:body` and
+content after it belongs to no section — it would carry none of the margins, header,
+footer or page numbering that section defines, which for a letterhead is all of the
+letterhead. The cost is that a template ending in a signature block gets the body below
+it. A template that cares where the content lands says so, with a control, and then the
+control decides.
+
+No other tool has a rule to copy here. docxtemplater, python-docx-template,
+docx-templates and Word's own mail merge all leave a template with no placeholder
+exactly as they found it and insert nothing, so the document opens cleanly and contains
+none of the caller's content. Where a pipeline would rather know than have it appended,
+ask:
+
+```php
+use MarkdownWord\Template\ContentFallback;
+
+(new MarkdownTemplate('letterhead.dotx'))
+    ->contentFallback(ContentFallback::Error)
+    ->insert($markdown)
+    ->save('letter.docx');
+```
+
+```sh
+mdword to-docx letterhead.dotx notes.md --require-control
+```
+
+Either raises a `NoContentControl` naming the controls the template *does* have — a
+letterhead whose control is called `terms` is one tag away from working, and a message
+saying only that it has no `body` reads as though it has none.
 
 ```
 Report for «client»          ← a MERGEFIELD, filled and then unlinked

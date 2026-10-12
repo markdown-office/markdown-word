@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Template;
 
+use DOMDocument;
 use DOMElement;
+use DOMNode;
 use DOMText;
 use DOMXPath;
 use MarkdownWord\Exception\MalformedDocument;
-use MarkdownWord\Exception\NoContentControl;
 use MarkdownWord\WordPackage;
 use MarkdownWord\Xml;
 use ZipArchive;
@@ -86,11 +87,19 @@ final class ContentControl
     /**
      * Put the content where the control is, and take the control away.
      *
+     * Reports whether it did, rather than refusing a template that has no such control:
+     * a template written for this library has one because its generator puts one there,
+     * and a template a company made in Word to be filled in by a person has none. Which
+     * of the two this is decides nothing about where the content goes — see
+     * {@see ContentFallback} — so answering it is the caller's business and this class
+     * only has the answer.
+     *
      * @param list<string> $elements The rendered blocks, as XML fragments.
+     * @return bool Whether a control of that name was found and filled.
      *
      * @throws MalformedDocument When the part holding the control is not XML.
      */
-    public function fill(string $docxPath, string $name, array $elements): void
+    public function fill(string $docxPath, string $name, array $elements): bool
     {
         $zip = new ZipArchive();
 
@@ -103,28 +112,31 @@ final class ContentControl
             $xml = $zip->getFromName($part);
 
             if (!is_string($xml)) {
-                return;
+                return false;
             }
 
             $filled = $this->replace($xml, $part, $name, $elements);
 
-            if ($filled !== $xml) {
-                $zip->deleteName($part);
-                $zip->addFromString($part, $filled);
+            if ($filled === null) {
+                return false;
             }
+
+            $zip->deleteName($part);
+            $zip->addFromString($part, $filled);
+
+            return true;
         } finally {
             $zip->close();
         }
     }
 
     /**
-     * The control of that name, as a list of the XPath results rather than one, because
-     * a template may carry the same control in a header and in the body.
+     * The part with the control replaced, or null when it carries no such control.
      *
      * @param list<string> $elements
      * @throws MalformedDocument When the part is not XML.
      */
-    private function replace(string $xml, string $part, string $name, array $elements): string
+    private function replace(string $xml, string $part, string $name, array $elements): ?string
     {
         $dom = Xml::parse($xml) ?? throw new MalformedDocument(
             sprintf('%s is not valid XML.', $part),
@@ -136,7 +148,7 @@ final class ContentControl
         $control = self::find($xpath, $name);
 
         if (!$control instanceof DOMElement) {
-            throw new NoContentControl($name, self::tagsIn($xpath));
+            return null;
         }
 
         $content = $control->getElementsByTagNameNS(self::W_NS, 'sdtContent')->item(0);
@@ -155,6 +167,110 @@ final class ContentControl
         // where the control sits is what decides that.
         $parent = $control->parentNode;
 
+        if ($parent instanceof DOMElement) {
+            self::insertInto($dom, $elements, $parent, $control);
+            $parent->removeChild($control);
+        }
+
+        // `saveXML()` indents what it did not author, and whitespace that lands
+        // between a `w:t` and its text is *text* in Word: a document written out this
+        // way has every paragraph reading as the literal characters `<w:p>`. The
+        // formatting is off, and what whitespace is left is what the template
+        // brought with it rather than what this function added.
+        $dom->formatOutput = false;
+        $dom->preserveWhiteSpace = true;
+
+        return (string) $dom->saveXML();
+    }
+
+    /**
+     * Put the content at the end of the body, for a template that named no place for it.
+     *
+     * The fallback for {@see ContentFallback::Append}, and the only one that needs no
+     * agreement with the template's author — which is what makes it the right default
+     * for the templates this library did not write, since the alternative is a document
+     * with none of the caller's content in it.
+     *
+     * @param list<string> $elements The rendered blocks, as XML fragments.
+     *
+     * @throws MalformedDocument When the body part is not XML.
+     */
+    public function appendTo(string $docxPath, array $elements): void
+    {
+        $zip = new ZipArchive();
+
+        if ($zip->open($docxPath) !== true) {
+            throw new MalformedDocument(sprintf('Unable to open "%s" as a zip archive.', $docxPath));
+        }
+
+        try {
+            $part = WordPackage::bodyPart($zip);
+            $xml = $zip->getFromName($part);
+
+            if (!is_string($xml)) {
+                return;
+            }
+
+            $zip->deleteName($part);
+            $zip->addFromString($part, $this->appended($xml, $part, $elements));
+        } finally {
+            $zip->close();
+        }
+    }
+
+    /**
+     * @param list<string> $elements
+     * @throws MalformedDocument When the part is not XML.
+     */
+    private function appended(string $xml, string $part, array $elements): string
+    {
+        $dom = Xml::parse($xml) ?? throw new MalformedDocument(
+            sprintf('%s is not valid XML.', $part),
+        );
+
+        $xpath = new DOMXPath($dom);
+        $xpath->registerNamespace('w', self::W_NS);
+
+        $body = $xpath->query('//w:body')?->item(0);
+
+        if (!$body instanceof DOMElement) {
+            throw new MalformedDocument('The document has no body to put the content in.');
+        }
+
+        // The `w:sectPr` has to stay the last child of a `w:body`; anything after it is
+        // outside every section and carries none of the margins, header, footer or page
+        // numbering that section defines. A template whose only section is its last one
+        // — which is every letterhead — is a template whose content belongs before it.
+        $section = $xpath->query('//w:body/w:sectPr')?->item(0);
+
+        self::insertInto(
+            $dom,
+            $elements,
+            $body,
+            $section instanceof DOMNode ? $section : null,
+        );
+
+        $dom->formatOutput = false;
+        $dom->preserveWhiteSpace = true;
+
+        return (string) $dom->saveXML();
+    }
+
+    /**
+     * The rendered blocks, in order, into a container in front of a reference node.
+     *
+     * A null reference appends to the end of the container, which is what putting
+     * content in a body with no section properties means.
+     *
+     * @param list<string> $elements
+     * @throws MalformedDocument When a rendered block is not XML.
+     */
+    private static function insertInto(
+        DOMDocument $dom,
+        array $elements,
+        DOMElement $parent,
+        ?DOMNode $before,
+    ): void {
         foreach ($elements as $xml) {
             $block = Xml::parse(sprintf('<w xmlns:w="%s">%s</w>', self::W_NS, $xml));
 
@@ -170,29 +286,53 @@ final class ContentControl
                     continue;
                 }
 
-                $parent?->insertBefore($dom->importNode($child, true), $control);
+                $parent->insertBefore($dom->importNode($child, true), $before);
             }
         }
-
-        $parent?->removeChild($control);
-
-        // `saveXML()` indents what it did not author, and whitespace that lands
-        // between a `w:t` and its text is *text* in Word: a document written out this
-        // way has every paragraph reading as the literal characters `<w:p>`. The
-        // formatting is off, and what whitespace is left is what the template
-        // brought with it rather than what this function added.
-        $dom->formatOutput = false;
-        $dom->preserveWhiteSpace = true;
-
-        return (string) $dom->saveXML();
     }
 
     /**
-     * Every tag in the part, for a failure that has to say what would have worked.
+     * The tags the document's controls carry, for a failure that has to say what would
+     * have worked.
      *
-     * @return list<string>
+     * A template that was refused is worth telling what it *does* have: a letterhead
+     * whose control is called `terms` is one tag away from working, and "the template
+     * has no `body` control" on its own reads as though it has none.
+     *
+     * @return list<string> Sorted, so the sentence reads the same way twice.
      */
-    private static function tagsIn(DOMXPath $xpath): array
+    public function tagsIn(string $docxPath): array
+    {
+        $zip = new ZipArchive();
+
+        if ($zip->open($docxPath) !== true) {
+            return [];
+        }
+
+        try {
+            $xml = $zip->getFromName(WordPackage::bodyPart($zip));
+
+            if (!is_string($xml)) {
+                return [];
+            }
+
+            $dom = Xml::parse($xml);
+
+            if ($dom === null) {
+                return [];
+            }
+
+            $xpath = new DOMXPath($dom);
+            $xpath->registerNamespace('w', self::W_NS);
+
+            return self::tagsOf($xpath);
+        } finally {
+            $zip->close();
+        }
+    }
+
+    /** @return list<string> */
+    private static function tagsOf(DOMXPath $xpath): array
     {
         $tags = [];
 

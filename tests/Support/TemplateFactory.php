@@ -64,6 +64,33 @@ final class TemplateFactory
     }
 
     /**
+     * A template shaped the way a real one is: a masthead, a salutation, fields for
+     * the values, and a closing block a person wrote by hand. **No content controls at
+     * all**, because nobody making a company letterhead inserts one.
+     *
+     * This is the case the renderer has to survive. A template authored for a
+     * particular tool carries that tool's placeholder; one authored in Word to be
+     * filled in by a person carries none, and refusing those would leave the library
+     * able to use only the templates it wrote itself.
+     */
+    public static function letterhead(): string
+    {
+        $phpWord = new PhpWord();
+        $section = $phpWord->addSection();
+
+        $section->addText('Northwind Ltd');
+        $section->addText('@@client@@');
+        $section->addText('Dear colleague,');
+        $section->addText('@@reference@@');
+        // The closing matter a letterhead ends with, which is the whole reason an
+        // append-at-the-end fallback has to be a decision rather than an accident.
+        $section->addText('Yours sincerely,');
+        $section->addText('The Management');
+
+        return self::withFields(self::write($phpWord, 'letterhead'));
+    }
+
+    /**
      * A template that names no place for the content under the name the renderer uses.
      *
      * It does carry a control, called something else, so the failure names what is
@@ -263,6 +290,21 @@ final class TemplateFactory
  */
 private static function withControl(string $path, string $body): string
 {
+    return self::withFields($path, $body);
+}
+
+/**
+ * Turn every `@@name@@` marker into a real `MERGEFIELD`, and put a content control of
+ * that name into the body.
+ *
+ * Two jobs rather than one because a real template can have either: {@see self::letterhead()}
+ * has fields and no control, which is what a letterhead a person made in Word looks
+ * like.
+ *
+ * @param string|null $body The control to add, or null for fields alone.
+ */
+private static function withFields(string $path, ?string $body = null): string
+{
     $zip = new ZipArchive();
     $zip->open($path);
     $xml = (string) $zip->getFromName('word/document.xml');
@@ -306,27 +348,29 @@ private static function withControl(string $path, string $body): string
         }
     }
 
-    $document = $dom->documentElement;
-    $control = Xml::parse(
-        sprintf(
-            '<root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
-            . 'xmlns:xml="http://www.w3.org/XML/1998/namespace">%s</root>',
-            ContentControl::markup($body),
-        ),
-    )?->documentElement?->firstChild;
+    if ($body !== null) {
+        $document = $dom->documentElement;
+        $control = Xml::parse(
+            sprintf(
+                '<root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+                . 'xmlns:xml="http://www.w3.org/XML/1998/namespace">%s</root>',
+                ContentControl::markup($body),
+            ),
+        )?->documentElement?->firstChild;
 
-    if (!$document instanceof DOMElement || !$control instanceof DOMNode) {
-        throw new RuntimeException('The content control could not be built.');
-    }
+        if (!$document instanceof DOMElement || !$control instanceof DOMNode) {
+            throw new RuntimeException('The content control could not be built.');
+        }
 
-    // Before the `w:sectPr`, which has to stay last in a body or Word rejects it.
-    $section = $xpath->query('//w:body/w:sectPr')?->item(0);
-    $bodyElement = $xpath->query('//w:body')?->item(0);
+        // Before the `w:sectPr`, which has to stay last in a body or Word rejects it.
+        $section = $xpath->query('//w:body/w:sectPr')?->item(0);
+        $bodyElement = $xpath->query('//w:body')?->item(0);
 
-    if ($section instanceof DOMNode) {
-        $bodyElement?->insertBefore($dom->importNode($control, true), $section);
-    } else {
-        $bodyElement?->appendChild($dom->importNode($control, true));
+        if ($section instanceof DOMNode) {
+            $bodyElement?->insertBefore($dom->importNode($control, true), $section);
+        } else {
+            $bodyElement?->appendChild($dom->importNode($control, true));
+        }
     }
 
     $zip = new ZipArchive();
