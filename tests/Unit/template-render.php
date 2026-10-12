@@ -5,6 +5,7 @@ declare(strict_types=1);
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Template\MarkdownTemplate;
+use MarkdownWord\Exception\NoContentControl;
 use MarkdownWord\Exception\TemplateNotFound;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
@@ -26,7 +27,7 @@ it('reports a missing template', function () {
 it('values are substituted', function () {
     $output = renderTemplate(Scratch::remember(TemplateFactory::report()), ['reference' => 'REF-1']);
 
-    expect(TemplateFactory::textOf($output))->toContain('Reference: REF-1');
+    expect(TemplateFactory::textOf($output))->toContain('REF-1');
 });
 
 it('markdown is inserted where the placeholder sits', function () {
@@ -34,7 +35,7 @@ it('markdown is inserted where the placeholder sits', function () {
         Scratch::remember(TemplateFactory::report()),
         ['reference' => 'REF-1'],
         static function (MarkdownTemplate $template): void {
-            $template->insert('summary', "First line\n\nSecond line");
+            $template->insert("First line\n\nSecond line", 'summary');
         },
     );
 
@@ -47,7 +48,7 @@ it('headings keep their structure inside a template', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', "# Title\n\nBody text");
+            $template->insert("# Title\n\nBody text");
         },
     );
 
@@ -59,7 +60,7 @@ it('lists survive template insertion', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', "- one\n- two");
+            $template->insert("- one\n- two");
         },
     );
 
@@ -72,7 +73,7 @@ it('lists keep their numbering inside a template', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', "- one\n- two");
+            $template->insert("- one\n- two");
         },
     );
 
@@ -94,8 +95,8 @@ it('different lists get distinct numbering', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', "- bullets");
-            $template->insert('body', "1. numbers");
+            $template->insert("- bullets");
+            $template->insert("1. numbers");
         },
     );
 
@@ -112,8 +113,8 @@ it('repeated identical lists share one definition', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', "- first");
-            $template->insert('body', "- second");
+            $template->insert("- first");
+            $template->insert("- second");
         },
     );
 
@@ -127,7 +128,7 @@ it('tables survive template insertion', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', "| a | b |\n| --- | --- |\n| 1 | 2 |");
+            $template->insert("| a | b |\n| --- | --- |\n| 1 | 2 |");
         },
     );
 
@@ -139,7 +140,7 @@ it('template styles can be targeted by name', function () {
         Scratch::remember(TemplateFactory::styled()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', '# Title');
+            $template->insert('# Title');
         },
         Configuration::create()->withStyles([Styles::HEADING_1 => 'Corp Title']),
     );
@@ -147,22 +148,34 @@ it('template styles can be targeted by name', function () {
     expect(TemplateFactory::xmlOf($output))->toContain('w:val="Corp Title"');
 });
 
-it('repeating region is cloned for each row', function () {
+it('a repeated row is written as a table in the Markdown', function () {
+    // What replaced `repeat()`: there is no row-cloning any more, so a list of records
+    // is a table in the document and the template styles it. The alternative — keeping
+    // a region dialect alongside Word's fields — is two ways to fill a template, which
+    // is what this removed.
     $output = renderTemplate(
-        Scratch::remember(TemplateFactory::report()),
-        ['reference' => 'REF-1'],
+        Scratch::remember(TemplateFactory::placeholder()),
+        [],
         static function (MarkdownTemplate $template): void {
-            $template->repeat('lines', [
-                ['line' => 'first'],
-                ['line' => 'second'],
-            ]);
+            $template->insert("| Item | Price |\n| --- | ---: |\n| Licence | 1,200 |\n| Support | 300 |");
         },
     );
 
     $text = TemplateFactory::textOf($output);
 
-    expect($text)->toContain('first');
-    expect($text)->toContain('second');
+    expect($text)->toContain('Licence');
+    expect($text)->toContain('1,200');
+    expect(TemplateFactory::xmlOf($output))->toContain('<w:tbl>');
+});
+
+it('a template with nowhere for the content says so, and names what it has', function () {
+    // The alternative is content silently landing at the end of the document, above a
+    // letterhead's own signature block, which looks like a finished document.
+    $renderer = new MarkdownTemplate(TemplateFactory::noControl());
+    $renderer->insert('# X');
+
+    expect(fn () => saveTemplate($renderer, Scratch::path('never')))
+        ->toThrow(NoContentControl::class, 'It does have: terms');
 });
 
 it('plain hyperlinks survive template insertion', function () {
@@ -170,7 +183,7 @@ it('plain hyperlinks survive template insertion', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', '[docs](https://example.com)');
+            $template->insert('[docs](https://example.com)');
         },
     );
 
@@ -183,7 +196,7 @@ it('hyperlinks with emphasis survive template insertion', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', '[**bold** link](https://example.com)');
+            $template->insert('[**bold** link](https://example.com)');
         },
     );
 
@@ -199,7 +212,7 @@ it('emphasised hyperlink keeps its bold run', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', '[**bold** link](https://example.com)');
+            $template->insert('[**bold** link](https://example.com)');
         },
     );
 
@@ -215,7 +228,7 @@ it('inserting empty markdown leaves the template intact', function () {
         Scratch::remember(TemplateFactory::placeholder()),
         [],
         static function (MarkdownTemplate $template): void {
-            $template->insert('body', '');
+            $template->insert('');
         },
     );
 
@@ -224,7 +237,7 @@ it('inserting empty markdown leaves the template intact', function () {
 
 it('to string produces a document', function () {
     $template = new MarkdownTemplate(Scratch::remember(TemplateFactory::placeholder()));
-    $template->insert('body', '# Title');
+    $template->insert('# Title');
 
     $bytes = renderTemplateToString($template);
 

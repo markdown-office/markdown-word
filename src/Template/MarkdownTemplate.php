@@ -18,26 +18,24 @@ use PhpOffice\PhpWord\TemplateProcessor;
 
 /**
  * Renders Markdown into an existing Word document used as a template: the
- * template supplies the styles and decides where the content goes.
+ * template supplies the styles, the letterhead and the values, and says where the
+ * content goes.
  *
- * Content is inserted into a *region* — a `${name}` marker, a `${slot}` marker on
- * a paragraph of its own, and a matching `${/name}` marker:
+ * Everything the template says is something Word already understands, because a
+ * template comes from Word and anything else would have to be invented here:
  *
- * ```
- * Report for ${customer}
- * ${body}
- * ${slot}
- * ${/body}
- * ```
+ * - **A value** is a `MERGEFIELD`, the field a person inserts with Ctrl+F9. Word
+ *   stores it as a field element, not as text, and {@see WordFields} fills it and then
+ *   takes it out again so a finished document holds no fields.
+ * - **A place for the content** is a **rich-text content control** named `body`, which
+ *   is the placeholder Word's Developer tab inserts and the only thing in Word that can
+ *   hold whole paragraphs where the author chose. {@see ContentControl} fills it and
+ *   removes it.
  *
- * {@see self::insert()} clones the region once per rendered block and replaces the
- * slot paragraph of each clone; {@see self::repeat()} clones it once per row and
- * fills `${name#1}`…`${name#N}` instead. A plain `${name}` macro is for a single-line
- * value ({@see self::set()}).
- *
- * A template that is not there is a {@see TemplateNotFound}; every other way this
- * can fail is a {@see FileNotWritable} — the template was fine and the machine was
- * not.
+ * A template that is not there is a {@see TemplateNotFound}; a template that names no
+ * place for the content is a {@see \MarkdownWord\Exception\NoContentControl}, which
+ * names the controls it does have. Every other way this can fail is a
+ * {@see FileNotWritable} — the template was fine and the machine was not.
  *
  * The staged document is moved into place rather than written there, so the
  * template on disk is never opened for writing: a path that is a hard link to it
@@ -45,9 +43,6 @@ use PhpOffice\PhpWord\TemplateProcessor;
  */
 final class MarkdownTemplate
 {
-    /** The variable the renderer fills inside a region. */
-    public const SLOT = 'slot';
-
     private readonly TemplateProcessor $processor;
 
     private readonly TemplatePackage $package;
@@ -57,6 +52,15 @@ final class MarkdownTemplate
     private readonly PhpWord $scratch;
 
     private readonly NumberingMerger $numbering;
+
+    /** @var array<string, string> */
+    private readonly array $fields;
+
+    /** @var list<AbstractElement>|null Rendered but not yet written; null when there is none. */
+    private ?array $content = null;
+
+    /** Which content control the content goes into, named by the template. */
+    private string $control = ContentControl::BODY;
 
     /**
      * @param array<string, string|int|float> $values Values substituted into single-line `${name}` placeholders.
@@ -111,9 +115,16 @@ final class MarkdownTemplate
         $this->scratch = new PhpWord();
         $this->numbering = new NumberingMerger($this->scratch);
 
+        // Kept rather than filled here: the fields live in the finished document, and
+        // filling them before the content has been inserted would be filling a document
+        // this class is still going to write over.
+        $folded = [];
+
         foreach ($values as $name => $value) {
-            $this->set((string) $name, (string) $value);
+            $folded[strtoupper((string) $name)] = (string) $value;
         }
+
+        $this->fields = $folded;
     }
 
     /**
@@ -126,79 +137,41 @@ final class MarkdownTemplate
     }
 
     /**
-     * Substitute a single-line value.
+     * The values for the fields in the template, by name.
      *
-     * @throws FileNotWritable when the document cannot be written, which the
-     *         processor reports by refusing to touch the template.
+     * The names are the ones a `MERGEFIELD` carries and are matched
+     * case-insensitively, because Word folds them to upper case when it stores
+     * them. A name no field asks for is kept and then ignored: a document may
+     * carry values for a template it is not always rendered into, and a value
+     * that goes unused is not an error.
      */
-    public function set(string $name, string $value): self
+    public function fields(array $fields): self
     {
-        // PHPWord leaves output escaping off by default, which would write a
-        // value containing `<` or `&` into the document as raw markup and
-        // produce a file Word cannot open.
-        OutputEscaping::enabled(function () use ($name, $value): void {
-            $this->processor->setValue($name, $value);
-        });
-
-        return $this;
-    }
-
-    /**
-     * Insert rendered Markdown into a `${name}`…`${/name}` region. The region
-     * must contain a `${slot}` paragraph, which is where the content lands; see
-     * the class docblock for the shape of the template.
-     *
-     * @throws FileNotWritable when the region cannot be resolved into the
-     *         document, or the document cannot be written.
-     */
-    public function insert(string $region, string $markdown): self
-    {
-        $elements = $this->render($markdown);
-
-        // Cloning the region zero times removes it. `TemplateProcessor::deleteBlock()`
-        // is not used: it assumes the markers share a paragraph and, when they do
-        // not, leaves an unbalanced `w:p` behind and the document stops parsing.
-        $this->processor->cloneBlock($region, count($elements), true, true);
-
-        foreach ($elements as $index => $element) {
-            // The XML is written here rather than through `setComplexBlock` so the
-            // numbering references can be pointed at this template's own list
-            // definitions; a list copied over unchanged would lose its bullets.
-            $this->processor->replaceXmlBlock(
-                self::SLOT . '#' . ($index + 1),
-                $this->numbering->renderElement($element),
-                'w:p',
-            );
+        foreach ($fields as $name => $value) {
+            $this->fields[strtoupper((string) $name)] = (string) $value;
         }
 
         return $this;
     }
 
     /**
-     * Repeat a `${name}`…`${/name}` region once per row. The region holds one
-     * macro per column, so a row of `['item' => 'Consulting', 'price' => '42
-     * EUR']` fills `${item}` and `${price}` in the first copy, the second copy,
-     * and so on.
+     * Render the Markdown, ready for {@see self::save()} to write where the template says.
      *
-     * @param list<array<string, string|int|float>> $rows
-     * @throws FileNotWritable when the region cannot be resolved into the
-     *         document, or the document cannot be written.
+     * Separate from the write because the content goes into the *finished* document: the
+     * template is written out first and this is written over it, so anything placed
+     * earlier would be lost.
+     *
+     * A template has one place for the content, so a second call replaces the first
+     * rather than adding to it. Appending is what a caller means when it hands over one
+     * Markdown document, and two blocks with nowhere to put them would leave the
+     * template's own content control holding one of them.
+     *
+     * @throws FileNotWritable when the Markdown cannot be rendered
      */
-    public function repeat(string $region, array $rows): self
+    public function insert(string $markdown, string $control = ContentControl::BODY): self
     {
-        // Zero clones drops the region; see the note in insert() about why
-        // `deleteBlock()` is avoided.
-        $this->processor->cloneBlock($region, count($rows), true, true);
-
-        if ($rows === []) {
-            return $this;
-        }
-
-        foreach ($rows as $index => $row) {
-            foreach ($row as $name => $value) {
-                $this->set((string) $name . '#' . ($index + 1), (string) $value);
-            }
-        }
+        $this->content = $this->render($markdown);
+        $this->control = $control;
 
         return $this;
     }
@@ -208,28 +181,15 @@ final class MarkdownTemplate
      *
      * @throws FileNotWritable when the document cannot be staged, its directory
      *         cannot be made, or the result cannot be written.
+     * @throws \MarkdownWord\Exception\NoContentControl when the template has nowhere
+     *         to put the content.
      */
     public function save(string $path): void
     {
         $temp = self::stage();
 
         try {
-            OutputEscaping::enabled(function () use ($temp): void {
-                $this->processor->saveAs($temp);
-            });
-
-            $payloads = $this->converter->pendingHyperlinks();
-
-            if ($payloads !== []) {
-                // Links whose label contains emphasis are written as placeholders;
-                // the writer turns them into real w:hyperlink elements in place.
-                DocxWriter::patchHyperlinks($temp, $payloads);
-            }
-
-            if ($this->numbering->hasNumbering()) {
-                $this->numbering->applyTo($temp);
-            }
-
+            $this->finish($temp);
             self::move($temp, $path);
         } finally {
             @unlink($temp);
@@ -240,15 +200,15 @@ final class MarkdownTemplate
      * The raw bytes of the resulting document.
      *
      * @throws FileNotWritable when the document cannot be staged or read back.
+     * @throws \MarkdownWord\Exception\NoContentControl when the template has nowhere
+     *         to put the content.
      */
     public function toString(): string
     {
         $temp = self::stage();
 
         try {
-            OutputEscaping::enabled(function () use ($temp): void {
-                $this->processor->saveAs($temp);
-            });
+            $this->finish($temp);
 
             $contents = file_get_contents($temp);
 
@@ -260,6 +220,56 @@ final class MarkdownTemplate
         } finally {
             @unlink($temp);
         }
+    }
+
+    /**
+     * Every pass that turns the staged copy of the template into the finished document.
+     *
+     * In this order, and the order is the whole of it:
+     *
+     * 1. PHPWord writes the template out unchanged.
+     * 2. The content goes in where the content control is. It has to be before the
+     *    hyperlink and numbering passes, because both edit the parts this one puts
+     *    elements into — a link written after the content is in would not find its
+     *    placeholder, and a list would come over pointing at a numbering part that the
+     *    third step has not written yet.
+     * 3. Hyperlinks whose label contains emphasis become real `w:hyperlink` elements.
+     * 4. The list definitions are carried over and the references pointed at them.
+     * 5. The fields are filled and unlinked, last, so a value can arrive in a
+     *    paragraph the earlier steps created.
+     *
+     * @throws FileNotWritable when a pass cannot write the staged document.
+     * @throws \MarkdownWord\Exception\NoContentControl when the template has nowhere to
+     *         put the content.
+     */
+    private function finish(string $temp): void
+    {
+        OutputEscaping::enabled(function () use ($temp): void {
+            $this->processor->saveAs($temp);
+        });
+
+        if ($this->content !== null) {
+            (new ContentControl())->fill(
+                $temp,
+                $this->control,
+                array_map(
+                    fn (AbstractElement $element): string => $this->numbering->renderElement($element),
+                    $this->content,
+                ),
+            );
+        }
+
+        $payloads = $this->converter->pendingHyperlinks();
+
+        if ($payloads !== []) {
+            DocxWriter::patchHyperlinks($temp, $payloads);
+        }
+
+        if ($this->numbering->hasNumbering()) {
+            $this->numbering->applyTo($temp);
+        }
+
+        (new WordFields($this->fields))->applyTo($temp);
     }
 
     /**

@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Tests\Support;
 
+use DOMDocument;
+use DOMElement;
+use DOMNode;
+use DOMXPath;
+use MarkdownWord\Template\ContentControl;
 use MarkdownWord\WordPackage;
+use MarkdownWord\Xml;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use RuntimeException;
@@ -21,9 +27,11 @@ use ZipArchive;
  */
 final class TemplateFactory
 {
+    private const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
     /**
-     * A template with a single value, a Markdown region and a repeating region —
-     * the constructs a typical report needs.
+     * A template with a field, a title and a place for the content — what a report
+     * letterhead actually needs.
      */
     public static function report(): string
     {
@@ -31,33 +39,40 @@ final class TemplateFactory
         $section = $phpWord->addSection();
 
         $section->addText('Quarterly Report');
-        $section->addText('Reference: ${reference}');
+        // The marker is the whole of the value, so the field's name is whatever is
+        // inside it. A marker in the middle of a sentence would need the text either
+        // side kept, which is what {@see self::withControl()} does when it splits.
+        $section->addText('@@reference@@');
 
-        $section->addText('${summary}');
-        $section->addText('${slot}');
-        $section->addText('${/summary}');
-
-        $section->addText('${lines}');
-        $section->addText('${line}');
-        $section->addText('${/lines}');
-
-        return self::write($phpWord, 'report');
+        // `summary` rather than `body`: a template names where its content goes, and a
+        // report letterhead whose body region is called `summary` is the ordinary case.
+        return self::withControl(self::write($phpWord, 'report'), 'summary');
     }
 
     /**
-     * A template with nothing but a Markdown region, for tests that only care
-     * about the inserted content.
+     * A template with nothing but a place for the content, for tests that only care
+     * about what is inserted.
      */
     public static function placeholder(string $name = 'body'): string
     {
         $phpWord = new PhpWord();
-        $section = $phpWord->addSection();
+        $phpWord->addSection();
 
-        $section->addText('${' . $name . '}');
-        $section->addText('${slot}');
-        $section->addText('${/' . $name . '}');
+        return self::withControl(self::write($phpWord, 'placeholder-' . $name), $name);
+    }
 
-        return self::write($phpWord, 'placeholder-' . $name);
+    /**
+     * A template that names no place for the content under the name the renderer uses.
+     *
+     * It does carry a control, called something else, so the failure names what is
+     * there — which is the whole of the fix for whoever has to write the template.
+     */
+    public static function noControl(): string
+    {
+        $phpWord = new PhpWord();
+        $phpWord->addSection();
+
+        return self::withControl(self::write($phpWord, 'no-control'), 'terms');
     }
 
     /**
@@ -70,12 +85,9 @@ final class TemplateFactory
         $phpWord->addParagraphStyle('CorpTitle', ['bold' => true, 'size' => 20]);
         $phpWord->addParagraphStyle('CorpBody', ['size' => 11]);
 
-        $section = $phpWord->addSection();
-        $section->addText('${body}');
-        $section->addText('${slot}');
-        $section->addText('${/body}');
+        $phpWord->addSection();
 
-        return self::write($phpWord, 'styled');
+        return self::withControl(self::write($phpWord, 'styled'), 'body');
     }
 
     /**
@@ -239,7 +251,109 @@ final class TemplateFactory
         return trim(implode("\n", $parts));
     }
 
-    private static function write(PhpWord $phpWord, string $name): string
+    /**
+ * Put a content control into a written template, and turn `@@name@@` into a field.
+ *
+ * Both are things PHPWord has no API for, which is the point: a template comes from
+ * Word, where a person inserts a content control from the Developer tab and a field
+ * with Ctrl+F9. Writing them here rather than with `${…}` markers is what keeps the
+ * tests honest about what the library actually reads.
+ *
+ * @param string $body Name of the content control the Markdown goes into.
+ */
+private static function withControl(string $path, string $body): string
+{
+    $zip = new ZipArchive();
+    $zip->open($path);
+    $xml = (string) $zip->getFromName('word/document.xml');
+    $zip->close();
+
+    $dom = Xml::parse($xml) ?? throw new RuntimeException(
+        sprintf('"%s" has a document part that is not XML.', $path),
+    );
+
+    $xpath = new DOMXPath($dom);
+    $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+    foreach ($xpath->query('//w:r[w:t]') ?: [] as $run) {
+        $text = $run->getElementsByTagNameNS(self::W_NS, 't')->item(0);
+
+        if (!$text instanceof DOMElement || !str_contains((string) $text->textContent, '@@')) {
+            continue;
+        }
+
+        // A marker is the whole of the value here, so the field takes the name
+        // inside it. Word does the same thing when a field is typed into a sentence:
+        // the run is split and the text either side of the field stays.
+        //
+        // `@@reference@@` splits into three parts — empty, the name, empty — so the
+        // name is the middle one and what is either side is what a sentence carries.
+        [, $name, $after] = explode('@@', (string) $text->textContent, 3);
+
+        $parent = $run->parentNode;
+        $field = self::mergeField($dom, $name);
+
+        $parent?->insertBefore($field, $run);
+        $parent?->removeChild($run);
+
+        if ($after !== '') {
+            $tail = $dom->createElementNS(self::W_NS, 'w:r');
+            $tailText = $dom->createElementNS(self::W_NS, 'w:t');
+            $tailText->setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+            $tailText->appendChild($dom->createTextNode($after));
+            $tail->appendChild($tailText);
+            $parent?->insertBefore($tail, $field->nextSibling);
+        }
+    }
+
+    $document = $dom->documentElement;
+    $control = Xml::parse(
+        sprintf(
+            '<root xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            . 'xmlns:xml="http://www.w3.org/XML/1998/namespace">%s</root>',
+            ContentControl::markup($body),
+        ),
+    )?->documentElement?->firstChild;
+
+    if (!$document instanceof DOMElement || !$control instanceof DOMNode) {
+        throw new RuntimeException('The content control could not be built.');
+    }
+
+    // Before the `w:sectPr`, which has to stay last in a body or Word rejects it.
+    $section = $xpath->query('//w:body/w:sectPr')?->item(0);
+    $bodyElement = $xpath->query('//w:body')?->item(0);
+
+    if ($section instanceof DOMNode) {
+        $bodyElement?->insertBefore($dom->importNode($control, true), $section);
+    } else {
+        $bodyElement?->appendChild($dom->importNode($control, true));
+    }
+
+    $zip = new ZipArchive();
+    $zip->open($path);
+    $zip->deleteName('word/document.xml');
+    $zip->addFromString('word/document.xml', (string) $dom->saveXML());
+    $zip->close();
+
+    return $path;
+}
+
+/** A `w:fldSimple` naming a `MERGEFIELD`, in the shape Word writes. */
+private static function mergeField(DOMDocument $dom, string $name): DOMElement
+{
+    $field = $dom->createElementNS(self::W_NS, 'w:fldSimple');
+    $field->setAttributeNS(self::W_NS, 'w:instr', ' MERGEFIELD ' . trim($name, ' ') . ' \\* MERGEFORMAT ');
+
+    $run = $dom->createElementNS(self::W_NS, 'w:r');
+    $text = $dom->createElementNS(self::W_NS, 'w:t');
+    $text->appendChild($dom->createTextNode('«' . trim($name, ' ') . '»'));
+    $run->appendChild($text);
+    $field->appendChild($run);
+
+    return $field;
+}
+
+private static function write(PhpWord $phpWord, string $name): string
     {
         $path = Scratch::path($name);
 
