@@ -89,7 +89,7 @@ foreach ([
         'imageBasePath' => $root . '/markdown',
     ]);
 
-    $path = $out . '/' . $name . '.docx';
+    $path = $out . '/' . $name . DOCX_EXTENSION;
     (new MarkdownToWord($markdown, $config))->save($path);
 
     $built[] = [$name, $description, $path];
@@ -257,7 +257,7 @@ foreach ([
     '21-dotx-report' => $dotxPath,
     '21-dotx-report.docx-template' => $docxTemplatePath,
 ] as $name => $template) {
-    $path = $out . '/' . $name . '.docx';
+    $path = $out . '/' . $name . DOCX_EXTENSION;
 
     (new MarkdownTemplate($template, reportStyle(), $reportValues))
         ->repeat('facts', $reportRows)
@@ -287,7 +287,7 @@ foreach ([
     'placeholder' => Options::IMAGE_PLACEHOLDER,
     'skip' => Options::IMAGE_SKIP,
 ] as $mode => $value) {
-    $path = $out . '/15-images-' . $mode . '.docx';
+    $path = $out . '/15-images-' . $mode . DOCX_EXTENSION;
     (new MarkdownToWord(
         $images,
         Configuration::create()->withOptions([
@@ -306,7 +306,7 @@ foreach ([
     '16-styled-tables' => 'Table style slots from the frontmatter.',
     '17-borderless-tables' => 'The table options, with no style slot.',
 ] as $name => $description) {
-    $path = $out . '/' . $name . '.docx';
+    $path = $out . '/' . $name . DOCX_EXTENSION;
     (new MarkdownToWord(
         (string) file_get_contents($root . '/markdown/' . $name . '.md'),
         Configuration::create(),
