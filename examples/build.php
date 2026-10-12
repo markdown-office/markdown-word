@@ -97,11 +97,14 @@ $templates = $root . '/templates';
 // rather than a build product — and this is how it is changed, so the generator and
 // the committed copy cannot drift apart without anyone editing a zip by hand.
 if (in_array('--write-template', $argv ?? [], true)) {
-    buildReportTemplate($templates . '/meridian-qbr.docx');
-    asTemplate($templates . '/meridian-qbr.docx', $templates . '/meridian-qbr.dotx');
-    @unlink($templates . '/meridian-qbr.docx');
+    $asDocument = $templates . '/meridian-qbr' . DOCX_EXTENSION;
+    $asTemplate = $templates . '/meridian-qbr.dotx';
 
-    printf("Wrote %s\n", $templates . '/meridian-qbr.dotx');
+    buildReportTemplate($asDocument);
+    asTemplate($asDocument, $asTemplate);
+    @unlink($asDocument);
+
+    printf("Wrote %s\n", $asTemplate);
 
     exit(0);
 }
@@ -837,9 +840,15 @@ function replaceMarkers(DOMDocument $dom, DOMElement $run, array $before): void
             continue;
         }
 
-        $nodes[] = $index % 2 === 1
-            ? mergeField($dom, $piece, $index === 1 ? ($before[$piece] ?? '') : '')
-            : textRun($dom, $piece);
+        if ($index % 2 === 0) {
+            $nodes[] = textRun($dom, $piece);
+
+            continue;
+        }
+
+        // Only the first field in a run takes the text that goes before it; the rest
+        // are preceded by a separator the template already wrote.
+        $nodes[] = mergeField($dom, $piece, $index === 1 ? ($before[$piece] ?? '') : '');
     }
 
     foreach ($nodes as $node) {
