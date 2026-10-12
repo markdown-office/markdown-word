@@ -212,13 +212,13 @@ final class WordFields
                 continue;
             }
 
-            $name = self::complexName($paragraph, $begin);
+            $name = self::complexName($begin);
 
             if ($name === null || !isset($this->values[$name])) {
                 continue;
             }
 
-            $runs = self::runsFrom($paragraph, $begin);
+            $runs = self::runsFrom($begin);
             $end = self::runWhereCharIs($runs, 'end');
 
             if ($end === null) {
@@ -254,7 +254,7 @@ final class WordFields
      * The instruction may be split across several `w:instrText` runs — Word does that
      * when it wraps a long instruction — so every run up to the `separate` is read.
      */
-    private static function complexName(DOMElement $paragraph, DOMElement $begin): ?string
+    private static function complexName(DOMElement $begin): ?string
     {
         $instruction = '';
         $node = $begin->nextSibling;
@@ -307,7 +307,7 @@ final class WordFields
      *
      * @return list<DOMElement>
      */
-    private static function runsFrom(DOMElement $paragraph, DOMElement $begin): array
+    private static function runsFrom(DOMElement $begin): array
     {
         $runs = [];
         $node = $begin;

@@ -63,6 +63,11 @@ const AFTER_PBDR = ['shd', 'tabs', 'suppressAutoHyphens', 'kinsoku', 'wordWrap',
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
+// The two types a Word package's body can be declared as, which is the whole of what
+// a `.docx` and a `.dotx` differ by.
+const DOCUMENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+const TEMPLATE_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
+
 /** The house logo, put in the template's header. */
 const LOGO = __DIR__ . '/markdown/assets/example-logo-meridian.png';
 
@@ -268,14 +273,12 @@ $built[] = ['13-frontmatter-override', 'Frontmatter outranked by the configurati
 // creating a new document from itself rather than opening.
 
 $dotxPath = $root . '/templates/meridian-qbr.dotx';
-$docxTemplatePath = $out . '/meridian-qbr.docx';
+$docxTemplatePath = $out . '/meridian-qbr' . DOCX_EXTENSION;
 
 asDocument($dotxPath, $docxTemplatePath);
 
-$DOCUMENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
-
-assertPackageType($dotxPath, 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml');
-assertPackageType($docxTemplatePath, $DOCUMENT_TYPE);
+assertPackageType($dotxPath, TEMPLATE_TYPE);
+assertPackageType($docxTemplatePath, DOCUMENT_TYPE);
 
 // The corporate example: a report rendered into a letterhead that carries its own
 // logo, fonts and sizes.
@@ -298,7 +301,7 @@ foreach ([
 
     // The claim the pair exists to show, checked rather than written in a README:
     // whichever kind of template it was rendered into, what comes out is a document.
-    assertPackageType($path, $DOCUMENT_TYPE);
+    assertPackageType($path, DOCUMENT_TYPE);
 
     $built[] = [$name, 'Rendered into ' . basename($template) . '.', $path];
 }
@@ -749,10 +752,30 @@ function buildPlainTemplate(string $path): void
  */
 function fieldsIn(string $path, array $before = []): void
 {
+    foreach (partsWithFields($path) as $part) {
+        rewritePart($path, $part, static function (DOMDocument $dom) use ($before): void {
+            foreach (fieldRuns($dom) as $run) {
+                replaceMarkers($dom, $run, $before);
+            }
+        });
+    }
+}
+
+/**
+ * The parts of a template that can hold a field: the body, and every header and
+ * footer there is.
+ *
+ * The header and footer parts are numbered from one, and `hasPart()` says whether
+ * one is there rather than assuming the numbering is contiguous.
+ *
+ * @return list<string>
+ */
+function partsWithFields(string $path): array
+{
     $parts = ['word/document.xml'];
 
-    for ($index = 1; $index <= 99; $index++) {
-        foreach (['header', 'footer'] as $kind) {
+    foreach (['header', 'footer'] as $kind) {
+        for ($index = 1; $index <= 99; $index++) {
             $part = sprintf('word/%s%d.xml', $kind, $index);
 
             if (hasPart($path, $part)) {
@@ -761,47 +784,69 @@ function fieldsIn(string $path, array $before = []): void
         }
     }
 
-    foreach ($parts as $part) {
-        rewritePart($path, $part, static function (DOMDocument $dom) use ($before): void {
-            $xpath = new DOMXPath($dom);
-            $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+    return $parts;
+}
 
-            foreach ($xpath->query('//w:r[w:t]') ?: [] as $run) {
-                $text = $run->getElementsByTagNameNS(W_NS, 't')->item(0);
+/**
+ * Every run in a part that carries a marker.
+ *
+ * @return list<DOMElement>
+ */
+function fieldRuns(DOMDocument $dom): array
+{
+    $xpath = new DOMXPath($dom);
+    $xpath->registerNamespace('w', W_NS);
 
-                if (!$text instanceof DOMElement || !str_contains((string) $text->textContent, '@@')) {
-                    continue;
-                }
+    $runs = [];
 
-                $parent = $run->parentNode;
+    foreach ($xpath->query('//w:r[w:t]') ?: [] as $run) {
+        $text = $run->getElementsByTagNameNS(W_NS, 't')->item(0);
 
-                // A run can hold more than one marker — "a · b · c" is one string —
-                // so it is split as many times as it takes. The pieces alternate
-                // text, name, text, name, and they are built in that order and then
-                // appended before the run in one go: inserting each in turn before an
-                // anchor that moves with it would reverse them, which is how
-                // "Prepared for @@client@@" came out as "Contoso IndustrialPrepared
-                // for".
-                $nodes = [];
-
-                foreach (explode('@@', (string) $text->textContent) as $index => $piece) {
-                    if ($piece === '') {
-                        continue;
-                    }
-
-                    $nodes[] = $index % 2 === 1
-                        ? mergeField($dom, $piece, $index === 1 ? ($before[$piece] ?? '') : '')
-                        : textRun($dom, $piece);
-                }
-
-                foreach ($nodes as $node) {
-                    $parent?->insertBefore($node, $run);
-                }
-
-                $parent?->removeChild($run);
-            }
-        });
+        if ($text instanceof DOMElement && str_contains((string) $text->textContent, '@@')) {
+            $runs[] = $run;
+        }
     }
+
+    return $runs;
+}
+
+/**
+ * Split one run into the fields and text its markers stand for.
+ *
+ * The pieces alternate text, name, text, name, and they are built in that order and
+ * then inserted before the run together: inserting each in turn before an anchor that
+ * moves with it reverses them, which is how "Prepared for @@client@@" came out as
+ * "Contoso IndustrialPrepared for".
+ *
+ * @param array<string, string> $before
+ */
+function replaceMarkers(DOMDocument $dom, DOMElement $run, array $before): void
+{
+    $parent = $run->parentNode;
+
+    if (!$parent instanceof DOMElement) {
+        return;
+    }
+
+    $text = $run->getElementsByTagNameNS(W_NS, 't')->item(0);
+    $pieces = explode('@@', $text instanceof DOMElement ? (string) $text->textContent : '');
+    $nodes = [];
+
+    foreach ($pieces as $index => $piece) {
+        if ($piece === '') {
+            continue;
+        }
+
+        $nodes[] = $index % 2 === 1
+            ? mergeField($dom, $piece, $index === 1 ? ($before[$piece] ?? '') : '')
+            : textRun($dom, $piece);
+    }
+
+    foreach ($nodes as $node) {
+        $parent->insertBefore($node, $run);
+    }
+
+    $parent->removeChild($run);
 }
 
 /**
@@ -944,8 +989,7 @@ function ruleStyles(string $path, array $styles): void
  */
 function asDocument(string $source, string $target): void
 {
-    $document = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
-    $template = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
+    [$document, $template] = [DOCUMENT_TYPE, TEMPLATE_TYPE];
 
     copy($source, $target);
 
@@ -987,8 +1031,7 @@ function asDocument(string $source, string $target): void
  */
 function asTemplate(string $source, string $target): void
 {
-    $document = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
-    $template = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
+    [$document, $template] = [DOCUMENT_TYPE, TEMPLATE_TYPE];
 
     copy($source, $target);
 

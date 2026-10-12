@@ -109,38 +109,6 @@ final class ContentControl
         }
     }
 
-    /** Whether the template has a content control of that name, without filling one. */
-    public static function existsIn(string $docxPath, string $name): bool
-    {
-        $zip = new ZipArchive();
-
-        if ($zip->open($docxPath) !== true) {
-            return false;
-        }
-
-        try {
-            $part = WordPackage::bodyPart($zip);
-            $xml = $zip->getFromName($part);
-
-            if (!is_string($xml)) {
-                return false;
-            }
-
-            $dom = Xml::parse($xml);
-
-            if ($dom === null) {
-                return false;
-            }
-
-            $xpath = new DOMXPath($dom);
-            $xpath->registerNamespace('w', self::W_NS);
-
-            return self::find($xpath, $name) !== null;
-        } finally {
-            $zip->close();
-        }
-    }
-
     /**
      * The control of that name, as a list of the XPath results rather than one, because
      * a template may carry the same control in a header and in the body.

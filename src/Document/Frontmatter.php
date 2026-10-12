@@ -218,7 +218,13 @@ final class Frontmatter
             // A boolean a document wrote as `true` is a word to it and a letter to a
             // field, so it is spelled rather than cast: `1` in a letterhead is a
             // mystery, and `true` is what the author wrote.
-            $values[(string) $name] = is_bool($value) ? ($value ? 'true' : 'false') : $value;
+            if (is_bool($value)) {
+                $values[(string) $name] = $value ? 'true' : 'false';
+
+                continue;
+            }
+
+            $values[(string) $name] = $value;
         }
 
         return $values;
