@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "add68d95cff76dc4591cfa1730de76a4",
+    "content-hash": "1b4c8551c5f07723da32ab46a426248d",
     "packages": [
         {
             "name": "dflydev/dot-access-data",
@@ -272,7 +272,7 @@
         },
         {
             "name": "markdown-office/commonmark-generic-directives",
-            "version": "dev-main",
+            "version": "v0.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/markdown-office/commonmark-generic-directives.git",
@@ -291,7 +291,6 @@
             "require-dev": {
                 "pestphp/pest": "^3.0 || ^4.0 || ^5.0"
             },
-            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -321,9 +320,9 @@
             ],
             "support": {
                 "issues": "https://github.com/markdown-office/commonmark-generic-directives/issues",
-                "source": "https://github.com/markdown-office/commonmark-generic-directives/tree/main"
+                "source": "https://github.com/markdown-office/commonmark-generic-directives/tree/v0.2.0"
             },
-            "time": "2026-10-11T13:45:50+00:00"
+            "time": "2026-10-13T10:16:28+00:00"
         },
         {
             "name": "nette/schema",
@@ -5098,9 +5097,7 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {
-        "markdown-office/commonmark-generic-directives": 20
-    },
+    "stability-flags": {},
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {
