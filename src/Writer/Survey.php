@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Writer;
 
+use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\ImageDescriptionCollector;
 use MarkdownWord\Render\SvgAttachmentCollector;
 use PhpOffice\PhpWord\Element\AbstractContainer;
@@ -57,6 +58,7 @@ final class Survey
         PhpWord $phpWord,
         ?ImageDescriptionCollector $images = null,
         ?SvgAttachmentCollector $vectors = null,
+        ?Toc $tocs = null,
     ): self {
         $survey = new self();
 
@@ -70,6 +72,10 @@ final class Survey
 
         if ($vectors?->pendingAnyAttached() === true) {
             $survey->used['svg-vector'] = true;
+        }
+
+        if ($tocs?->isUsed() === true) {
+            $survey->used['table-of-contents'] = true;
         }
 
         $survey->vectorOnly = $vectors?->pendingWithoutRaster() === true;

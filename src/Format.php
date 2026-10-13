@@ -83,6 +83,7 @@ enum Format: string
                 'shading',
                 'paragraph-border',
                 'svg-vector',
+                'table-of-contents',
             ],
             // `Writer\RTF\Element\AbstractElement::writeOpening()` wants a
             // `Style\Paragraph` and this library's named styles are `Style\Font`;
@@ -100,6 +101,7 @@ enum Format: string
                 'image-alt-text',
                 'jpeg-label',
                 'svg-vector',
+                'table-of-contents',
             ],
         };
     }
@@ -162,5 +164,6 @@ enum Format: string
         'image-alt-text' => 'a picture is left with no alternative text',
         'jpeg-label' => 'a JPEG is written into the file labelled as a PNG',
         'svg-vector' => 'an SVG is flattened into a raster and cannot be scaled like a vector',
+        'table-of-contents' => 'a table of contents is left as the text ::toc rather than as a field Word can build',
     ];
 }

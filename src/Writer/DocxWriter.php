@@ -10,6 +10,7 @@ use MarkdownWord\Exception\UnreadableDocument;
 use MarkdownWord\Format;
 use MarkdownWord\Render\ImageDescriptionCollector;
 use MarkdownWord\Render\LinkPayloadCollector;
+use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\SvgAttachmentCollector;
 use PhpOffice\PhpWord\PhpWord;
 
@@ -57,13 +58,14 @@ final class DocxWriter
         ?LinkPayloadCollector $links = null,
         ?ImageDescriptionCollector $images = null,
         ?SvgAttachmentCollector $vectors = null,
+        ?Toc $tocs = null,
     ): string {
         return Staging::write(
             $phpWord,
             Format::Docx->writer(),
             $path,
-            static function (string $staged) use ($links, $images, $vectors): void {
-                self::patch($staged, $links, $images, $vectors);
+            static function (string $staged) use ($links, $images, $vectors, $tocs): void {
+                self::patch($staged, $links, $images, $vectors, $tocs);
             },
         );
     }
@@ -81,12 +83,13 @@ final class DocxWriter
         ?LinkPayloadCollector $links = null,
         ?ImageDescriptionCollector $images = null,
         ?SvgAttachmentCollector $vectors = null,
+        ?Toc $tocs = null,
     ): string {
         return Staging::toString(
             $phpWord,
             Format::Docx->writer(),
-            static function (string $staged) use ($links, $images, $vectors): void {
-                self::patch($staged, $links, $images, $vectors);
+            static function (string $staged) use ($links, $images, $vectors, $tocs): void {
+                self::patch($staged, $links, $images, $vectors, $tocs);
             },
         );
     }
@@ -112,9 +115,14 @@ final class DocxWriter
         ?LinkPayloadCollector $links,
         ?ImageDescriptionCollector $images,
         ?SvgAttachmentCollector $vectors,
+        ?Toc $tocs,
     ): void {
         if ($links?->hasPayloads() === true) {
             self::patchHyperlinks($docxPath, $links->payloads());
+        }
+
+        if ($tocs !== null && $tocs->payloads() !== []) {
+            (new TocPass($tocs->payloads()))->applyTo($docxPath);
         }
 
         $descriptions = $images?->take() ?? [];

@@ -11,6 +11,7 @@ use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
+use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
 use MarkdownWord\Render\HtmlFragmentRenderer;
@@ -45,6 +46,8 @@ final class MarkdownToWord implements Converter
     private ?ImageConversionCollector $conversions = null;
 
     private ?SvgAttachmentCollector $vectors = null;
+
+    private ?Toc $toc = null;
 
     /**
      * The format the last write went through, and what that document asked of the
@@ -372,12 +375,12 @@ final class MarkdownToWord implements Converter
     private function write(Format $format, PhpWord $phpWord, ?string $target): string
     {
         $this->format = $format;
-        $this->survey = Survey::of($phpWord, $this->images, $this->vectors);
+        $this->survey = Survey::of($phpWord, $this->images, $this->vectors, $this->toc);
 
         return match ($format) {
             Format::Docx => $target === null
-                ? DocxWriter::toString($phpWord, $this->links, $this->images, $this->vectors)
-                : DocxWriter::write($phpWord, $target, $this->links, $this->images, $this->vectors),
+                ? DocxWriter::toString($phpWord, $this->links, $this->images, $this->vectors, $this->toc)
+                : DocxWriter::write($phpWord, $target, $this->links, $this->images, $this->vectors, $this->toc),
             Format::Odt => $target === null
                 ? OdtWriter::toString($phpWord, $this->links, $this->images)
                 : OdtWriter::write($phpWord, $target, $this->links, $this->images),
@@ -473,6 +476,13 @@ final class MarkdownToWord implements Converter
         // inline renderer and a block one by the document renderer, and a name
         // means the same thing whichever of the two meets it.
         $directives = new Directives();
+
+        // Kept across renders, as the link collector beside it is, so the
+        // placeholder indices stay unique when one converter renders several
+        // documents — which is what the template renderer does.
+        $this->toc ??= new Toc($config->getOptions(), $styles, $this->format);
+
+        $directives = $directives->withBlock('toc', $this->toc);
 
         $inlines = new InlineRenderer(
             $styles,
