@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f7bce8ca46bad7460bfd00c33d0538ca",
+    "content-hash": "add68d95cff76dc4591cfa1730de76a4",
     "packages": [
         {
             "name": "dflydev/dot-access-data",
@@ -276,12 +276,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/markdown-office/commonmark-generic-directives.git",
-                "reference": "305098e3de74f8e1812c10209c2f4ffa210107d7"
+                "reference": "3fa56b2f0ec03fab8830a9c5e46bad5c354874c4"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/markdown-office/commonmark-generic-directives/zipball/305098e3de74f8e1812c10209c2f4ffa210107d7",
-                "reference": "305098e3de74f8e1812c10209c2f4ffa210107d7",
+                "url": "https://api.github.com/repos/markdown-office/commonmark-generic-directives/zipball/3fa56b2f0ec03fab8830a9c5e46bad5c354874c4",
+                "reference": "3fa56b2f0ec03fab8830a9c5e46bad5c354874c4",
                 "shasum": ""
             },
             "require": {
