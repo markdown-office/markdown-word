@@ -77,9 +77,9 @@ final class CommonMarkParser implements MarkdownParserInterface
     private array $extensions;
 
     /**
-     * @param list<class-string>|null $extensions `null` selects the default, GFM;
-     *        an empty list means CommonMark only, which is why the two cannot be
-     *        the same value.
+     * @param list<class-string>|null $extensions `null` selects
+     *        {@see self::DEFAULT_FLAVOUR}; an empty list means CommonMark only, which
+     *        is why the two cannot be the same value.
      * @param array<string, mixed> $config        Passed to the CommonMark
      *        {@see \League\CommonMark\Environment\Environment}.
      */
@@ -105,15 +105,9 @@ final class CommonMarkParser implements MarkdownParserInterface
      * On top of GFM: the Generic Directives RFC — `:name[…]`, `::name[…]`,
      * `:::name` … `:::`.
      *
-     * Opted into rather than folded into the default, because a directive is a
-     * word the author chose. `Status :green[go]` is a sentence today and a node
-     * the day this is on by default, and a parser nobody asked to change should
-     * not change the syntax of every document converted after it.
-     *
-     * That day came: this is now the default flavour, and the sentence is
-     * preserved by rendering a name nothing claims as its own source form, so
-     * `:green[go]` comes back out of the parser as the characters it was
-     * written as. {@see \MarkdownWord\Render\Directives}.
+     * Was opt-in, because a directive is a word the author chose and
+     * `Status :green[go]` is a sentence — the reasoning is below, and it is why
+     * this is now the default flavour without the sentence changing.
      *
      * Permissive, which is what the RFC describes and what the extension does
      * when given nothing: any well-formed directive parses.
@@ -153,10 +147,9 @@ final class CommonMarkParser implements MarkdownParserInterface
      *
      * They remain available by constructing the parser with an explicit list.
      *
-     * `GenericDirectiveExtension` is left out as well, and it is not one of this
-     * method's kind of thing: every entry here is a formatting construct with a
-     * rendering to match, and a directive has none yet. {@see self::directives()}
-     * is where a caller asks for the grammar.
+     * `GenericDirectiveExtension` is left out because {@see self::DEFAULT_FLAVOUR}
+     * already carries it and this method is about the extensions that are *not*
+     * on by default; listing it here as well would put it in twice.
      */
     public static function withAllExtensions(): self
     {

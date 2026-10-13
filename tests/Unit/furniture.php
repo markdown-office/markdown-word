@@ -243,3 +243,25 @@ it('reads a header that is not a block as nothing at all', function () {
     expect(Frontmatter::of(['header' => 3])->header()->isEmpty())->toBeTrue()
         ->and(Frontmatter::of(['footer' => 'yes please'])->footer()->isEmpty())->toBeTrue();
 });
+it('says a block that is not a mapping of keys is not one', function (mixed $header) {
+    // `Furniture::fromArray()` drops a block it cannot read, so a `header:` written as
+    // a value or as a list produces a document with no header and nothing saying why —
+    // while `options:` and `styles:` in the same position are reported. A key a reader
+    // believes they set, silently not setting it, is the failure this library's error
+    // reporting exists to prevent.
+    $problems = Frontmatter::of(['header' => $header])->shapeProblems();
+
+    expect($problems)->not->toBe([])
+        ->and($problems[0])->toContain('not a mapping of keys');
+})->with([
+    'a plain value' => 'Acme Ltd',
+    'a list' => ['one', 'two'],
+    'a number' => 3,
+]);
+
+it('leaves a header that is a mapping of keys unremarked', function () {
+    expect(Frontmatter::of(['header' => ['align' => 'center']])->shapeProblems())->toBe([])
+        // Including an empty one, which is a document saying "no overrides" rather than
+        // one that never mentioned a header.
+        ->and(Frontmatter::of(['header' => []])->shapeProblems())->toBe([]);
+});

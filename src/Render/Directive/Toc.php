@@ -71,10 +71,18 @@ final class Toc
     /** Whether any document asked for a table of contents, whatever it was written as. */
     private bool $used = false;
 
+    /**
+     * @param bool $carries Whether a placeholder written here will be swapped for the
+     *        field. False when the elements are going to be copied into a document this
+     *        library is not writing, because then nobody runs
+     *        {@see \MarkdownWord\Writer\TocPass} over the result and the placeholder
+     *        would survive into it.
+     */
     public function __construct(
         private readonly Options $options,
         private readonly StyleResolver $styles,
         private readonly ?Format $format = null,
+        private readonly bool $carries = true,
     ) {
     }
 
@@ -97,7 +105,7 @@ final class Toc
         // asked for a table of contents must not be told it lost one.
         $this->used = true;
 
-        if (($this->format ?? Format::Docx) !== Format::Docx) {
+        if (!$this->carries || ($this->format ?? Format::Docx) !== Format::Docx) {
             $target->addTextRun($this->styles->paragraphStyleFor(Styles::PARAGRAPH))->addText((string) $node);
 
             return;

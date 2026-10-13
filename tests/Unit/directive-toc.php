@@ -10,6 +10,7 @@ use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Tests\Support\Scratch;
+use MarkdownWord\Text\TextExtractor;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\Writer\TocPass;
@@ -414,4 +415,21 @@ it('takes the second format\'s loss rather than the first\'s', function () {
     $converter->convertTo(Format::Odt, Scratch::path('order', '.odt'));
 
     expect(array_column($converter->pendingLosses(), 'feature'))->toContain('table-of-contents');
+});
+
+it('is carried by toPhpWord(), which never writes and so never sets a format', function () {
+    // `toPhpWord()` renders into a PhpWord the caller writes themselves, and writes
+    // nothing — so the format property it would read is whatever it was left at. Left
+    // null that reads as "not docx" and the handler draws the source form, in a
+    // document the caller is about to write as a `.docx`, which is the format every
+    // other part of the library defaults to.
+    $converter = new MarkdownToWord("::toc\n\n# One\n");
+    $phpWord = $converter->toPhpWord("::toc\n\n# One\n");
+
+    // `TextExtractor` rather than reaching into the tree: it is what a caller reading
+    // a rendered document uses, and the placeholder is a text node exactly as a
+    // footnote's mark would be.
+    $text = MarkdownWord\Text\TextExtractor::fromPhpWord($phpWord);
+
+    expect($text)->not->toContain(Toc::MARKER);
 });

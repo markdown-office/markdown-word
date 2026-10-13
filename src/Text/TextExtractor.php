@@ -6,6 +6,7 @@ namespace MarkdownWord\Text;
 
 use MarkdownWord\Render\LinkPayloadCollector;
 use PhpOffice\PhpWord\Element\AbstractContainer;
+use MarkdownWord\Render\Directive\Toc;
 use PhpOffice\PhpWord\Element\Footnote;
 use PhpOffice\PhpWord\Element\Image;
 use PhpOffice\PhpWord\Element\Link;
@@ -66,12 +67,35 @@ final class TextExtractor
     }
 
     /**
+     * A run's text with the `::toc` placeholders taken out.
+     *
+     * By pattern rather than against a known list, because the number is per render and
+     * the counter restarts: the marker brackets a number no caller of this class knows.
+     */
+    private static function withoutTocPlaceholders(string $text): string
+    {
+        return (string) preg_replace(
+            '/' . preg_quote(Toc::MARKER, '/') . '\d+' . preg_quote(Toc::MARKER, '/') . '/u',
+            '',
+            $text,
+        );
+    }
+
+    /**
      * @param list<array{placeholder: string, url: string, title: ?string, runs: list<array{text: string, style: array<string, mixed>}>}> $hyperlinks
      */
     private static function fromElement(mixed $element, string $separator, array $hyperlinks = []): string
     {
         if ($element instanceof Text) {
-            return LinkPayloadCollector::substitute($element->getText(), $hyperlinks);
+            // Both placeholders are swapped out while the file is written, so a text
+            // extraction taken from the element tree before that sees them. The
+            // hyperlink one is resolved here because its payload is in hand; a table of
+            // contents' placeholder cannot be — the field it stands for is built from
+            // the directive, which is not in the tree — so it is dropped rather than
+            // reported as part of the document's wording.
+            return str_contains($text = $element->getText(), Toc::MARKER)
+                ? self::withoutTocPlaceholders(LinkPayloadCollector::substitute($text, $hyperlinks))
+                : LinkPayloadCollector::substitute($text, $hyperlinks);
         }
 
         if ($element instanceof Link) {
@@ -122,7 +146,11 @@ final class TextExtractor
 
         foreach ($container->getElements() as $child) {
             if ($child instanceof Text) {
-                $parts[] = LinkPayloadCollector::substitute($child->getText(), $hyperlinks);
+                // Both ways in see a `::toc` placeholder: it is written as a run of its
+                // own, so it arrives here and not through {@see self::fromElement()}.
+                $parts[] = self::withoutTocPlaceholders(
+                    LinkPayloadCollector::substitute($child->getText(), $hyperlinks),
+                );
             } elseif ($child instanceof Link) {
                 $parts[] = $child->getText();
             } elseif ($child instanceof Image) {

@@ -59,9 +59,12 @@ All notable changes to this project are documented here. The format follows
   written down at conversion time, which is what makes a page number right on
   the page the document lands on.
 
-  Frontmatter wins over a `.dotx` template **per key**, the same rule `styles:`
-  uses. An empty block writes no part at all, rather than an empty band on every
-  page of a document that asked for nothing.
+  An empty block writes no part at all, rather than an empty band on every page of
+  a document that asked for nothing.
+
+  A `.dotx` may carry a header and footer of its own, and these do not merge with
+  them: the template's parts are its own, and a `header:` in the frontmatter is
+  ignored on that path. Set the header in the template, or render without one.
 
   `.odt` carries neither, and says so through `Format::drops()`. `.rtf` carries
   both — the footer is written by `Writer\RTF\Part\Document` rather than by a

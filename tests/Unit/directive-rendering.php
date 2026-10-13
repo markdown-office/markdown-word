@@ -49,6 +49,28 @@ it('draws an inline directive nobody claims with its attributes intact', functio
         ->toBe('Ship it :badge[PRODUCTION]{type="warning"} today.');
 });
 
+it('collapses the whitespace of an unclaimed directive, and says so', function () {
+    // The source form is the *node* rendered, not the author's bytes: `addText()`
+    // collapses runs of whitespace, as a browser does and as any other text in the
+    // document does. So a directive drawn as its own source is not byte-identical to
+    // what was typed.
+    //
+    // Asserted rather than left to be discovered, because the claim made in the README
+    // is that an unclaimed directive "comes back out as the characters the author
+    // typed", and for two inputs that is not quite true. The re-quoting of attribute
+    // values is in the table beside it; this is not, and should be.
+    expect(renderText(':green[go   fast]'))->toBe(':green[go fast]')
+        ->and(renderText(":green[a\nb]"))->toBe(':green[a b]');
+});
+
+it('drops the brackets of an unclaimed directive with an empty label', function () {
+    // `:green[]` has nothing between the brackets, so `__toString()` writes no brackets
+    // at all. A mark a reader cannot act on and cannot match, where the document is
+    // preserved, is better than the alternative on this path — which is dropping it —
+    // but it is not the same characters either.
+    expect(renderText(':green[]'))->toBe(':green');
+});
+
 it('draws a leaf nobody claims as a paragraph of its own', function () {
     // A leaf has no body, so there is nothing left to descend into and the old
     // fallthrough dropped it entirely — label included — leaving a hole where

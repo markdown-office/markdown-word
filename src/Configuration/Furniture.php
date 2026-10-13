@@ -54,7 +54,13 @@ final class Furniture
      * belongs in this list; without a line here it would be merged as an absence, and
      * could never be cleared once it had a value.
      *
-     * {@see \MarkdownWord\Configuration\Options} keeps the same list for the same reason.
+     * Empty, unlike {@see \MarkdownWord\Configuration\Options}'s, and deliberately so:
+     * that list has two properties because clearing an image base path is a thing a
+     * document does, whereas every property here defaults to null already, so dropping
+     * the key and keeping it reach the same object. It is listed rather than
+     * inlined so a property that comes to mean something when it is null has one place
+     * to be named — and so a reader comparing the two classes is comparing the two
+     * decisions rather than assuming they are the same one.
      *
      * @var list<string>
      */

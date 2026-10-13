@@ -383,14 +383,18 @@ it('refuses a header naming a key nothing reads', function () {
     expect(fn () => furnitureDocx("---\nheader:\n  algin: right\n---\n\nBody.\n"))
         ->toThrow(InvalidConfigurationValue::class);
 
-    // And it says which block, so a document with a head and a foot is not a
-    // guessing game.
+    // And it says which block, so a document with a head and a foot is not a guessing
+    // game. A `try`/`catch` with the assertions inside would pass if nothing were
+    // thrown at all, so this asks for the exception first and reads it after.
+    $message = null;
+
     try {
         furnitureDocx("---\nfooter:\n  align: middle\n---\n\nBody.\n");
     } catch (InvalidConfigurationValue $e) {
-        expect($e->getMessage())->toContain('"footer"')
-            ->and($e->getMessage())->toContain('center, left, right');
+        $message = $e->getMessage();
     }
+
+    expect($message)->toContain('"footer"')->toContain('center, left, right');
 });
 
 // What the writer cannot carry
@@ -417,31 +421,22 @@ it('says nothing about a header or a footer a document did not have', function (
 
 // What a document keeps from a template
 
-it('keeps a template slot the document does not name', function () {
+it('writes nothing for a document that names nothing', function () {
+    // The empty-form claim, at the point where it is applied rather than at the value
+    // object: `Furniture::isEmpty()` is what decides, and a writer that reached past it
+    // would put an empty band on every page of a document that asked for no header.
     $phpWord = new PhpWord();
     $section = $phpWord->addSection();
-    $config = new Configuration();
 
     (new FurnitureWriter())->draw(
-        furnitureRenderer($config, $phpWord),
-        Frontmatter::of(['header' => ['body' => 'Northwind Ltd']]),
+        furnitureRenderer(new Configuration(), $phpWord),
+        Frontmatter::of(['header' => []]),
         $section,
-        // What a template brought: an alignment, a rule and a page number.
-        Furniture::fromArray(['align' => 'right', 'border' => 'bottom', 'page' => true]),
     );
 
-    $path = Scratch::path('from-template');
+    $path = Scratch::path('nothing-named');
     IOFactory::createWriter($phpWord, 'Word2007')->save($path);
 
-    $header = TemplateFactory::xmlOf($path, 'word/header1.xml');
-
-    // The three keys the document never mentioned survive, and the one it did mention
-    // is the only one that changed. A merge that rebuilt from the document's array alone
-    // would return exactly what was written — which is what
-    // `tests/Unit/furniture.php` checks at the value object, and this is the same rule at
-    // the point where it is applied.
-    expect($header)->toContain('Northwind Ltd')
-        ->and($header)->toContain('<w:jc w:val="right"/>')
-        ->and($header)->toContain('<w:bottom w:val="single" w:sz="6" w:color="auto"/>')
-        ->and($header)->toMatch('~<w:instrText[^>]*>\s*PAGE\s*</w:instrText>~');
+    expect($section->getHeaders())->toBe([])
+        ->and(TemplateFactory::hasPart($path, 'word/header1.xml'))->toBeFalse();
 });

@@ -389,7 +389,7 @@ look](#the-built-in-look) for the other half of that sentence.
 | A picture's alternative text | carried | carried | dropped |
 | An SVG | carried, vector beside its raster | flattened to a raster | flattened to a raster |
 | `:footnote[…]` | carried as a Word footnote | source form back | source form back |
-| A header and a footer | carried | carried | not carried |
+| A header and a footer | carried | not carried | carried |
 | `::toc` | carried as a field | source form back | source form back |
 | Rendering into a template | carried | not available | not available |
 
@@ -625,9 +625,14 @@ Inside the container.
 :::
 ```
 
-**A directive this library does not draw is drawn as the author wrote it.** That
-is what makes the syntax safe to have on by default, and it is a real decision
-rather than an absence of one:
+**A directive this library does not draw is drawn as the source form.** That is
+what makes the syntax safe to have on by default, and it is a real decision
+rather than an absence of one. It is the node rendered back into its own
+syntax, not the author's bytes, so three things come out slightly changed:
+attribute values are re-quoted where they were bare, runs of whitespace inside a
+label collapse, and the brackets of an empty label are not written. A sentence
+containing a directive you have not heard of therefore still reads as the
+sentence you wrote, and `:green[go   fast]` reads as `:green[go fast]`.
 
 | Written | In the document |
 | --- | --- |
@@ -724,6 +729,16 @@ library:
 Only `.docx` carries a footnote: neither other format has a writer for one, so
 they get the source form back and the loss is reported the usual way.
 
+**Through a `.dotx` template, every one of these three is drawn as its source
+form.** The template renderer copies elements into the template's own document
+rather than writing a package, so the parts this library writes *beside* a body
+never travel — a footnote part, a header part, the field a `::toc` placeholder
+stands for. Emitting them anyway leaves a document carrying a footnote
+reference to a note it does not contain and a run of invisible separators where
+a table of contents should be. So `::toc` and `:footnote` are drawn as
+`:footnote[…]`, `:footnote` reads as written rather than as a mark, and a
+`header:` block has no effect. Render without a template to use them.
+
 ### Headers and footers
 
 A document's running head and foot come from its frontmatter, and the body of
@@ -778,9 +793,9 @@ page 1 has no footer. Give `footer:` a `firstPage` too, or do not ask for one.
 page — which is what writing the part unconditionally would give a template that
 already carries a header of its own.
 
-Frontmatter wins over a `.dotx` template, **per key** — the same rule
-`styles:` uses, and for the same reason. `align: center` under a template's
-header centres the template's own content; naming `body` replaces it.
+A `.dotx` may carry its own header and footer, and this does not merge with
+them: the template's parts are its own, and a `header:` in the frontmatter is
+ignored on that path. Set the header in the template, or render without one.
 
 `.docx` and `.rtf` both carry a header and a footer. `.odt` carries neither —
 PHPWord has no part for either — so a document declaring one gets the loss

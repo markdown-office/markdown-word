@@ -57,8 +57,15 @@ final class MarkdownToWord implements Converter
     /**
      * The format the last write went through, and what that document asked of the
      * writer, so {@see self::pendingLosses()} has something to answer with.
+     *
+     * `Docx` rather than null, because two of the public entry points —
+     * {@see self::toPhpWord()} and {@see self::renderIntoContainer()} — render without
+     * writing and so never set it, and a directive handler reads it to decide whether it
+     * can carry what it is drawing. Null would read as "not docx" and hand those two a
+     * source form where the document is about to be written as a `.docx`, which is the
+     * format every other part of the library defaults to.
      */
-    private ?Format $format = null;
+    private ?Format $format = Format::Docx;
 
     private ?Survey $survey = null;
 
@@ -83,12 +90,23 @@ final class MarkdownToWord implements Converter
      *        names every setting there is, so it puts the built-in look above the
      *        frontmatter along with everything else — and, for the same reason, above a
      *        theme as well. See {@see \MarkdownWord\Configuration::withTheme()}.
+     * @param bool $detached Whether the rendered elements are going to be copied into
+     *        *another* document rather than written from here — which is what the
+     *        template renderer does, and what `deferredHyperlinks` exists for.
+     *
+     *        A part this library writes beside a body cannot travel: the elements are
+     *        carried over and the parts they were registered in are not. So a footnote, a
+     *        header part and the field a `::toc` placeholder stands for are each drawn as
+     *        what they are instead, because emitting them here leaves a document carrying
+     *        a footnote reference to a note the package does not contain, and a run of
+     *        invisible separators where a table of contents should be.
      */
     public function __construct(
         private readonly ?string $source = null,
         private readonly Configuration $config = new Configuration(),
         private readonly ?MarkdownParserInterface $parser = null,
         private readonly Configuration|array|null $overrides = null,
+        private readonly bool $detached = false,
     ) {
     }
 
@@ -482,11 +500,12 @@ final class MarkdownToWord implements Converter
         // means the same thing whichever of the two meets it.
         $directives = new Directives();
 
-        // Kept across renders, as the link collector beside it is, so the
-        // placeholder indices stay unique when one converter renders several
-        // documents — which is what the template renderer does.
-        $this->toc = new Toc($config->getOptions(), $styles, $this->format);
-        $this->footnotes = new Footnote($styles, $this->format);
+        // Rebuilt per render rather than cached on the converter, because each reads
+        // `$this->format` when it is drawn and a cached one keeps the format of the
+        // *first* render. One converter writing a `.docx` and then an `.odt` would hand
+        // the second a handler for the wrong format.
+        $this->toc = new Toc($config->getOptions(), $styles, $this->format, carries: !$this->detached);
+        $this->footnotes = new Footnote($styles, $this->format, carries: !$this->detached);
 
         $directives = $directives
             ->withBlock('toc', $this->toc)
@@ -519,7 +538,9 @@ final class MarkdownToWord implements Converter
         // whole section: a render into a container of its own — a template's content
         // control, a table cell — is somewhere a page has no top or bottom to put
         // them on, and PHPWord would write a part belonging to no section.
-        if ($container instanceof Section) {
+        // Only when the package is ours to write. A header part added to a scratch
+        // document the template renderer then empties is a header in no output at all.
+        if ($container instanceof Section && !$this->detached) {
             (new FurnitureWriter())->draw(
                 $renderer,
                 Frontmatter::fromDocument($document, $this->lastMarkdown),

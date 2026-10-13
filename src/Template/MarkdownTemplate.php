@@ -117,6 +117,7 @@ final class MarkdownTemplate
             $config->withOptions(['deferredHyperlinks' => true]),
             $parser,
             $overrides,
+            detached: true,
         );
 
         // Applied here rather than by the caller, because this converter is built with a

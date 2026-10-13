@@ -423,9 +423,26 @@ final class Frontmatter
                 continue;
             }
 
+            // A key with nothing under it is a document saying "no overrides", which is
+            // not the same claim as one that never mentioned a header and is the ordinary
+            // way to write one — so it is left unremarked, and writes no part at all.
             $value = $this->get($section);
 
+            if ($value === null) {
+                continue;
+            }
+
             if (self::mappingOf($value) === null) {
+                $problems[] = Validator::locate(
+                    sprintf(
+                        'The "%s" key of the frontmatter block is %s, which is not a mapping of keys. '
+                        . 'Each key goes on its own line, indented beneath it.',
+                        $section,
+                        Validator::show($value),
+                    ),
+                    $this->lineOf($section),
+                );
+
                 continue;
             }
 

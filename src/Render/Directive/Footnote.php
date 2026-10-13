@@ -62,9 +62,16 @@ final class Footnote
     /** Whether the document asked for a footnote, whatever format it is written in. */
     private bool $used = false;
 
+    /**
+     * @param bool $carries Whether a footnote drawn here can reach the finished
+     *        document. False when the rendered elements are going to be copied into a
+     *        document this library is not writing: the elements travel and the
+     *        `word/footnotes.xml` they were registered in does not.
+     */
     public function __construct(
         private readonly StyleResolver $styles,
         private readonly ?Format $format = null,
+        private readonly bool $carries = true,
     ) {
     }
 
@@ -87,7 +94,7 @@ final class Footnote
         // Only `.docx` can carry a footnote. The token a placeholder-and-pass design
         // would leave behind is not emitted at all, so there is nothing for a writer
         // that cannot do this to fail to take back out.
-        if (($this->format ?? Format::Docx) !== Format::Docx) {
+        if (!$this->carries || ($this->format ?? Format::Docx) !== Format::Docx) {
             $target->addText((string) $node, $this->styles->fontFor($style));
 
             return;

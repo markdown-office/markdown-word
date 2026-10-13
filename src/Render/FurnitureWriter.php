@@ -69,29 +69,23 @@ final class FurnitureWriter
 
     /**
      * Put whatever the frontmatter describes onto the section.
-     *
-     * @param Furniture|null $template What a template already has in this slot, and what
-     *        a document overrides a key at a time. See {@see Furniture::withAll()} for
-     *        why the merge is per key and not a replacement.
      */
     public function draw(
         DocumentRenderer $renderer,
         Frontmatter $frontmatter,
         Section $section,
-        ?Furniture $template = null,
     ): void {
-        $this->write($renderer, $frontmatter->header(), $section, $template, true);
-        $this->write($renderer, $frontmatter->footer(), $section, $template, false);
+        $this->write($renderer, $frontmatter->header(), $section, true);
+        $this->write($renderer, $frontmatter->footer(), $section, false);
     }
 
     private function write(
         DocumentRenderer $renderer,
         Furniture $written,
         Section $section,
-        ?Furniture $template,
         bool $header,
     ): void {
-        $furniture = ($template ?? new Furniture())->withAll($written->toArray());
+        $furniture = $written;
 
         if ($furniture->isEmpty()) {
             return;
