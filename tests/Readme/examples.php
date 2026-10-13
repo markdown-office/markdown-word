@@ -729,3 +729,57 @@ it('orders the four sources the way the table on the page says', function () {
         ->and($level(ConfigurationMerger::resolve(commandLine: $commandLine, frontmatter: $frontmatter)))->toBe(2)
         ->and($level(ConfigurationMerger::resolve(commandLine: $commandLine, frontmatter: $frontmatter, configFile: $fromFile)))->toBe(2);
 });
+
+/**
+ * The `w:pStyle` of the paragraph carrying the table of contents' title, or an
+ * empty string when it carries none.
+ */
+function readmeTocTitleStyle(string $body): string
+{
+    $dom = new DOMDocument();
+    $dom->loadXML($body);
+    $xpath = new DOMXPath($dom);
+    $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+    foreach ($xpath->query('//w:p') ?: [] as $paragraph) {
+        if (str_contains($paragraph->textContent, 'Contents')) {
+            foreach ($xpath->query('.//w:pStyle', $paragraph) ?: [] as $style) {
+                return $style->getAttribute('w:val');
+            }
+
+            return '';
+        }
+    }
+
+    return '';
+}
+
+it('the table of contents section, run', function () {
+    // Every claim on that section is about what Word is told rather than about what
+    // the document looks like, so each is read back out of the written file. A claim
+    // about a field can only be checked in the XML.
+    $document = Scratch::path('readme-toc');
+    (new MarkdownToWord("::toc{title=\"Contents\"}\n\n# One\n\n## Two\n"))->save($document);
+
+    $body = TemplateFactory::xmlOf($document);
+
+    // A field, and a complete one: a `begin` with nothing to close it is a document
+    // Word will not build a table of contents in.
+    expect($body)->toContain('TOC \\o "1-6" \\h \\z \\u')
+        ->and($body)->toContain('w:fldCharType="begin"')
+        ->and($body)->toContain('w:fldCharType="end"');
+
+    // Marked dirty, so Word evaluates it rather than showing the placeholder.
+    expect($body)->toContain('w:dirty="true"');
+
+    // The title above it, in the heading look but without the heading style, which
+    // is the whole of what stops it listing itself. Asked of the paragraph holding
+    // the title rather than of the document: a document with an `# One` in it has a
+    // `Heading1` of its own, and that is one more reason the two cannot be told
+    // apart by counting.
+    expect($body)->toContain('Contents')
+        ->and(readmeTocTitleStyle($body))->not->toContain('Heading1');
+
+    // And no cached entry claiming a page number nobody computed.
+    expect($body)->not->toContain('PAGEREF');
+});

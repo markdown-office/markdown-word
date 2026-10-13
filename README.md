@@ -597,6 +597,7 @@ result by converting a document in both directions before reporting success.
 | `---` | a paragraph with a bottom border |
 | Raw HTML | rebuilt as Word content, or shown as text, or dropped |
 | Footnotes, description lists | with `CommonMarkParser::extended()` |
+| A table of contents | `::toc`; see [A table of contents](#a-table-of-contents) |
 | Directives — `:name[…]`, `::name[…]`, `:::name` … `:::` | on by default; a name nothing draws comes back as the characters it was written as, see [Directives](#directives) |
 
 A link whose label contains formatting, such as `[**bold** link](url)`, becomes a
@@ -654,6 +655,42 @@ Names are not otherwise checked. `GenericDirectiveExtension` takes a
 `UnknownDirective` rather than being rendered as text — but `CommonMarkParser`
 builds its extensions from class names and cannot pass one in, so strict mode is
 not reachable through the factory.
+
+### A table of contents
+
+`::toc` writes a real Word table-of-contents field. Word builds it from the
+headings when the document opens, and only a field keeps it right as the
+document grows — a list of lines written here would be wrong the moment a
+section moved.
+
+```markdown
+::toc
+::toc{depth=2}
+::toc{title="Contents"}
+::toc{numbers=false}
+```
+
+| Attribute | |
+| --- | --- |
+| `depth` | how many heading levels, `1` to `6`. Defaults to `maxHeadingLevel` |
+| `title` | a heading above the field |
+| `numbers` | `false` leaves page numbers out (Word's `\n`) |
+
+Two details are worth knowing, because both are visible in the file:
+
+**There are no cached entries.** Word fills the field in on open; until it
+does, the field says *Press F9 to build the table of contents.* A cached
+alternative is possible and is worse — the page numbers would have to be
+guessed, and a table of contents claiming everything is on page 1 misleads
+precisely the reader who cannot refresh it.
+
+**`title` is drawn in the heading look but not with the heading style.** `TOC \o`
+collects by built-in heading style, so a title that carried one would list
+itself as the first entry of the contents it titles.
+
+Only `.docx` can carry the field. An `.odt` or an `.rtf` gets the source form
+back — `::toc` as a paragraph — and says so through the usual
+`Format::drops()` channel, the same as any other thing a format cannot hold.
 
 ## Word templates
 
