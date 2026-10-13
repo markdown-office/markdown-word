@@ -33,9 +33,24 @@ use MarkdownOffice\CommonMark\Directive\GenericDirectiveExtension;
  * walks that rather than HTML, so emphasis nesting, hard breaks, entity
  * references and link reference definitions arrive as the author wrote them
  * instead of flattened into a string of tags.
+ *
+ * Directives are on by default now, which is a change of behaviour rather than
+ * an addition: `Status :green[go]` parses as a directive instead of prose. It
+ * is safe because a directive this library does not draw is rendered as its own
+ * source form — see {@see \MarkdownWord\Render\Directives} — so a name nothing
+ * claims comes back out as the characters the author typed. Only a name the
+ * renderer claims changes a document.
  */
 final class CommonMarkParser implements MarkdownParserInterface
 {
+    /**
+     * Which of {@see self::FLAVOURS} a `new CommonMarkParser()` gets.
+     *
+     * A name rather than a list of classes so that the default is stated once and
+     * cannot drift between the constant, the docblock and the factory that is
+     * supposed to agree with it.
+     */
+    public const DEFAULT_FLAVOUR = 'directives';
     /**
      * What each set adds *on top of* CommonMark, which {@see self::parse()} adds
      * regardless.
@@ -70,7 +85,9 @@ final class CommonMarkParser implements MarkdownParserInterface
      */
     public function __construct(?array $extensions = null, private readonly array $config = [])
     {
-        $this->extensions = $extensions === null ? self::FLAVOURS['gfm'] : array_values($extensions);
+        $this->extensions = $extensions === null
+            ? self::FLAVOURS[self::DEFAULT_FLAVOUR]
+            : array_values($extensions);
     }
 
     public static function commonMarkOnly(): self
@@ -93,6 +110,11 @@ final class CommonMarkParser implements MarkdownParserInterface
      * the day this is on by default, and a parser nobody asked to change should
      * not change the syntax of every document converted after it.
      *
+     * That day came: this is now the default flavour, and the sentence is
+     * preserved by rendering a name nothing claims as its own source form, so
+     * `:green[go]` comes back out of the parser as the characters it was
+     * written as. {@see \MarkdownWord\Render\Directives}.
+     *
      * Permissive, which is what the RFC describes and what the extension does
      * when given nothing: any well-formed directive parses.
      * {@see GenericDirectiveExtension} also takes a {@see DirectiveRegistry},
@@ -103,10 +125,10 @@ final class CommonMarkParser implements MarkdownParserInterface
      * a registry on it gets a fresh one without it. Which default this library
      * wants is a question for its users, not one to settle in a constructor.
      *
-     * What reaches a Word document is temporary, and asserted in
-     * tests/Unit/directive-grammar.php: a container's body is drawn and the
-     * container is not, an inline directive is drawn as its label, and a leaf
-     * directive is dropped. The grammar comes first; the rendering follows.
+     * What reaches a Word document is decided by
+     * {@see \MarkdownWord\Render\Directives}: a name it draws is rendered, and
+     * a name it does not is rendered as its source form. Asserted in
+     * tests/Unit/directive-grammar.php.
      *
      * @see https://talk.commonmark.org/t/generic-directives-plugins-syntax/444
      */

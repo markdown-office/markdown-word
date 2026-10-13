@@ -617,21 +617,25 @@ it('parser flavours', function () {
 });
 
 it('the directives table on the page, run', function () {
-    // The page claims three shapes parse and none of them is drawn. Both halves are
-    // checked against a rendered document, because "what a directive looks like in
-    // Word" is a claim about the render and not about the markup.
+    // The page claims three shapes parse and what each becomes in Word. Every
+    // claim is checked against a rendered document, because "what a directive
+    // looks like in Word" is a claim about the render and not about the markup.
     $render = static fn (string $markdown): string => TextExtractor::fromPhpWord(
         (new MarkdownToWord(null, new Configuration(), CommonMarkParser::directives()))->toPhpWord($markdown),
     );
 
-    // The container's body is there and the container is not.
+    // The container's body is there and the fence is not, because a container's
+    // body is the author's own Markdown and the fence is not.
     expect($render(":::callout{type=info}\nInside the container.\n:::\n"))->toBe('Inside the container.');
 
-    // The inline directive keeps its label and nothing else.
-    expect($render("Ship it :badge[PRODUCTION]{type=success} today.\n"))->toBe('Ship it PRODUCTION today.');
+    // A name nothing draws comes back as the characters it was written as, so a
+    // sentence that happens to contain one is the sentence the author wrote.
+    expect($render("Ship it :badge[PRODUCTION]{type=success} today.\n"))
+        ->toBe('Ship it :badge[PRODUCTION]{type="success"} today.');
 
-    // A leaf has no body, so it leaves nothing behind.
-    expect($render("::image[caption]{src=\"chart.png\"}\n"))->toBe('');
+    // A leaf has no body to descend into, so it is drawn rather than dropped —
+    // dropping it would take the paragraph it stood between with it.
+    expect($render("::image[caption]{src=\"chart.png\"}\n"))->toBe('::image[caption]{src="chart.png"}');
 });
 
 it('the default parser: what needs extended() and what does not', function () {

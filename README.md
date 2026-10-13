@@ -597,7 +597,7 @@ result by converting a document in both directions before reporting success.
 | `---` | a paragraph with a bottom border |
 | Raw HTML | rebuilt as Word content, or shown as text, or dropped |
 | Footnotes, description lists | with `CommonMarkParser::extended()` |
-| Directives — `:name[…]`, `::name[…]`, `:::name` … `:::` | with `CommonMarkParser::directives()`; parsed but not yet drawn, see [Directives](#directives) |
+| Directives — `:name[…]`, `::name[…]`, `:::name` … `:::` | on by default; a name nothing draws comes back as the characters it was written as, see [Directives](#directives) |
 
 A link whose label contains formatting, such as `[**bold** link](url)`, becomes a
 genuine Word hyperlink *with* the bold applied. PHPWord cannot express that
@@ -607,7 +607,7 @@ into a `w:hyperlink` element while writing the file.
 ### Directives
 
 The [Generic Directives RFC](https://talk.commonmark.org/t/generic-directives-plugins-syntax/444)
-is parsed by `CommonMarkParser::directives()`, from
+is parsed by `CommonMarkParser`, from
 [`markdown-office/commonmark-generic-directives`](https://github.com/markdown-office/commonmark-generic-directives).
 Three shapes, told apart by their colons and by nothing else:
 
@@ -621,33 +621,39 @@ Inside the container.
 :::
 ```
 
-It is a parser, not a default. A directive is a word the author chose, so
-`Status :green[go]` is a sentence today and a node the day this is on by default
-— and a converter nobody asked to change should not change the syntax of every
-document converted after it.
-
-**What reaches a Word document is a decision this library has not made yet, and
-what happens today is a loss rather than a rendering.** The renderer has no case
-for either node type, and both walks end in "nothing claimed this node, so render
-whatever it holds":
+**A directive this library does not draw is drawn as the author wrote it.** That
+is what makes the syntax safe to have on by default, and it is a real decision
+rather than an absence of one:
 
 | Written | In the document |
 | --- | --- |
-| `:::callout{type=info}` … `:::` | the body, as ordinary Markdown; the container itself is gone |
-| `:badge[PRODUCTION]{type=success}` | the label `PRODUCTION`; the name and the attributes are gone |
-| `::image[caption]{src="chart.png"}` | nothing at all — a leaf has no body to fall back on |
+| `:::callout{type=info}` … `:::` | the body, as ordinary Markdown; the fence is gone |
+| `:badge[PRODUCTION]{type=success}` | `:badge[PRODUCTION]{type="success"}` — the same characters back |
+| `::image[caption]{src="chart.png"}` | `::image[caption]{src="chart.png"}` |
 
-Two directives differing only in their attributes therefore produce the same
-document, and a document written entirely in leaf directives raises
-`NothingToConvert` — it parsed, and rendered to nothing at all. Both are asserted
-in `tests/Unit/directive-grammar.php` and both are titled temporary: they are
-what the grammar does before the rendering catches up, not a decision to keep.
+A container is transparent because its body is the author's own Markdown and the
+fence is not; drawing the fence would put `:callout` in the document as a line of
+its own. A leaf has no body to fall back on, so the alternative to drawing it was
+dropping it — which took the paragraph it stood between with it.
 
-Names are not checked. `GenericDirectiveExtension` takes a `DirectiveRegistry`
-that makes it strict — an unregistered name raises `UnknownDirective` rather than
-being silently ignored — but `CommonMarkParser` builds its extensions from class
-names and cannot pass one in, so strict mode is not reachable through the factory
-yet. Which default this library wants is a question for its users.
+The third row is what a change of default turns on. Directives were once opt-in,
+because `Status :green[go]` is a sentence and a parser nobody asked to change
+should not change the syntax of every document converted after it. That reasoning
+still holds for a *drawn* name, so it is kept by drawing only the names this
+library has an implementation for, and everything else returns the characters as
+typed. Two directives differing only in their attributes still produce two
+different lines.
+
+What a name means is a decision per name, and it lives in
+[`src/Render/Directives.php`](src/Render/Directives.php) rather than in the
+parser. Names are matched without regard to case, since a document cannot be asked
+to care.
+
+Names are not otherwise checked. `GenericDirectiveExtension` takes a
+`DirectiveRegistry` that makes it strict — an unregistered name raises
+`UnknownDirective` rather than being rendered as text — but `CommonMarkParser`
+builds its extensions from class names and cannot pass one in, so strict mode is
+not reachable through the factory.
 
 ## Word templates
 
@@ -1397,9 +1403,9 @@ Use a different Markdown dialect:
 ```php
 use MarkdownWord\Parser\CommonMarkParser;
 
-new MarkdownToWord(null, $config, CommonMarkParser::commonMarkOnly());
+new MarkdownToWord(null, $config, CommonMarkParser::commonMarkOnly());   // no directives
 new MarkdownToWord(null, $config, CommonMarkParser::extended());      // + footnotes
-new MarkdownToWord(null, $config, CommonMarkParser::directives());    // + directives
+new MarkdownToWord(null, $config, CommonMarkParser::directives());    // the default
 new MarkdownToWord(null, $config, CommonMarkParser::withAllExtensions());
 ```
 

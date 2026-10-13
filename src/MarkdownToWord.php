@@ -11,6 +11,7 @@ use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
+use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
 use MarkdownWord\Render\HtmlFragmentRenderer;
 use MarkdownWord\Render\ImageConversionCollector;
@@ -468,12 +469,18 @@ final class MarkdownToWord implements Converter
         $this->conversions ??= new ImageConversionCollector();
         $this->vectors ??= new SvgAttachmentCollector();
 
+        // One registry for both renderers: an inline directive is handled by the
+        // inline renderer and a block one by the document renderer, and a name
+        // means the same thing whichever of the two meets it.
+        $directives = new Directives();
+
         $inlines = new InlineRenderer(
             $styles,
             new ImageResolver($config->getOptions(), $this->images, $this->conversions, $this->vectors, $this->format),
             $this->links,
             $html,
             $config->getOptions()->deferredHyperlinks,
+            $directives,
         );
 
         $renderer = new DocumentRenderer(
@@ -485,6 +492,7 @@ final class MarkdownToWord implements Converter
             // config file or a theme all name them.
             new NumberingRegistry($config, $phpWord),
             $html,
+            $directives,
         );
 
         $renderer->render($document, $container);

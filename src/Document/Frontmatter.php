@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord\Document;
 
 use League\CommonMark\Node\Block\Document;
+use MarkdownWord\Configuration\Furniture;
 use MarkdownWord\Configuration\Validator;
 use MarkdownWord\Exception\InvalidConfiguration;
 use MarkdownWord\Exception\InvalidConfigurationValue;
@@ -24,6 +25,12 @@ use MarkdownWord\Exception\InvalidConfigurationValue;
  * conversion, so they are read here and resolved beside the other configuration —
  * mixing them into `Options` would put a key in the configuration that no renderer
  * looks at, and leave a path unchecked.
+ *
+ * `header` and `footer` are a third shape, and not one to be handed on: what a running
+ * head is made of is content rather than a rendering behaviour, so it is read into
+ * {@see Furniture} through {@see self::header()} and {@see self::footer()} instead,
+ * which is also what lets a document override one slot of a template's header and keep
+ * the rest.
  *
  * The block is also where the source is: {@see self::lineOf()} answers where in a
  * file a given key sits, which is what lets a mistake in it be reported as "line 7"
@@ -228,6 +235,30 @@ final class Frontmatter
         }
 
         return $values;
+    }
+
+    /**
+     * The header a document describes, or an empty one.
+     *
+     * Read into {@see Furniture} rather than passed on with {@see self::toConfigurationArray()}
+     * because a running head is not a rendering behaviour switch: what goes in it is
+     * content — a body, a page number, a chapter reference — and {@see \MarkdownWord\Configuration\Options}
+     * has no `with*()` that would read one. A document that names no header gets an
+     * empty one rather than null, so a caller can ask {@see Furniture::isEmpty()} and
+     * write no header part at all.
+     */
+    public function header(): Furniture
+    {
+        return Furniture::fromArray($this->getArray('header'));
+    }
+
+    /**
+     * The footer a document describes, or an empty one. {@see self::header()} for the
+     * shape and the reason.
+     */
+    public function footer(): Furniture
+    {
+        return Furniture::fromArray($this->getArray('footer'));
     }
 
     /**

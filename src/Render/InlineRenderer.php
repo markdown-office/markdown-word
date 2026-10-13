@@ -17,6 +17,7 @@ use League\CommonMark\Node\Inline\AbstractStringContainer;
 use League\CommonMark\Node\Inline\Newline;
 use League\CommonMark\Node\Inline\Text;
 use League\CommonMark\Node\Node;
+use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration\Options;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 
@@ -36,6 +37,7 @@ final class InlineRenderer
         private readonly LinkPayloadCollector $links,
         private readonly HtmlFragmentRenderer $html,
         private readonly bool $deferredHyperlinks = false,
+        private readonly Directives $directives = new Directives(),
     ) {
     }
 
@@ -86,6 +88,16 @@ final class InlineRenderer
 
         if ($node instanceof Document) {
             return $this->render($node->children(), $target, $style, $onParagraphBreak);
+        }
+
+        if ($node instanceof DirectiveInline) {
+            if ($this->directives->drawInline($node, $target, $style)) {
+                return $target;
+            }
+
+            $this->renderUnclaimedDirective($node, $target, $style);
+
+            return $target;
         }
 
         if ($node instanceof Strong) {
@@ -147,6 +159,21 @@ final class InlineRenderer
         }
 
         return $target;
+    }
+
+    /**
+     * A directive name nothing claims, drawn as the author wrote it.
+     *
+     * Its label is a child, so without this the fallthrough above would draw the
+     * label and drop the rest — which is what happened before any name was
+     * registered, and it loses prose the moment directives are the default:
+     * `Status :green[go]` would come out as `Status go`, with the `:green[` gone
+     * and nothing to say where it went. `__toString()` round-trips to the source
+     * syntax, so drawing the node gives back the characters as typed.
+     */
+    private function renderUnclaimedDirective(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): void
+    {
+        $this->addText((string) $node, $target, $style);
     }
 
     private function renderLink(
