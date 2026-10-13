@@ -29,6 +29,7 @@
         "ext-mbstring": "*",
         "ext-zip": "*",
         "league/commonmark": "^2.10",
+        "markdown-office/commonmark-generic-directives": "^0.2.0",
         "phpoffice/phpword": "^1.4",
         "symfony/yaml": "^7.4 || ^8.1"
     },

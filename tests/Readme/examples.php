@@ -607,13 +607,31 @@ it('the reader hands back the block tree as well as the Markdown', function () {
 });
 
 it('parser flavours', function () {
-    foreach (['commonMarkOnly', 'extended', 'withAllExtensions'] as $flavour) {
+    foreach (['commonMarkOnly', 'extended', 'directives', 'withAllExtensions'] as $flavour) {
         $converter = new MarkdownToWord(null, new Configuration(), CommonMarkParser::{$flavour}());
 
         expect(withoutUpstreamDeprecations(
             static fn (): PhpWord => $converter->toPhpWord("# Title\n\n- a\n- b\n"),
         ))->toBeInstanceOf(PhpWord::class);
     }
+});
+
+it('the directives table on the page, run', function () {
+    // The page claims three shapes parse and none of them is drawn. Both halves are
+    // checked against a rendered document, because "what a directive looks like in
+    // Word" is a claim about the render and not about the markup.
+    $render = static fn (string $markdown): string => TextExtractor::fromPhpWord(
+        (new MarkdownToWord(null, new Configuration(), CommonMarkParser::directives()))->toPhpWord($markdown),
+    );
+
+    // The container's body is there and the container is not.
+    expect($render(":::callout{type=info}\nInside the container.\n:::\n"))->toBe('Inside the container.');
+
+    // The inline directive keeps its label and nothing else.
+    expect($render("Ship it :badge[PRODUCTION]{type=success} today.\n"))->toBe('Ship it PRODUCTION today.');
+
+    // A leaf has no body, so it leaves nothing behind.
+    expect($render("::image[caption]{src=\"chart.png\"}\n"))->toBe('');
 });
 
 it('the default parser: what needs extended() and what does not', function () {

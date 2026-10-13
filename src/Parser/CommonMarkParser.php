@@ -22,6 +22,8 @@ use League\CommonMark\Extension\Mention\MentionExtension;
 use League\CommonMark\Extension\NormalizeHeadings\NormalizeHeadingsExtension;
 use League\CommonMark\Node\Block\Document;
 use League\CommonMark\Parser\MarkdownParser;
+use MarkdownOffice\CommonMark\Directive\Directive\DirectiveRegistry;
+use MarkdownOffice\CommonMark\Directive\GenericDirectiveExtension;
 
 /**
  * The default parser: full CommonMark plus the GitHub-Flavored Markdown
@@ -47,6 +49,10 @@ final class CommonMarkParser implements MarkdownParserInterface
             GithubFlavoredMarkdownExtension::class,
             FootnoteExtension::class,
             DescriptionListExtension::class,
+        ],
+        'directives' => [
+            GithubFlavoredMarkdownExtension::class,
+            GenericDirectiveExtension::class,
         ],
     ];
 
@@ -79,6 +85,37 @@ final class CommonMarkParser implements MarkdownParserInterface
     }
 
     /**
+     * On top of GFM: the Generic Directives RFC — `:name[…]`, `::name[…]`,
+     * `:::name` … `:::`.
+     *
+     * Opted into rather than folded into the default, because a directive is a
+     * word the author chose. `Status :green[go]` is a sentence today and a node
+     * the day this is on by default, and a parser nobody asked to change should
+     * not change the syntax of every document converted after it.
+     *
+     * Permissive, which is what the RFC describes and what the extension does
+     * when given nothing: any well-formed directive parses.
+     * {@see GenericDirectiveExtension} also takes a {@see DirectiveRegistry},
+     * which makes it strict — an unregistered name raises `UnknownDirective`
+     * rather than being ignored — and that mode is *not* reachable from here, or
+     * from {@see self::__construct()}: the extension list is a list of class names
+     * and each one is built with `new`, so a caller handing over an instance with
+     * a registry on it gets a fresh one without it. Which default this library
+     * wants is a question for its users, not one to settle in a constructor.
+     *
+     * What reaches a Word document is temporary, and asserted in
+     * tests/Unit/directive-grammar.php: a container's body is drawn and the
+     * container is not, an inline directive is drawn as its label, and a leaf
+     * directive is dropped. The grammar comes first; the rendering follows.
+     *
+     * @see https://talk.commonmark.org/t/generic-directives-plugins-syntax/444
+     */
+    public static function directives(): self
+    {
+        return new self(self::FLAVOURS['directives']);
+    }
+
+    /**
      * A parser with every extension the installed `league/commonmark` release
      * ships with that can be enabled without extra configuration.
      *
@@ -93,6 +130,11 @@ final class CommonMarkParser implements MarkdownParserInterface
      *    placeholder that means little in a Word document.
      *
      * They remain available by constructing the parser with an explicit list.
+     *
+     * `GenericDirectiveExtension` is left out as well, and it is not one of this
+     * method's kind of thing: every entry here is a formatting construct with a
+     * rendering to match, and a directive has none yet. {@see self::directives()}
+     * is where a caller asks for the grammar.
      */
     public static function withAllExtensions(): self
     {

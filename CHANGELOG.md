@@ -33,6 +33,33 @@ All notable changes to this project are documented here. The format follows
   an `.odt` or an `.rtf` draws the picture from, so those two want one whatever this
   is set to.
 
+- **Directives parse, under `CommonMarkParser::directives()`.** The
+  [Generic Directives RFC](https://talk.commonmark.org/t/generic-directives-plugins-syntax/444)
+  — `:name[…]`, `::name[…]` and `:::name` … `:::` — through
+  [`markdown-office/commonmark-generic-directives`](https://github.com/markdown-office/commonmark-generic-directives):
+
+  ```php
+  new MarkdownToWord(null, $config, CommonMarkParser::directives());
+  ```
+
+  It is a parser rather than a default, because a directive is a word the author
+  chose: `Status :green[go]` is a sentence today and a node the day it is on by
+  default, and nothing should change the syntax of every document converted after
+  it.
+
+  **What a directive looks like in Word is not decided yet, and what happens today
+  is a loss.** The renderer has no case for either node type. A `:::` container
+  contributes its body and is then gone; `:name[label]{attrs}` contributes the
+  label and drops the name and the attributes; a `::leaf[…]` contributes nothing
+  at all, and a document of nothing but leaves raises `NothingToConvert`. It is
+  asserted in `tests/Unit/directive-grammar.php` and it is what the grammar does
+  before the rendering catches up.
+
+  Names are not checked. The extension can be given a `DirectiveRegistry` that
+  makes it raise `UnknownDirective` for a name it does not hold rather than
+  ignoring it, but `CommonMarkParser` builds its extensions from class names and
+  cannot pass one in, so strict mode is not reachable through the factory yet.
+
 ### Fixed
 
 - **A build that cannot rasterise an SVG no longer says it can.** The capability was
