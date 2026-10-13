@@ -609,10 +609,18 @@ final class Application
      * It is on because the precedence the README gives has a row for the frontmatter
      * sitting below the command line, and that row means nothing from a terminal
      * unless the terminal reads the block at all.
+     *
+     * The rest is {@see CommonMarkParser::DEFAULT_FLAVOUR} rather than the `gfm` it
+     * used to name, because a document converted from a terminal is a document
+     * converted, and the terminal was otherwise the one way to get a parser without
+     * directives — so `::toc` and a `header:` worked in a file and not in a shell.
      */
     public static function parser(): CommonMarkParser
     {
-        return new CommonMarkParser([...CommonMarkParser::FLAVOURS['gfm'], FrontMatterExtension::class]);
+        return new CommonMarkParser([
+            ...CommonMarkParser::FLAVOURS[CommonMarkParser::DEFAULT_FLAVOUR],
+            FrontMatterExtension::class,
+        ]);
     }
 
     /**

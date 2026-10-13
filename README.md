@@ -692,6 +692,70 @@ Only `.docx` can carry the field. An `.odt` or an `.rtf` gets the source form
 back — `::toc` as a paragraph — and says so through the usual
 `Format::drops()` channel, the same as any other thing a format cannot hold.
 
+### Headers and footers
+
+A document's running head and foot come from its frontmatter, and the body of
+each is **Markdown** — the same renderer, so bold, links and images all work.
+
+```markdown
+---
+options:
+  imageMaxWidth: 4
+header:
+  body: |
+    ![Logo](assets/logo.png)
+    **Meridian Analytics**
+  align: right
+  border: bottom
+  firstPage: true
+footer:
+  body: |
+    Page {page} of {total} — {filename}
+  align: center
+```
+
+| Key | |
+| --- | --- |
+| `body` | Markdown for the part |
+| `align` | `left`, `center`, `right` — a tab stop for the fields |
+| `border` | `top`, `bottom`, `both` |
+| `firstPage` | `true` gives page 1 a header of its own |
+| `even` | `true` gives even pages one, and turns on `w:evenAndOddHeaders` |
+
+`{page}`, `{total}`, `{date}`, `{chapter}` and `{filename}` become **real Word
+fields** — `PAGE`, `NUMPAGES`, `DATE`, `STYLEREF`, `FILENAME` — not text
+substituted at conversion time. A page number written into the file is wrong by
+the time the document is printed; the field is not. The `date`, `chapter`,
+`page`, `total` and `filename` keys draw the same field without a token, and
+`dateFormat` chooses the picture a date is written in.
+
+Three things that are easy to get wrong, and are therefore worth stating:
+
+**Size a header logo with `options: imageMaxWidth`,** because there is no
+per-image width. The default is 15 cm, which is a body picture's width and fills
+a third of the page as a logo. It is a global cap, so it applies to the body as
+well — the alternative, a per-image attribute, is a syntax this library would
+have to invent.
+
+**`firstPage: true` applies to the whole section, not just the header.** Word's
+`<w:titlePg/>` has no finer setting, so page 1 then looks for a *first-page
+footer* as well — and a document that gave only an ordinary footer has none, so
+page 1 has no footer. Give `footer:` a `firstPage` too, or do not ask for one.
+
+**An empty `header:` writes no header part at all.** Not an empty band on every
+page — which is what writing the part unconditionally would give a template that
+already carries a header of its own.
+
+Frontmatter wins over a `.dotx` template, **per key** — the same rule
+`styles:` uses, and for the same reason. `align: center` under a template's
+header centres the template's own content; naming `body` replaces it.
+
+`.docx` and `.rtf` both carry a header and a footer. `.odt` carries neither —
+PHPWord has no part for either — so a document declaring one gets the loss
+reported through `Format::drops()`. A link in a header works; alt text and an
+SVG logo do not, because the passes that write those rewrite `word/document.xml`
+and not the header parts.
+
 ## Word templates
 
 Point the renderer at the **styleIds** your template defines and it inherits the

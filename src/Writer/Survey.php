@@ -64,6 +64,14 @@ final class Survey
 
         foreach ($phpWord->getSections() as $section) {
             $survey->walk($section, false);
+
+            if ($section->getHeaders() !== []) {
+                $survey->used['header'] = true;
+            }
+
+            if ($section->getFooters() !== []) {
+                $survey->used['footer'] = true;
+            }
         }
 
         if ($images?->anyDescribed() === true) {

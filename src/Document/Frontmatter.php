@@ -415,6 +415,25 @@ final class Frontmatter
             }
         }
 
+        // `header:` and `footer:` are read by {@see Furniture}, which drops a key it
+        // does not hold — so without this a mis-indented `algin: right` would leave
+        // a header with no alignment and nothing anywhere saying why.
+        foreach (['header', 'footer'] as $section) {
+            if (!$this->has($section)) {
+                continue;
+            }
+
+            $value = $this->get($section);
+
+            if (self::mappingOf($value) === null) {
+                continue;
+            }
+
+            foreach (Furniture::validate($value, null, $section) as $problem) {
+                $problems[] = Validator::locate($problem, $this->lineOf($section));
+            }
+        }
+
         return $problems;
     }
 }

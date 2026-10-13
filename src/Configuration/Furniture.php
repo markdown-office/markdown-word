@@ -42,7 +42,7 @@ final class Furniture
      *
      * @var list<string>
      */
-    private const SWITCHES = ['chapter', 'page', 'total', 'filename', 'date'];
+    private const SWITCHES = ['chapter', 'page', 'total', 'filename', 'date', 'firstPage', 'even'];
 
     /**
      * The properties where `null` is a value in its own right rather than the absence of
@@ -83,6 +83,8 @@ final class Furniture
         public readonly ?bool $total = null,
         public readonly ?bool $filename = null,
         public readonly ?bool $date = null,
+        public readonly ?bool $firstPage = null,
+        public readonly ?bool $even = null,
     ) {
     }
 
@@ -165,6 +167,8 @@ final class Furniture
             'total' => $this->total,
             'filename' => $this->filename,
             'date' => $this->date,
+            'firstPage' => $this->firstPage,
+            'even' => $this->even,
         ];
     }
 
@@ -188,13 +192,18 @@ final class Furniture
      * @param array<string, mixed> $given
      * @param callable(string): ?int|null $locate The file line a property sits on. It is
      *        handed the property name as written — `align`, `dateFormat` — because this
-     *        class does not know whether it is reading a `header:` or a `footer:`; the
-     *        caller, which does, prefixes the key it was read from.
+     *        class does not know which of `header:` and `footer:` it is reading.
+     * @param string $where The key the block was read from, named in each message.
+     *        Without it a `align: 3` is reported as a problem with a `align` and the
+     *        reader is left to work out which of the two blocks it is in.
      *
      * @return list<string>
      */
-    public static function validate(array $given, ?callable $locate = null): array
-    {
+    public static function validate(
+        array $given,
+        ?callable $locate = null,
+        string $where = 'header or footer',
+    ): array {
         $known = array_keys((new self())->toArray());
         $problems = [];
 
@@ -203,7 +212,7 @@ final class Furniture
 
             if (!\in_array($property, $known, true)) {
                 $problems[] = Validator::locate(
-                    Validator::describe($property, '', '', $known, 'keys'),
+                    \sprintf('In "%s": %s', $where, Validator::describe($property, '', '', $known, 'keys')),
                     self::line($locate, $property),
                 );
 
@@ -214,10 +223,14 @@ final class Furniture
 
             if ($rest !== null) {
                 $problems[] = Validator::locate(
-                    Validator::describeValue(
-                        \sprintf('The "%s" key', $property),
-                        ValueShape::show($value),
-                        $rest,
+                    \sprintf(
+                        'In "%s": %s',
+                        $where,
+                        Validator::describeValue(
+                            \sprintf('the "%s" key', $property),
+                            ValueShape::show($value),
+                            $rest,
+                        ),
                     ),
                     self::line($locate, $property),
                 );

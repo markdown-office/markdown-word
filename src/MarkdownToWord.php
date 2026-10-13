@@ -14,6 +14,7 @@ use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
+use MarkdownWord\Render\FurnitureWriter;
 use MarkdownWord\Render\HtmlFragmentRenderer;
 use MarkdownWord\Render\ImageConversionCollector;
 use MarkdownWord\Render\SvgAttachmentCollector;
@@ -30,6 +31,7 @@ use MarkdownWord\Writer\OdtWriter;
 use MarkdownWord\Writer\RtfWriter;
 use MarkdownWord\Writer\Survey;
 use PhpOffice\PhpWord\Element\AbstractContainer;
+use PhpOffice\PhpWord\Element\Section;
 use PhpOffice\PhpWord\PhpWord;
 
 /**
@@ -506,5 +508,17 @@ final class MarkdownToWord implements Converter
         );
 
         $renderer->render($document, $container);
+
+        // The running head and foot the document's frontmatter describes. Only for a
+        // whole section: a render into a container of its own — a template's content
+        // control, a table cell — is somewhere a page has no top or bottom to put
+        // them on, and PHPWord would write a part belonging to no section.
+        if ($container instanceof Section) {
+            (new FurnitureWriter())->draw(
+                $renderer,
+                Frontmatter::fromDocument($document, $this->lastMarkdown),
+                $container,
+            );
+        }
     }
 }

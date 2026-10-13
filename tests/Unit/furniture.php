@@ -53,6 +53,8 @@ it('carries every property through the array form', function (string $property, 
     'a total switch' => ['total', true],
     'a filename switch' => ['filename', true],
     'a date' => ['date', true],
+        'a different first page' => ['firstPage', true],
+        'a separate even page' => ['even', true],
 ]);
 
 it('keeps what a merge was not asked to change', function () {
@@ -73,6 +75,8 @@ it('keeps what a merge was not asked to change', function () {
         'total' => true,
         'filename' => null,
         'date' => null,
+        'firstPage' => null,
+        'even' => null,
     ]);
 });
 
@@ -122,6 +126,8 @@ it('is not empty as soon as one property has a value', function (string $propert
     'a switch on' => ['page', true],
     'a switch off' => ['chapter', false],
     'a date' => ['date', true],
+        'a different first page' => ['firstPage', true],
+        'a separate even page' => ['even', true],
     'a body with nothing in it' => ['body', ''],
 ]);
 
@@ -160,25 +166,29 @@ it('names a key that is not one of its own', function () {
     // language model and a mis-indented key looks exactly like one that was never meant
     // to be there. A near miss is suggested, since that is the mistake anyone makes once
     // and cannot see from the error alone.
-    $keys = 'align, body, border, chapter, date, dateFormat, filename, page, total.';
+    // Written out rather than read from the class, so a property added to `Furniture`
+    // has to be added here too. This is that test: a new key with a stale list would
+    // report a key the reader has legitimately written as one that does not exist.
+    $keys = 'align, body, border, chapter, date, dateFormat, even, filename, firstPage, page, total.';
 
     expect(Furniture::validate(['totl' => true]))
-        ->toBe([\sprintf('Unknown "totl". Did you mean "total"? Known keys: %s', $keys)])
+        ->toBe([\sprintf('In "header or footer": Unknown "totl". Did you mean "total"? Known keys: %s', $keys)])
         // Far enough from every key to be something else, so none is suggested: a wrong
         // suggestion sends the reader to the wrong place to look.
         ->and(Furniture::validate(['alignement' => 'center']))
-        ->toBe([\sprintf('Unknown "alignement". Known keys: %s', $keys)]);
+        ->toBe([\sprintf('In "header or footer": Unknown "alignement". Known keys: %s', $keys)]);
 });
 
 it('says where a wrong value was written', function () {
-    // The property name alone, because this class does not know whether it is reading a
-    // `header:` or a `footer:`; the caller prefixes the key it read from.
+    // The block is named because a reader with two of them — a head and a foot —
+    // otherwise has to work out which one a wrong value is in.
     $lines = ['align' => 7];
 
     expect(Furniture::validate(
         ['align' => 'nope'],
         static fn (string $path): ?int => $lines[$path] ?? null,
-    ))->toBe(['Line 7: The "align" key is "nope". It is one of: center, left, right.']);
+        'footer',
+    ))->toBe(['Line 7: In "footer": the "align" key is "nope". It is one of: center, left, right.']);
 });
 
 it('accepts a block it can use', function () {

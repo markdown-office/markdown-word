@@ -403,6 +403,20 @@ foreach ([
     $built[] = ['15-images-' . $mode, 'Images in ' . $mode . ' mode.', $path];
 }
 
+// Headers and footers
+
+// `imageBasePath` for the same reason as `15-images`: a relative `assets/…` is
+// resolved against this directory rather than against wherever the build ran, and
+// without it the logo comes out as its own alt text where the picture should be.
+$path = $docs . '/' . '24-furniture' . DOCX_EXTENSION;
+(new MarkdownToWord(
+    (string) file_get_contents($root . '/markdown/24-furniture.md'),
+    Configuration::create()->withOptions(['imageBasePath' => $root . '/markdown']),
+    $frontmatterParser,
+))->save($path);
+
+$built[] = ['24-furniture', 'A running head and foot described in the frontmatter.', $path];
+
 // Tables
 
 foreach ([

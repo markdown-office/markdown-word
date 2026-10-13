@@ -35,6 +35,46 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A document can describe its own header and footer**, under `header:` and
+  `footer:` in the `---` block. The body of each is Markdown, drawn by the same
+  renderer, so a logo, bold text and a link all work:
+
+  ```markdown
+  ---
+  header:
+    body: |
+      ![Logo](assets/logo.png)
+      **Meridian Analytics**
+    align: right
+    border: bottom
+  footer:
+    body: |
+      Page {page} of {total}
+    align: center
+  ---
+  ```
+
+  `{page}`, `{total}`, `{date}`, `{chapter}` and `{filename}` become real Word
+  fields — `PAGE`, `NUMPAGES`, `DATE`, `STYLEREF`, `FILENAME` — rather than text
+  written down at conversion time, which is what makes a page number right on
+  the page the document lands on.
+
+  Frontmatter wins over a `.dotx` template **per key**, the same rule `styles:`
+  uses. An empty block writes no part at all, rather than an empty band on every
+  page of a document that asked for nothing.
+
+  `.odt` carries neither, and says so through `Format::drops()`. `.rtf` carries
+  both — the footer is written by `Writer\RTF\Part\Document` rather than by a
+  part of its own, which is worth knowing before concluding from a missing
+  `Footer.php` that it cannot.
+
+- **A table of contents, as `::toc`.** A real Word `TOC` field with no cached
+  entries, marked dirty, with `w:updateFields` set so Word builds it on open.
+  An `.odt` or an `.rtf` gets the source form back rather than the placeholder a
+  field would have been written into.
+
+### Fixed
+
 - **An SVG can be written without a raster beside it**, under `svgFallback`, on the
   command line as `--svg-fallback`:
 

@@ -783,3 +783,79 @@ it('the table of contents section, run', function () {
     // And no cached entry claiming a page number nobody computed.
     expect($body)->not->toContain('PAGEREF');
 });
+
+it('the header and footer section, run', function () {
+    // Checked against the written parts rather than the render: a claim about a field
+    // or a tab stop is a claim about XML, and one about alignment is a claim about a
+    // paragraph property that a reader resolves.
+    $markdown = <<<'MD'
+        ---
+        header:
+          body: |
+            **Meridian Analytics**
+          align: right
+          border: bottom
+          firstPage: true
+        footer:
+          body: |
+            Page {page} of {total}
+          align: center
+        ---
+
+        # Body
+        MD;
+
+    $path = Scratch::path('readme-furniture');
+    (new MarkdownToWord($markdown, parser: readmeFurnitureParser()))->save($path);
+
+    $body = TemplateFactory::xmlOf($path);
+
+    // Both parts, and the first page referenced, which is what `<w:titlePg/>` means.
+    expect($body)->toContain('<w:headerReference w:type="default"')
+        ->and($body)->toContain('<w:headerReference w:type="first"')
+        ->and($body)->toContain('<w:footerReference w:type="default"')
+        ->and($body)->toContain('<w:titlePg/>');
+
+    $header = TemplateFactory::xmlOf($path, 'word/header1.xml');
+    $footer = TemplateFactory::xmlOf($path, 'word/footer1.xml');
+
+    // Alignment and the rule under the head.
+    expect($header)->toContain('<w:jc w:val="right"/>')
+        ->and($header)->toContain('pBdr')
+        ->and($footer)->toContain('<w:jc w:val="center"/>');
+
+    // The page numbers are fields, not the number one, which is what makes them
+    // right on the page the document lands on.
+    expect($footer)->toContain('<w:instrText xml:space="preserve"> PAGE </w:instrText>')
+        ->and($footer)->toContain('<w:instrText xml:space="preserve"> NUMPAGES </w:instrText>');
+});
+
+it('writes no header part for a document that names no header', function () {
+    // The empty-form claim. Asserting the part is absent rather than empty is the
+    // whole difference: an empty part is a blank band on every page of a document
+    // that asked for nothing.
+    $path = Scratch::path('readme-no-furniture');
+    (new MarkdownToWord("# Body\n", parser: readmeFurnitureParser()))->save($path);
+
+    $zip = new ZipArchive();
+    $zip->open($path);
+    $parts = [];
+
+    for ($index = 0; $index < $zip->numFiles; $index++) {
+        $parts[] = (string) $zip->getNameIndex($index);
+    }
+
+    $zip->close();
+
+    expect(array_values(array_filter($parts, static fn (string $p): bool => str_contains($p, 'header') || str_contains($p, 'footer'))))
+        ->toBe([]);
+});
+
+/** A parser that reads the frontmatter a `header:` block lives in. */
+function readmeFurnitureParser(): MarkdownWord\Parser\CommonMarkParser
+{
+    return new MarkdownWord\Parser\CommonMarkParser([
+        ...MarkdownWord\Parser\CommonMarkParser::FLAVOURS[MarkdownWord\Parser\CommonMarkParser::DEFAULT_FLAVOUR],
+        League\CommonMark\Extension\FrontMatter\FrontMatterExtension::class,
+    ]);
+}
