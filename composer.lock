@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "bf0becfbe98e2dea7575c7eb2c4770dc",
+    "content-hash": "f7bce8ca46bad7460bfd00c33d0538ca",
     "packages": [
         {
             "name": "dflydev/dot-access-data",
@@ -269,6 +269,61 @@
                 }
             ],
             "time": "2022-12-11T20:36:23+00:00"
+        },
+        {
+            "name": "markdown-office/commonmark-generic-directives",
+            "version": "dev-main",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/markdown-office/commonmark-generic-directives.git",
+                "reference": "305098e3de74f8e1812c10209c2f4ffa210107d7"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/markdown-office/commonmark-generic-directives/zipball/305098e3de74f8e1812c10209c2f4ffa210107d7",
+                "reference": "305098e3de74f8e1812c10209c2f4ffa210107d7",
+                "shasum": ""
+            },
+            "require": {
+                "league/commonmark": "^2.10",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "pestphp/pest": "^3.0 || ^4.0 || ^5.0"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "MarkdownOffice\\CommonMark\\Directive\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Fabian Graßl",
+                    "email": "mail@fabiangrassl.de"
+                }
+            ],
+            "description": "A standalone league/commonmark extension implementing the Generic Directives RFC: container (:::), leaf (::) and text (:) directives with attribute, #id and .class syntax.",
+            "keywords": [
+                "attributes",
+                "commonmark",
+                "container-directive",
+                "directive",
+                "extension",
+                "leaf-directive",
+                "markdown",
+                "text-directive"
+            ],
+            "support": {
+                "issues": "https://github.com/markdown-office/commonmark-generic-directives/issues",
+                "source": "https://github.com/markdown-office/commonmark-generic-directives/tree/main"
+            },
+            "time": "2026-10-11T13:45:50+00:00"
         },
         {
             "name": "nette/schema",
@@ -5043,7 +5098,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "markdown-office/commonmark-generic-directives": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {

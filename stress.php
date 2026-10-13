@@ -75,6 +75,14 @@ $cases = [
     'link in code' => '`[not a link](x)`',
     'autolink email' => '<mailto:a@b.com>',
     'mixed everything' => self_mixed(),
+    // The three directive shapes, with a container that carries text: a leaf and
+    // the fences are drawn as nothing at all, so without a body the document would
+    // come out empty and this case would be reporting the loss rather than a fault.
+    //
+    // What this checks that the suite cannot is the PHP it runs on. Pest needs 8.4
+    // and the library supports 8.2, so without a case here nothing about directives
+    // is exercised on the oldest version this library claims to work on.
+    'directives' => self_directives(),
 ];
 
 /**
@@ -148,6 +156,22 @@ function self_mixed(): string
         MD;
 }
 
+function self_directives(): string
+{
+    return <<<'MD'
+        Ship it :badge[PRODUCTION]{type=success} today.
+
+        ::image[caption]{src="chart.png"}
+
+        :::callout{type=info}
+        ## Inside the container
+
+        - one
+        - two
+        :::
+        MD;
+}
+
 /**
  * "Word will open it" means the archive is a zip and `word/document.xml` is XML,
  * short of opening it. Read from the archive rather than from the file: the file
@@ -185,6 +209,7 @@ $configurations = [
     'no decoration' => Configuration::create()->withoutDecoration(),
     'CommonMark only' => null,
     'every extension' => null,
+    'directives' => null,
     'placeholder images' => Configuration::create()->withOptions(['images' => Options::IMAGE_PLACEHOLDER]),
     'soft break as paragraph' => Configuration::create()->withOptions(['softBreak' => Options::SOFT_BREAK_PARAGRAPH]),
     'html preserved' => Configuration::create()->withOptions(['html' => Options::HTML_PRESERVE]),
@@ -195,6 +220,7 @@ $configurations = [
 $parsers = [
     'CommonMark only' => CommonMarkParser::commonMarkOnly(),
     'every extension' => CommonMarkParser::withAllExtensions(),
+    'directives' => CommonMarkParser::directives(),
 ];
 
 // The template renderer takes a configuration but no parser, so the configurations
