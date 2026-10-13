@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Writer;
 
+use MarkdownWord\Render\Directive\Footnote;
 use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\ImageDescriptionCollector;
 use MarkdownWord\Render\SvgAttachmentCollector;
@@ -59,6 +60,7 @@ final class Survey
         ?ImageDescriptionCollector $images = null,
         ?SvgAttachmentCollector $vectors = null,
         ?Toc $tocs = null,
+        ?Footnote $footnotes = null,
     ): self {
         $survey = new self();
 
@@ -84,6 +86,10 @@ final class Survey
 
         if ($tocs?->isUsed() === true) {
             $survey->used['table-of-contents'] = true;
+        }
+
+        if ($footnotes?->isUsed() === true) {
+            $survey->used['footnotes'] = true;
         }
 
         $survey->vectorOnly = $vectors?->pendingWithoutRaster() === true;

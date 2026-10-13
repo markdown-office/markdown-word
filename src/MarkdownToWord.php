@@ -11,6 +11,7 @@ use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
+use MarkdownWord\Render\Directive\Footnote;
 use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
@@ -50,6 +51,8 @@ final class MarkdownToWord implements Converter
     private ?SvgAttachmentCollector $vectors = null;
 
     private ?Toc $toc = null;
+
+    private ?Footnote $footnotes = null;
 
     /**
      * The format the last write went through, and what that document asked of the
@@ -377,7 +380,7 @@ final class MarkdownToWord implements Converter
     private function write(Format $format, PhpWord $phpWord, ?string $target): string
     {
         $this->format = $format;
-        $this->survey = Survey::of($phpWord, $this->images, $this->vectors, $this->toc);
+        $this->survey = Survey::of($phpWord, $this->images, $this->vectors, $this->toc, $this->footnotes);
 
         return match ($format) {
             Format::Docx => $target === null
@@ -482,9 +485,12 @@ final class MarkdownToWord implements Converter
         // Kept across renders, as the link collector beside it is, so the
         // placeholder indices stay unique when one converter renders several
         // documents — which is what the template renderer does.
-        $this->toc ??= new Toc($config->getOptions(), $styles, $this->format);
+        $this->toc = new Toc($config->getOptions(), $styles, $this->format);
+        $this->footnotes = new Footnote($styles, $this->format);
 
-        $directives = $directives->withBlock('toc', $this->toc);
+        $directives = $directives
+            ->withBlock('toc', $this->toc)
+            ->withInline('footnote', $this->footnotes);
 
         $inlines = new InlineRenderer(
             $styles,

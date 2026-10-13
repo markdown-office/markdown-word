@@ -6,6 +6,7 @@ namespace MarkdownWord\Text;
 
 use MarkdownWord\Render\LinkPayloadCollector;
 use PhpOffice\PhpWord\Element\AbstractContainer;
+use PhpOffice\PhpWord\Element\Footnote;
 use PhpOffice\PhpWord\Element\Image;
 use PhpOffice\PhpWord\Element\Link;
 use PhpOffice\PhpWord\Element\ListItem;
@@ -98,6 +99,14 @@ final class TextExtractor
         }
 
         if ($element instanceof AbstractContainer) {
+            // A footnote's body is not part of the sentence the mark sits in: Word
+            // draws it at the foot of the page, and PHPWord holds it as a container
+            // inside the run. Read as text it would land mid-sentence — a claim
+            // about the document's wording that is true nowhere in the document.
+            if ($element instanceof Footnote) {
+                return '';
+            }
+
             return self::fromContainer($element, $separator, $hyperlinks);
         }
 

@@ -388,6 +388,9 @@ look](#the-built-in-look) for the other half of that sentence.
 | A WebP picture | carried as PNG | carried as PNG | carried as PNG |
 | A picture's alternative text | carried | carried | dropped |
 | An SVG | carried, vector beside its raster | flattened to a raster | flattened to a raster |
+| `:footnote[…]` | carried as a Word footnote | source form back | source form back |
+| A header and a footer | carried | carried | not carried |
+| `::toc` | carried as a field | source form back | source form back |
 | Rendering into a template | carried | not available | not available |
 
 Five of those are worth naming in full, because they are the ones a reader is
@@ -691,6 +694,35 @@ itself as the first entry of the contents it titles.
 Only `.docx` can carry the field. An `.odt` or an `.rtf` gets the source form
 back — `::toc` as a paragraph — and says so through the usual
 `Format::drops()` channel, the same as any other thing a format cannot hold.
+
+### Footnotes
+
+`:footnote[…]` is a Word footnote, with its mark where the directive stood and its
+body at the foot of the page.
+
+```markdown
+Trading closed ahead of plan :footnote[The western figure excludes two hires.] in
+every region.
+```
+
+The body is **text, never Markdown** — the directive's label goes in as written.
+The mark is a real superscript reference and the body is numbered by Word, so the
+notes renumber themselves when one is inserted or deleted above.
+
+Two things about the syntax, both from the directive grammar rather than from this
+library:
+
+- **The label goes in one pair of brackets.** `:footnote[n=12]`. Written
+  `:footnote:[n=12]` the second colon starts something else and the note ends up
+  empty — which is drawn as the source form rather than as a mark pointing at
+  nothing.
+- **A mark cannot sit flush against a word.** `plan:footnote[…]` is prose — the
+  grammar leaves a colon after a word alone, because `status:error` is prose too.
+  There has to be a space or punctuation in front of the colon, so the document
+  reads `plan :footnote[…]` with a visible space before the mark.
+
+Only `.docx` carries a footnote: neither other format has a writer for one, so
+they get the source form back and the loss is reported the usual way.
 
 ### Headers and footers
 

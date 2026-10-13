@@ -859,3 +859,43 @@ function readmeFurnitureParser(): MarkdownWord\Parser\CommonMarkParser
         League\CommonMark\Extension\FrontMatter\FrontMatterExtension::class,
     ]);
 }
+
+it('the footnotes section, run', function () {
+    // The claim that decides whether this is a footnote at all: the mark is inside
+    // the sentence, in the same paragraph as the words on either side of it, rather
+    // than in a paragraph of its own. Everything else about a footnote follows from
+    // that.
+    $markdown = "Ahead of plan :footnote[n=12] in the west.\n";
+
+    $path = Scratch::path('readme-footnote');
+    (new MarkdownToWord($markdown, parser: readmeFurnitureParser()))->save($path);
+
+    $body = TemplateFactory::xmlOf($path);
+
+    expect($body)->toContain('w:footnoteReference');
+
+    // One paragraph holding the words and the mark, which is what the count is for:
+    // a `w:p` of its own for the reference would take the count to two.
+    expect(substr_count($body, '<w:p>'))->toBe(1);
+
+    // And the part, whose ids have to be the ones the marks point at.
+    $notes = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+
+    expect($notes)->toContain('n=12')
+        ->and(preg_match('/w:footnoteReference w:id="(\d+)"/', $body, $mark) === 1)
+        ->and($notes)->toContain('<w:footnote w:id="' . $mark[1] . '"');
+});
+
+it('leaves the note body out of the sentence', function () {
+    // A footnote's body is not part of the document's wording: Word draws it at the
+    // foot of the page. Read as text it landed mid-sentence, which is a claim about
+    // the document that is true nowhere in it.
+    $converter = new MarkdownToWord(
+        "Ahead of plan :footnote[n=12] in the west.\n",
+        parser: readmeFurnitureParser(),
+    );
+
+    expect(MarkdownWord\Text\TextExtractor::fromPhpWord($converter->toPhpWord(
+        "Ahead of plan :footnote[n=12] in the west.\n",
+    )))->toBe('Ahead of plan  in the west.');
+});

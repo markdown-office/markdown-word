@@ -380,3 +380,38 @@ it('reports no such loss for a document that never asked for one', function (For
 
     expect(array_column($converter->pendingLosses(), 'feature'))->not->toContain('table-of-contents');
 })->with(['odt' => Format::Odt, 'rtf' => Format::Rtf]);
+
+it('carries no token into the second format one converter writes', function () {
+    // The handler is rebuilt per render rather than cached on the converter, and the
+    // reason is this: a cached one keeps the format of the *first* render, so a
+    // converter writing a `.docx` and then an `.odt` hands the second a field it can
+    // take — emitting the token into a file no `TocPass` ever runs against. One
+    // converter writing several documents is not hypothetical; it is what the
+    // template renderer does.
+    $docx = Scratch::path('twice', '.docx');
+    $odt = Scratch::path('twice', '.odt');
+
+    $converter = new MarkdownToWord("::toc\n\n# One\n");
+    $converter->convertTo(Format::Docx, $docx);
+    $converter->convertTo(Format::Odt, $odt);
+
+    $zip = new ZipArchive();
+    $zip->open($odt);
+    $content = $zip->getFromName('content.xml');
+    $zip->close();
+
+    expect($content)->not->toContain(Toc::MARKER)
+        ->and($content)->not->toContain('MDWT');
+});
+
+it('takes the second format\'s loss rather than the first\'s', function () {
+    // The other half: the `.docx` carries the field, so the `.odt` is where the loss
+    // is, and a handler frozen on the first render would report it for the `.docx`
+    // instead — telling the reader of a document that has a table of contents in it
+    // that the table of contents was left out.
+    $converter = new MarkdownToWord("::toc\n\n# One\n");
+    $converter->convertTo(Format::Docx, Scratch::path('order', '.docx'));
+    $converter->convertTo(Format::Odt, Scratch::path('order', '.odt'));
+
+    expect(array_column($converter->pendingLosses(), 'feature'))->toContain('table-of-contents');
+});

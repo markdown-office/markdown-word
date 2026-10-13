@@ -86,6 +86,7 @@ enum Format: string
                 'table-of-contents',
                 'header',
                 'footer',
+                'footnotes',
             ],
             // `Writer\RTF\Element\AbstractElement::writeOpening()` wants a
             // `Style\Paragraph` and this library's named styles are `Style\Font`;
@@ -104,6 +105,7 @@ enum Format: string
                 'jpeg-label',
                 'svg-vector',
                 'table-of-contents',
+                'footnotes',
             ],
         };
     }
@@ -169,5 +171,6 @@ enum Format: string
         'table-of-contents' => 'a table of contents is left as the text ::toc rather than as a field Word can build',
         'header' => 'the running head at the top of every page is left out',
         'footer' => 'the running foot at the bottom of every page is left out',
+        'footnotes' => 'a footnote is left as the text :footnote[...] rather than as a note at the foot of the page',
     ];
 }

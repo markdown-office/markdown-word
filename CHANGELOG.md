@@ -68,6 +68,16 @@ All notable changes to this project are documented here. The format follows
   part of its own, which is worth knowing before concluding from a missing
   `Footer.php` that it cannot.
 
+- **A footnote, as `:footnote[…]`.** A real Word footnote — a superscript mark
+  where the directive stood, the body at the foot of the page, numbered by Word so
+  the notes renumber themselves. The label is text and not Markdown, which is the
+  directives package's own decision about a leaf label.
+
+  Two limits of the grammar are worth knowing: the label goes in one pair of
+  brackets (`:footnote[n=12]`, not `:footnote:[n=12]`, which parses as an empty
+  label), and a mark cannot sit flush against a word, because the grammar leaves a
+  colon after a word alone.
+
 - **A table of contents, as `::toc`.** A real Word `TOC` field with no cached
   entries, marked dirty, with `w:updateFields` set so Word builds it on open.
   An `.odt` or an `.rtf` gets the source form back rather than the placeholder a
