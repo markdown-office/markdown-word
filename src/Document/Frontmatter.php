@@ -415,9 +415,23 @@ final class Frontmatter
             }
         }
 
-        // `header:` and `footer:` are read by {@see Furniture}, which drops a key it
-        // does not hold — so without this a mis-indented `algin: right` would leave
-        // a header with no alignment and nothing anywhere saying why.
+        return [...$problems, ...$this->furnitureProblems()];
+    }
+
+    /**
+     * Everything wrong with a `header:` or `footer:` block.
+     *
+     * {@see Furniture} drops a key it does not hold and a block it cannot read, so
+     * without this a mis-indented `algin: right` leaves a header with no alignment and
+     * nothing anywhere in the run saying why — and a `header:` written as a plain value
+     * leaves a document with no header at all, reported as neither.
+     *
+     * @return list<string>
+     */
+    private function furnitureProblems(): array
+    {
+        $problems = [];
+
         foreach (['header', 'footer'] as $section) {
             if (!$this->has($section)) {
                 continue;
