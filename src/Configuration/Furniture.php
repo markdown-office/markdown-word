@@ -42,7 +42,7 @@ final class Furniture
      *
      * @var list<string>
      */
-    private const SWITCHES = ['chapter', 'page', 'total', 'filename'];
+    private const SWITCHES = ['chapter', 'page', 'total', 'filename', 'date'];
 
     /**
      * The properties where `null` is a value in its own right rather than the absence of
@@ -64,7 +64,11 @@ final class Furniture
      * @param string|null $dateFormat The picture a date is written in, such as
      *        `d MMMM yyyy`. A value in its own right rather than part of a switch, so a
      *        document can change the format of a date a template already asked for.
-     * @param string|null $date The date itself, as text.
+     * @param bool|null   $date Whether to draw a date. Word's own `DATE` field rather
+     *        than a date written down, so a document that says so does not print the
+     *        day it was generated and call it the day it was written. A document that
+     *        wants a fixed date states it in `fields:` and puts it in the template,
+     *        which is where a value belongs and a switch does not.
      *
      * What either of them is used for is the writer's question; this class holds what a
      * block said, and knows only that the two are separate keys a merge keeps apart.
@@ -78,7 +82,7 @@ final class Furniture
         public readonly ?bool $page = null,
         public readonly ?bool $total = null,
         public readonly ?bool $filename = null,
-        public readonly ?string $date = null,
+        public readonly ?bool $date = null,
     ) {
     }
 
@@ -104,12 +108,12 @@ final class Furniture
     /**
      * Merge a block over this one.
      *
-     * This is the whole of what a frontmatter's override of a template's header is, and
-     * it is why a null means "not mentioned" here: `header:` beneath a document carrying
-     * `align: right` in the template is a document changing the body and saying nothing
-     * about the alignment, and reading the null as "reset it" would change a slot the
-     * author never mentioned. That is silent data loss rather than a visible mistake,
-     * and it is the one thing a partial override must never do.
+     * This is the whole of what a frontmatter's override of a template's header is. A
+     * `null` means "not mentioned" rather than "reset": a document naming a `body` and
+     * saying nothing about the alignment its template set is changing the body, and
+     * reading the absent alignment as a reset would change a slot the author never
+     * mentioned. That is silent data loss rather than a visible mistake, and it is the
+     * one thing a partial override must never do.
      *
      * The two ways in agree on which properties can hold a null at all — that is a
      * property of the class rather than of the caller — so they drop the same keys
@@ -126,9 +130,9 @@ final class Furniture
      * Whether anything at all was configured, which is how an empty header is told from
      * a filled one.
      *
-     * Nothing configured has to produce no Word header part at all: an empty `header:`
-     * in a template is how a document asks for the rule and nothing else, and writing
-     * the part would put an empty band on every page.
+     * Nothing configured has to produce no Word header part at all: a document naming a
+     * `header:` and giving it no keys is asking for none, and writing the part would put
+     * an empty band on every page of a template that has a header of its own.
      *
      * Compared against `null` rather than through `empty()`, because `false` and `''`
      * are values: a page number switched off, and a body with nothing in it under a
@@ -170,11 +174,12 @@ final class Furniture
      *
      * The error surface for the block rather than part of {@see self::fromArray()},
      * which stays the documented behaviour of a value object and drops what it cannot
-     * use. A block whose `align` is a word is the case this exists for: the key is known,
-     * so nothing raises, and the alignment the document asked for is simply not there.
+     * use. The case this exists for is a known key with a value it cannot take — an
+     * `align` that is not one of the three words — which nothing raises over, and the
+     * alignment the document asked for is then simply not there.
      *
-     * A `null` is never a problem here. It is not configured, which is what every
-     * property's default is, so there is nothing wrong with a block that says it.
+     * A `null` is not a problem either: it is not configured, which is what every
+     * property's default already is, so a block that says it says nothing.
      *
      * Nothing is checked across properties either. `dateFormat` without `date` is a
      * partial override of a date a template already asked for, and reporting it would
@@ -246,7 +251,7 @@ final class Furniture
             'body' => \is_string($value)
                 ? null
                 : 'It is Markdown text, written as a value or as a block beneath the colon.',
-            'dateFormat', 'date' => \is_string($value) ? null : 'It is text, written as a string.',
+            'dateFormat' => \is_string($value) ? null : 'It is text, written as a string.',
             default => null,
         };
     }

@@ -6,6 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: directives are parsed by default.** `new CommonMarkParser()` now takes
+  the `directives` flavour rather than `gfm`, so `:name[…]`, `::name[…]` and
+  `:::name` … `:::` parse in every document without opting in.
+  `CommonMarkParser::commonMarkOnly()` and `extended()` still decline them.
+
+  This is a change of behaviour rather than an addition, and the reason the syntax
+  used to be opt-in still stands: `Status :green[go]` is a sentence, and a parser
+  nobody asked to change should not change the syntax of every document converted
+  after it.
+
+  What answers it is that **a directive this library does not draw is drawn as the
+  author wrote it** — the node round-trips to its source form, so an unclaimed name
+  comes back out as the characters the author typed. Before this, the renderer drew
+  a directive's label and discarded its name and attributes, so
+  `:badge[PRODUCTION]{type=success}` and `:badge[DRAFT]{type=info}` produced
+  identical sentences; a leaf, having no body to fall back on, was dropped entirely
+  along with the paragraph it stood between.
+
+  A container stays transparent — its body is the author's Markdown and the fence is
+  not — so a `::callout` remains ordinary text in the document rather than a line
+  reading `:callout`.
+
+  Only a name with an implementation changes a document. Names live in
+  `src/Render/Directives.php` rather than in the parser.
+
 ### Added
 
 - **An SVG can be written without a raster beside it**, under `svgFallback`, on the

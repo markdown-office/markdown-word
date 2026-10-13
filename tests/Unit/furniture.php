@@ -52,7 +52,7 @@ it('carries every property through the array form', function (string $property, 
     'a page switch' => ['page', true],
     'a total switch' => ['total', true],
     'a filename switch' => ['filename', true],
-    'a date' => ['date', '1 October 2026'],
+    'a date' => ['date', true],
 ]);
 
 it('keeps what a merge was not asked to change', function () {
@@ -121,7 +121,7 @@ it('is not empty as soon as one property has a value', function (string $propert
     'a date format' => ['dateFormat', 'd MMMM yyyy'],
     'a switch on' => ['page', true],
     'a switch off' => ['chapter', false],
-    'a date' => ['date', '1 October 2026'],
+    'a date' => ['date', true],
     'a body with nothing in it' => ['body', ''],
 ]);
 
@@ -191,7 +191,7 @@ it('accepts a block it can use', function () {
         'page' => true,
         'total' => true,
         'filename' => true,
-        'date' => '1 October 2026',
+        'date' => true,
     ]))->toBe([])
         // A null is not configured rather than wrong, and `dateFormat` on its own is a
         // partial override of a date a template already asked for — not a mistake.
