@@ -14,29 +14,27 @@ use ZipArchive;
 /**
  * Makes this library's heading styles the built-in ones a reader recognises.
  *
- * A heading style PHPWord writes is missing two things, and each one breaks a table of
- * contents on its own. Correcting the first is what produces the second message, which
- * is why a document that was fixed once still did not work:
+ * A heading style PHPWord writes is missing two things, and only one of them stops a
+ * table of contents from being built.
  *
- * > Ein Inhaltsverzeichnis erstellen? Beginnen Sie damit, dass Sie ein
- * > Überschriftenformat aus dem Formatvorlagenkatalog auf den ausgewählten Text
- * > anwenden.
- *
- * … and, once the name was right:
+ * **The name, which Word needs.** A `.docx` identifies a built-in style by the `w:name`
+ * in its definition, and Word spells those `heading 1` … `heading 9`. A definition of
+ * `w:styleId="Heading1"` carrying `w:name="Heading1"` is a style *called* Heading1,
+ * which resembles the built-in heading and is not it, and Word collects nothing:
  *
  * > Es wurden keine Einträge für das Inhaltsverzeichnis gefunden.
  *
- * **The name.** A `.docx` identifies a built-in style by the `w:name` in its
- * definition, and Word spells those `heading 1` … `heading 9`. A definition of
- * `w:styleId="Heading1"` carrying `w:name="Heading1"` is a style *called* Heading1,
- * which resembles the built-in heading and is not it.
+ * That is the whole of what Word needs. A document whose names are right and whose
+ * levels are missing collects every heading, with page numbers — checked against Word
+ * 16.113 rather than reasoned about, which is the only way it could have been known.
  *
- * **The outline level.** A heading is collected by its level, and the level belongs to
- * the style rather than to the paragraph — `w:outlineLvl`, zero-based, so heading 1 is
- * `0`. A style that carries the built-in name and redefines `w:pPr` without one leaves
- * its paragraphs at no level, and a paragraph at no level is a paragraph. LibreOffice
- * reads it that way, and says so in its own markup: the same document is `<text:p>`
- * without the level and `<text:h>` with it.
+ * **The outline level, which Word does not need.** A heading style is also expected to
+ * say what level it is, in `w:outlineLvl`, zero-based so heading 1 is `0`, and Word
+ * writes one on every heading style in its own template. Word does not collect by it:
+ * `TOC \o` reads the style. Other readers do — LibreOffice reads the level and not the
+ * name, and says so in its own markup. The same document is `<text:p>` without the
+ * level and `<text:h>` with it, so to anything that is not Word this library's headings
+ * were body text wearing a heading's size.
  *
  * PHPWord offers no hook for either. `Writer\Word2007\Part\Styles` writes `w:name`
  * from the same string as the `w:styleId`, lowercasing only on the branch where the

@@ -193,10 +193,11 @@ it('does not claim again what the code does not do', function (string $claim) {
     // the built-in `heading 1`. Nothing visible is wrong with it; a table of contents
     // is the one thing that notices, and says so in German rather than in English.
     'a heading style is the built-in heading style' => 'so `Heading1` reaches a reader',
-    // Correcting only the name was believed sufficient, on the grounds that a TOC reads
-    // the name and not the level. It reads both, and the document said so in German:
-    // "Es wurden keine Einträge für das Inhaltsverzeichnis gefunden."
-    'a TOC reads a heading style name and not its level' => '`TOC \\o` does not read one',
+    // The outline level was written as the cure for a table of contents that stayed
+    // empty once the name was fixed, and LibreOffice reads the level rather than the
+    // name, so it was not a guess. Word does not collect by it at all: with the names
+    // right and no levels, Word builds the contents with page numbers.
+    'a TOC needs the outline level, not only the style name' => 'still collects nothing',
 ]);
 
 it('has no decorative dividers in it', function () {

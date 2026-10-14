@@ -86,29 +86,24 @@ All notable changes to this project are documented here. The format follows
   An `.odt` or an `.rtf` gets the source form back rather than the placeholder a
   field would have been written into.
 
-- **A heading is now the built-in heading style, with the level that goes with
-  it.** Every heading style was defined as `w:styleId="Heading1"` with
-  `w:name="Heading1"`, which is a style *called* Heading1 — and a `.docx`
-  identifies a built-in style by the `w:name` in its definition, which Word
-  spells `heading 1`. Word offered to build the table of contents rather than
-  building it:
-
-  > Ein Inhaltsverzeichnis erstellen? Beginnen Sie damit, dass Sie ein
-  > Überschriftenformat aus dem Formatvorlagenkatalog auf den ausgewählten Text
-  > anwenden.
-
-  Correcting the name is not enough, and a document that got that far failed
-  differently, because a heading is collected by its outline level and the level
-  belongs to the style rather than to the paragraph:
+- **A heading is now the built-in heading style, by name and by level.** Every
+  heading style was defined as `w:styleId="Heading1"` with `w:name="Heading1"`,
+  which is a style *called* Heading1 — and a `.docx` identifies a built-in style
+  by the `w:name` in its definition, which Word spells `heading 1`. Word collects
+  a `TOC \o` by that name, so it collected nothing:
 
   > Es wurden keine Einträge für das Inhaltsverzeichnis gefunden.
 
-  Nothing else was ever wrong with the document: the headings looked right,
-  every property in them was plausible, and a table of contents was the only
-  thing that could tell. The definitions now carry `w:name="heading 1"` …
-  `heading 6` and `w:outlineLvl` 0 … 5, which is what Word and LibreOffice both
-  collect by. The size, colour and spacing a document set are left exactly as
-  they were.
+  The definitions now carry `w:name="heading 1"` … `heading 6`, and Word builds
+  the contents with page numbers. The size, colour and spacing a document set are
+  left exactly as they were.
+
+  Each definition also gets the `w:outlineLvl` a heading style is expected to
+  carry, zero-based, 0 … 5. Word does not collect by it — `TOC \o` reads the
+  style — but every other reader does: LibreOffice reads the level and not the
+  name, and the same document is a plain `<text:p>` without one and a real
+  `<text:h text:outline-level="1">` with it. These headings were body text to
+  anything that was not Word.
 
   Written after the file is closed, by `Writer\BuiltInHeadingPass`, because
   PHPWord offers no hook for either: `Writer\Word2007\Part\Styles` takes
@@ -116,6 +111,10 @@ All notable changes to this project are documented here. The format follows
   styles only. A `w:styleId` outside this library's own list is not touched, so
   a slot pointed at a style of the document's own keeps it and a template's
   stylesheet comes through unchanged.
+
+  Verified by opening the built examples in Word 16.113 and reading back what it
+  collected, which is also what corrected the second of these two fixes: it was
+  written as the cure for a symptom that the name alone had already cured.
 
 ### Fixed
 

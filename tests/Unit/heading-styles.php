@@ -13,23 +13,20 @@ use MarkdownWord\Writer\BuiltInHeadingPass;
 /*
  * Whether a heading style is the built-in one.
  *
- * Two things are missing from what PHPWord writes, and each one breaks a table of
- * contents on its own. Correcting the first is what produces the second message, so a
- * document that was fixed once still did not work:
- *
- *   Ein Inhaltsverzeichnis erstellen? Beginnen Sie damit, dass Sie ein
- *   Überschriftenformat aus dem Formatvorlagenkatalog auf den ausgewählten Text
- *   anwenden.
- *
- * … and, once the name was right:
+ * Two things are missing from what PHPWord writes. Only the first stops a table of
+ * contents being built:
  *
  *   Es wurden keine Einträge für das Inhaltsverzeichnis gefunden.
  *
- * The name is what Word identifies a built-in style by, and it spells those
- * `heading 1` … `heading 9`. The level is what a heading is *collected* by, and it
- * belongs to the style: a paragraph at no outline level is a paragraph, however it is
- * styled. LibreOffice reads it that way, and says so in its own markup — the same
- * document is `<text:p>` without the level and `<text:h>` with it.
+ * That is what Word collects nothing into, and the names below fix it — checked by
+ * opening the file in Word 16.113, since reading the markup cannot say whether Word
+ * would collect anything from it.
+ *
+ * The outline level is the other half, and Word does not need it: with the names right
+ * and the levels gone, Word still builds the contents with page numbers. It is here
+ * because a heading style is expected to carry one and because LibreOffice reads the
+ * level rather than the name — the same document is `<text:p>` without one and
+ * `<text:h text:outline-level="1">` with it.
  *
  * Nothing visible is wrong with a document missing either of them. The headings look
  * right, every property in them is plausible, and a table of contents is the only
@@ -111,10 +108,11 @@ it('names all six of them, not only the levels a document used', function () {
         ->toBe(['heading 1', 'heading 2', 'heading 3', 'heading 4', 'heading 5', 'heading 6']);
 });
 
-it('gives every heading the outline level a table of contents collects it by', function () {
-    // The missing half, and the one that has to be asked about separately: naming a
-    // style `heading 1` makes it the built-in heading, and the level is what says
-    // *which* one. Zero-based — heading 1 is `0`, not `1`.
+it('gives every heading the level a heading style is expected to carry', function () {
+    // Zero-based — heading 1 is `0`, not `1` — and Word puts one on every heading
+    // style in its own template. Word does not collect a `TOC` by it; LibreOffice
+    // reads the level and not the name, so without it these are body text to anything
+    // that is not Word.
     $path = Scratch::path('heading-styles-levels');
     (new MarkdownToWord("# One\n\n## Two\n\n### Three\n"))->save($path);
 

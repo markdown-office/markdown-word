@@ -686,36 +686,31 @@ section moved.
 
 Three details are worth knowing, because all of them are visible in the file:
 
-**The headings must be the built-in ones, and they must have a level.** Two things
-are missing from what PHPWord writes, and each on its own is enough to collect
-nothing.
-
-The *name* first: a `.docx` identifies a built-in style by the `w:name` in its
-definition, and Word spells those `heading 1` … `heading 9`. A definition carrying
-`w:name="Heading1"` is a style *called* Heading1 — it resembles the built-in heading
-and is not it — and Word offers to build the table of contents instead of doing it:
-
-> Ein Inhaltsverzeichnis erstellen? Beginnen Sie damit, dass Sie ein
-> Überschriftenformat aus dem Formatvorlagenkatalog auf den ausgewählten Text
-> anwenden.
-
-The *level* second, and it is the one that is easy to believe is not needed: a
-heading is collected by its outline level, which is a property of the style rather
-than of the paragraph, and a paragraph at no level is a paragraph however it is
-styled. With the name right and no level, the message changes to
+**The headings must carry the built-in names.** A `.docx` identifies a built-in style
+by the `w:name` in its definition, and Word spells those `heading 1` … `heading 9`. A
+definition carrying `w:name="Heading1"` is a style *called* Heading1 — it resembles the
+built-in heading and is not it — and Word collects nothing, which it says in the field
+rather than in a dialog:
 
 > Es wurden keine Einträge für das Inhaltsverzeichnis gefunden.
 
-LibreOffice reads it the same way — the same file is a plain paragraph without the
-level and a real heading with it — which is the check available to anyone who does
-not have Word to hand.
+With the names right, Word collects every heading with its page number. That is the
+whole of what it needs, and it was checked by opening the file in Word rather than by
+reading the markup, which is the only way to know it.
 
-Both are written after the file is closed, by `Writer\BuiltInHeadingPass`, because
-PHPWord offers no hook for either: `Writer\Word2007\Part\Styles` takes `w:name`
-from the `w:styleId` and lowercases it only on the branch where the style came from
-a `Paragraph`, and `w:outlineLvl` is written for numbering styles only. Nothing else
-in a definition is touched, so a size, a colour or a spacing a document set is
-exactly as it was.
+Both halves are written after the file is closed, by `Writer\BuiltInHeadingPass`,
+because PHPWord offers no hook for either: `Writer\Word2007\Part\Styles` takes `w:name`
+from the `w:styleId` and lowercases it only on the branch where the style came from a
+`Paragraph`, and `w:outlineLvl` is written for numbering styles only. Nothing else in
+a definition is touched, so a size, a colour or a spacing a document set is exactly as
+it was.
+
+**The outline level is for everyone else.** A heading style is also expected to say what
+level it is, and Word writes one on every heading style in its own template — but Word
+does not collect by it, `TOC \o` reads the style. LibreOffice reads the level and not
+the name: the same document is `<text:p>Findings</text:p>` without one and
+`<text:h text:outline-level="1">Findings</text:h>` with it. Without it, these headings
+were body text to anything that is not Word.
 
 **There are no cached entries.** Word fills the field in on open; until it
 does, the field says *Press F9 to build the table of contents.* A cached

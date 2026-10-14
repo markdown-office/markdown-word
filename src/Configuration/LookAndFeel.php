@@ -27,7 +27,9 @@ namespace MarkdownWord\Configuration;
  *
  * A style name alone is not an outline level, and nothing here pretends it is.
  * PHPWord's paragraph writer emits `w:outlineLvl` only for a numbered paragraph,
- * so there is no setting here that would change that —
+ * so there is no setting here that would change that — a level is added afterwards,
+ * and only for this library's own heading styles, by
+ * {@see \MarkdownWord\Writer\BuiltInHeadingPass}, which is not a slot anyone configures.
  * `tests/Unit/look-and-feel.php` says what the name does and does not amount
  * to.
  *
