@@ -781,6 +781,7 @@ options:
 header:
   body: |
     ![Logo](assets/logo.png)
+
     **Meridian Analytics**
   align: right
   border: bottom
@@ -790,6 +791,11 @@ footer:
     Page {page} of {total} — {filename}
   align: center
 ```
+
+A blank line is what separates them. Two lines with nothing between them are one
+paragraph, and an image inside a paragraph is inline — text flows beside it rather
+than under it. Leave the line empty to stack them, or set `softBreak: lineBreak` to
+have every line break in the document become one.
 
 | Key | |
 | --- | --- |

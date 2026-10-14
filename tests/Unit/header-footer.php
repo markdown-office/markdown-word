@@ -192,6 +192,30 @@ it('draws the body of a header as Markdown', function () {
         ->and($header)->toMatch('~<w:r><w:rPr><w:i w:val="1"/>.*?</w:rPr><w:t[^>]*>since 1974</w:t></w:r>~s');
 });
 
+it('gives a header body one paragraph per block, as any Markdown does', function () {
+    // The blank line is what stacks a logo above the wordmark beside it, and
+    // `examples/markdown/24-furniture.md` depends on it. Two lines with nothing between
+    // them are one paragraph, and an image inside a paragraph is inline — Word runs the
+    // text beside the picture rather than under it. A renderer that gave every line a
+    // paragraph of its own would look friendlier here and change the meaning of every
+    // header body written this way.
+    $overrides = ['options' => [
+        'imageBasePath' => furnitureImageDirectory(),
+        'images' => Options::IMAGE_EMBED,
+    ]];
+
+    $oneBlock = "---\nheader:\n  body: |\n    ![the logo](logo.png)\n    **Acme Ltd**\n---\n\nBody.\n";
+    $twoBlocks = "---\nheader:\n  body: |\n    ![the logo](logo.png)\n\n    **Acme Ltd**\n---\n\nBody.\n";
+
+    $paragraphs = fn (string $body): int => preg_match_all(
+        '~<w:p[ >]~',
+        TemplateFactory::xmlOf(furnitureDocx($body, $overrides), 'word/header1.xml'),
+    );
+
+    expect($paragraphs($oneBlock))->toBe(1)
+        ->and($paragraphs($twoBlocks))->toBe(2);
+});
+
 it('embeds a raster picture in a header', function () {
     $markdown = "---\nheader:\n  body: 'Acme ![the logo](logo.png)'\n---\n\nBody.\n";
 

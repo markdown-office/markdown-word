@@ -4,6 +4,7 @@ options:
 header:
   body: |
     ![Meridian](assets/example-logo-meridian.png)
+
     **Meridian Analytics**
   align: right
   border: bottom

@@ -44,6 +44,7 @@ All notable changes to this project are documented here. The format follows
   header:
     body: |
       ![Logo](assets/logo.png)
+
       **Meridian Analytics**
     align: right
     border: bottom
@@ -61,6 +62,10 @@ All notable changes to this project are documented here. The format follows
 
   An empty block writes no part at all, rather than an empty band on every page of
   a document that asked for nothing.
+
+  The blank line after the logo is what stacks it above the text. Two lines with
+  nothing between them are one paragraph, and an image inside a paragraph is
+  inline, so the text runs beside it.
 
   A `.dotx` may carry a header and footer of its own, and these do not merge with
   them: the template's parts are its own, and a `header:` in the frontmatter is
