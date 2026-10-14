@@ -41,6 +41,9 @@ final class HeadingNamePass
 {
     private const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
+    /** The part the definitions are in, spelled once so `applyTo()` and nothing else agree. */
+    private const STYLES_PART = 'word/styles.xml';
+
     /**
      * The built-in names, in order, so a level is a position rather than a lookup.
      *
@@ -71,7 +74,7 @@ final class HeadingNamePass
         }
 
         try {
-            $styles = $zip->getFromName('word/styles.xml');
+            $styles = $zip->getFromName(self::STYLES_PART);
 
             if (!is_string($styles)) {
                 return;
@@ -80,8 +83,8 @@ final class HeadingNamePass
             $named = $this->rename($styles);
 
             if ($named !== $styles) {
-                $zip->deleteName('word/styles.xml');
-                $zip->addFromString('word/styles.xml', $named);
+                $zip->deleteName(self::STYLES_PART);
+                $zip->addFromString(self::STYLES_PART, $named);
             }
         } finally {
             $zip->close();
@@ -90,7 +93,7 @@ final class HeadingNamePass
 
     private function rename(string $styles): string
     {
-        $dom = Xml::parseOrFail($styles, 'word/styles.xml is not valid XML.');
+        $dom = Xml::parseOrFail($styles, self::STYLES_PART . ' is not valid XML.');
         $changed = false;
 
         // Namespaced rather than `getElementsByTagName('w:style')`, which matches on

@@ -177,7 +177,7 @@ foreach ([
     '05-links-and-images' => 'Hyperlinks with formatting in the label, and images.',
     '06-quotes' => 'Block quotes, including nesting and other block content.',
 ] as $name => $description) {
-    $markdown = (string) file_get_contents($root . '/markdown/' . $name . '.md');
+    $markdown = markdownOf($root, $name);
 
     // Images in the examples are relative to the Markdown file.
     $config = Configuration::create()->withOptions([
@@ -240,6 +240,18 @@ $outputPath = $docs . '/10-template' . DOCX_EXTENSION;
     ->save($outputPath);
 
 $built[] = ['10-template', 'Markdown rendered into a Word template.', $outputPath];
+
+/**
+ * A source file's Markdown, read from where the examples keep their input.
+ *
+ * One reader rather than three `file_get_contents()` calls: the path is the thing that
+ * has to agree between them, and a fourth example added somewhere else would otherwise
+ * be the one that does not.
+ */
+function markdownOf(string $root, string $name): string
+{
+    return (string) file_get_contents($root . '/markdown/' . $name . '.md');
+}
 
 // Frontmatter
 //
@@ -428,7 +440,7 @@ foreach ([
 ] as $name => $description) {
     $path = $docs . '/' . $name . DOCX_EXTENSION;
     (new MarkdownToWord(
-        (string) file_get_contents($root . '/markdown/' . $name . '.md'),
+        markdownOf($root, $name),
         Configuration::create(),
         $frontmatterParser,
     ))->save($path);
@@ -444,7 +456,7 @@ foreach ([
 ] as $name => $description) {
     $path = $docs . '/' . $name . DOCX_EXTENSION;
     (new MarkdownToWord(
-        (string) file_get_contents($root . '/markdown/' . $name . '.md'),
+        markdownOf($root, $name),
         Configuration::create(),
         $frontmatterParser,
     ))->save($path);
