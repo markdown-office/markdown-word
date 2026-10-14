@@ -86,6 +86,21 @@ All notable changes to this project are documented here. The format follows
   An `.odt` or an `.rtf` gets the source form back rather than the placeholder a
   field would have been written into.
 
+- **A heading is now the built-in heading style, and not only a resemblance of
+  one.** Every heading style was defined as `w:styleId="Heading1"` with
+  `w:name="Heading1"`, which is a style *called* Heading1 — and Word tells a
+  `TOC \o` which styles to collect by name, so it collected nothing:
+
+  > Ein Inhaltsverzeichnis erstellen? Beginnen Sie damit, dass Sie ein
+  > Überschriftenformat aus dem Formatvorlagenkatalog auf den ausgewählten Text
+  > anwenden.
+
+  Nothing else was wrong with the document: the headings looked right, every
+  property in them was plausible, and a table of contents was the only thing that
+  could tell. The definitions now carry `w:name="heading 1"` … `heading 6`, the
+  spelling Word recognises. The size, colour and spacing a document set are left
+  exactly as they were; only the name was wrong.
+
 ### Fixed
 
 - **An SVG can be written without a raster beside it**, under `svgFallback`, on the

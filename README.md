@@ -684,7 +684,15 @@ section moved.
 | `title` | a heading above the field |
 | `numbers` | `false` leaves page numbers out (Word's `\n`) |
 
-Two details are worth knowing, because both are visible in the file:
+Three details are worth knowing, because all of them are visible in the file:
+
+**The headings must be the built-in ones, by name.** A `.docx` identifies a built-in
+style by the `w:name` in its definition, and Word spells those `heading 1` …
+`heading 9`. A definition carrying `w:name="Heading1"` is a style *called* Heading1
+— it resembles the built-in heading and is not it — and a `TOC \o` collects by name,
+so it collects nothing and Word offers to build the table of contents instead of
+doing it. This library writes the built-in names, which is why a table of contents
+here works at all.
 
 **There are no cached entries.** Word fills the field in on open; until it
 does, the field says *Press F9 to build the table of contents.* A cached

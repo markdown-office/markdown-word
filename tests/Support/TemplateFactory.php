@@ -582,4 +582,37 @@ private static function write(PhpWord $phpWord, string $name): string
 
         return $contents;
     }
+
+    /**
+     * Every `w:style` definition in a package's stylesheet, keyed by its `w:styleId`.
+     *
+     * Namespace-aware, because `getElementsByTagName('w:style')` matches on the
+     * qualified name and finds nothing in a parsed part — the prefix is a binding and
+     * not part of the name.
+     *
+     * @return array<string, string> styleId to the whole `<w:style>` element
+     */
+    public static function styleDefinitions(string $docx): array
+    {
+        $dom = new DOMDocument();
+        $dom->loadXML(self::xmlOf($docx, 'word/styles.xml'));
+
+        $found = [];
+
+        foreach ($dom->getElementsByTagNameNS(self::W_NS, 'style') as $style) {
+            $found[$style->getAttribute('w:styleId')] = (string) $dom->saveXML($style);
+        }
+
+        return $found;
+    }
+
+    /**
+     * The `w:name` a definition carries, or null when it carries none.
+     */
+    public static function styleNameOf(string $definition): ?string
+    {
+        return preg_match('/<w:name w:val="([^"]+)"/', $definition, $match) === 1
+            ? html_entity_decode($match[1], ENT_QUOTES | ENT_XML1)
+            : null;
+    }
 }

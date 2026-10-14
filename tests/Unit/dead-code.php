@@ -189,6 +189,10 @@ it('does not claim again what the code does not do', function (string $claim) {
     // production but a test runner's handler is called for suppressed diagnostics too,
     // so every `.odt` and `.rtf` conversion test failed on it.
     'a symlink target is read before it is known to be there' => '@readlink($path)',
+    // A heading style is named `Heading1`, which is a style *called* Heading1 and not
+    // the built-in `heading 1`. Nothing visible is wrong with it; a table of contents
+    // is the one thing that notices, and says so in German rather than in English.
+    'a heading style is the built-in heading style' => 'so `Heading1` reaches a reader',
 ]);
 
 it('has no decorative dividers in it', function () {
