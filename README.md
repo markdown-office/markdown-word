@@ -686,13 +686,36 @@ section moved.
 
 Three details are worth knowing, because all of them are visible in the file:
 
-**The headings must be the built-in ones, by name.** A `.docx` identifies a built-in
-style by the `w:name` in its definition, and Word spells those `heading 1` …
-`heading 9`. A definition carrying `w:name="Heading1"` is a style *called* Heading1
-— it resembles the built-in heading and is not it — and a `TOC \o` collects by name,
-so it collects nothing and Word offers to build the table of contents instead of
-doing it. This library writes the built-in names, which is why a table of contents
-here works at all.
+**The headings must be the built-in ones, and they must have a level.** Two things
+are missing from what PHPWord writes, and each on its own is enough to collect
+nothing.
+
+The *name* first: a `.docx` identifies a built-in style by the `w:name` in its
+definition, and Word spells those `heading 1` … `heading 9`. A definition carrying
+`w:name="Heading1"` is a style *called* Heading1 — it resembles the built-in heading
+and is not it — and Word offers to build the table of contents instead of doing it:
+
+> Ein Inhaltsverzeichnis erstellen? Beginnen Sie damit, dass Sie ein
+> Überschriftenformat aus dem Formatvorlagenkatalog auf den ausgewählten Text
+> anwenden.
+
+The *level* second, and it is the one that is easy to believe is not needed: a
+heading is collected by its outline level, which is a property of the style rather
+than of the paragraph, and a paragraph at no level is a paragraph however it is
+styled. With the name right and no level, the message changes to
+
+> Es wurden keine Einträge für das Inhaltsverzeichnis gefunden.
+
+LibreOffice reads it the same way — the same file is a plain paragraph without the
+level and a real heading with it — which is the check available to anyone who does
+not have Word to hand.
+
+Both are written after the file is closed, by `Writer\BuiltInHeadingPass`, because
+PHPWord offers no hook for either: `Writer\Word2007\Part\Styles` takes `w:name`
+from the `w:styleId` and lowercases it only on the branch where the style came from
+a `Paragraph`, and `w:outlineLvl` is written for numbering styles only. Nothing else
+in a definition is touched, so a size, a colour or a spacing a document set is
+exactly as it was.
 
 **There are no cached entries.** Word fills the field in on open; until it
 does, the field says *Press F9 to build the table of contents.* A cached
@@ -700,9 +723,9 @@ alternative is possible and is worse — the page numbers would have to be
 guessed, and a table of contents claiming everything is on page 1 misleads
 precisely the reader who cannot refresh it.
 
-**`title` is drawn in the heading look but not with the heading style.** `TOC \o`
-collects by built-in heading style, so a title that carried one would list
-itself as the first entry of the contents it titles.
+**`title` is drawn in the heading look but not with the heading style.** A title
+that carried a heading style would list itself as the first entry of the contents
+it titles.
 
 Only `.docx` can carry the field. An `.odt` or an `.rtf` gets the source form
 back — `::toc` as a paragraph — and says so through the usual
@@ -733,6 +756,10 @@ library:
   grammar leaves a colon after a word alone, because `status:error` is prose too.
   There has to be a space or punctuation in front of the colon, so the document
   reads `plan :footnote[…]` with a visible space before the mark.
+- **A mark on a line of its own is a paragraph holding a mark.** `:footnote` is an
+  inline directive, so one between two blank lines is not an annotation of the sentence
+  above it — it is a whole paragraph with nothing in it but a superscript, and a reader
+  sees an empty line. Put it at the end of the sentence it belongs to.
 
 Only `.docx` carries a footnote: neither other format has a writer for one, so
 they get the source form back and the loss is reported the usual way.

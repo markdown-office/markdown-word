@@ -16,17 +16,19 @@ use PhpOffice\PhpWord\Style\Paragraph;
  * A fresh `styles.xml` carries only `Normal` and `FootnoteReference`, so the
  * `w:pStyle` a heading carries has nothing to resolve against. Defining them keeps a
  * standalone document self-contained while still using the styleIds Word recognises.
- * What that does not do is make a heading one, and it is the second half of the
- * sentence that is the problem: PHPWord writes the definition's `w:name` from the
- * same string as its `w:styleId`, and a name of `Heading1` is a style *called*
- * Heading1 rather than the built-in `heading 1`. Word tells a `TOC \o` which
- * styles to collect by name, so it collects nothing.
+ * What that does not do is make a heading one: two things PHPWord writes are missing
+ * from what a table of contents needs, and both are corrected afterwards by
+ * {@see \MarkdownWord\Writer\BuiltInHeadingPass} rather than here.
  *
- * The name is therefore corrected afterwards, by
- * {@see \MarkdownWord\Writer\HeadingNamePass}. There is no hook for it here:
- * PHPWord lowercases a name only on the branch where the style came from a
- * `Paragraph`, and a heading reaches the registry through `addFontStyle()`. Nothing
- * sets an outline level either, and `TOC \o` does not read one.
+ * The name is the first. PHPWord writes a definition's `w:name` from the same string as
+ * its `w:styleId`, and a name of `Heading1` is a style *called* Heading1 rather than
+ * the built-in `heading 1`. There is no hook for it here: PHPWord lowercases a name
+ * only on the branch where the style came from a `Paragraph`, and a heading reaches the
+ * registry through `addFontStyle()`.
+ *
+ * The outline level is the second, and the one that is easy to believe is not needed.
+ * A heading is collected by its level, and the level is a property of the style; a
+ * document that got the name right and no level still collects nothing.
  *
  * The definition is taken from the slot rather than from a table here, so a document
  * that overrides a heading writes a definition of its own and not the library's.

@@ -86,20 +86,36 @@ All notable changes to this project are documented here. The format follows
   An `.odt` or an `.rtf` gets the source form back rather than the placeholder a
   field would have been written into.
 
-- **A heading is now the built-in heading style, and not only a resemblance of
-  one.** Every heading style was defined as `w:styleId="Heading1"` with
-  `w:name="Heading1"`, which is a style *called* Heading1 — and Word tells a
-  `TOC \o` which styles to collect by name, so it collected nothing:
+- **A heading is now the built-in heading style, with the level that goes with
+  it.** Every heading style was defined as `w:styleId="Heading1"` with
+  `w:name="Heading1"`, which is a style *called* Heading1 — and a `.docx`
+  identifies a built-in style by the `w:name` in its definition, which Word
+  spells `heading 1`. Word offered to build the table of contents rather than
+  building it:
 
   > Ein Inhaltsverzeichnis erstellen? Beginnen Sie damit, dass Sie ein
   > Überschriftenformat aus dem Formatvorlagenkatalog auf den ausgewählten Text
   > anwenden.
 
-  Nothing else was wrong with the document: the headings looked right, every
-  property in them was plausible, and a table of contents was the only thing that
-  could tell. The definitions now carry `w:name="heading 1"` … `heading 6`, the
-  spelling Word recognises. The size, colour and spacing a document set are left
-  exactly as they were; only the name was wrong.
+  Correcting the name is not enough, and a document that got that far failed
+  differently, because a heading is collected by its outline level and the level
+  belongs to the style rather than to the paragraph:
+
+  > Es wurden keine Einträge für das Inhaltsverzeichnis gefunden.
+
+  Nothing else was ever wrong with the document: the headings looked right,
+  every property in them was plausible, and a table of contents was the only
+  thing that could tell. The definitions now carry `w:name="heading 1"` …
+  `heading 6` and `w:outlineLvl` 0 … 5, which is what Word and LibreOffice both
+  collect by. The size, colour and spacing a document set are left exactly as
+  they were.
+
+  Written after the file is closed, by `Writer\BuiltInHeadingPass`, because
+  PHPWord offers no hook for either: `Writer\Word2007\Part\Styles` takes
+  `w:name` from the `w:styleId`, and `w:outlineLvl` is written for numbering
+  styles only. A `w:styleId` outside this library's own list is not touched, so
+  a slot pointed at a style of the document's own keeps it and a template's
+  stylesheet comes through unchanged.
 
 ### Fixed
 

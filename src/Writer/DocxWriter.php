@@ -125,7 +125,7 @@ final class DocxWriter
             (new TocPass($tocs->payloads()))->applyTo($docxPath);
         }
 
-        (new HeadingNamePass())->applyTo($docxPath);
+        (new BuiltInHeadingPass())->applyTo($docxPath);
 
         $descriptions = $images?->take() ?? [];
 
