@@ -253,8 +253,11 @@ $built[] = ['10-template', 'Markdown rendered into a Word template.', $outputPat
 // The GFM flavour plus frontmatter. Naming only `FrontMatterExtension` would *replace*
 // the default rather than add to it, and the tables in these examples would come out as
 // paragraphs of pipes.
+// Directives are on by default, so it is `DEFAULT_FLAVOUR` that is added to rather
+// than `gfm`: naming `gfm` here would build a parser *without* them, and an example
+// page whose whole subject is the directive syntax would come out as literal text.
 $frontmatterParser = new CommonMarkParser([
-    ...CommonMarkParser::FLAVOURS['gfm'],
+    ...CommonMarkParser::FLAVOURS[CommonMarkParser::DEFAULT_FLAVOUR],
     FrontMatterExtension::class,
 ]);
 
@@ -416,6 +419,22 @@ $path = $docs . '/' . '24-furniture' . DOCX_EXTENSION;
 ))->save($path);
 
 $built[] = ['24-furniture', 'A running head and foot described in the frontmatter.', $path];
+
+// Directives
+
+foreach ([
+    '25-toc' => 'A table of contents field and the footnotes that go with it.',
+    '26-directives' => 'What each shape of the directive syntax becomes, drawn and not.',
+] as $name => $description) {
+    $path = $docs . '/' . $name . DOCX_EXTENSION;
+    (new MarkdownToWord(
+        (string) file_get_contents($root . '/markdown/' . $name . '.md'),
+        Configuration::create(),
+        $frontmatterParser,
+    ))->save($path);
+
+    $built[] = [$name, $description, $path];
+}
 
 // Tables
 
