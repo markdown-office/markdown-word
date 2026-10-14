@@ -167,35 +167,37 @@ final class BuiltInHeadingPass
         $paragraph = $this->child($style, 'pPr');
         $existing = $paragraph === null ? null : $this->child($paragraph, 'outlineLvl');
         $wanted = (string) $level;
+        $changed = false;
 
         if ($existing !== null) {
-            if ($existing->getAttribute('w:val') === $wanted) {
-                return false;
-            }
-
+            $changed = $existing->getAttribute('w:val') !== $wanted;
             $existing->setAttribute('w:val', $wanted);
-
-            return true;
+        } elseif ($paragraph !== null) {
+            $paragraph->appendChild($this->element($document, 'outlineLvl', $wanted));
+            $changed = true;
+        } else {
+            $this->addParagraphProperties($document, $style, $wanted);
+            $changed = true;
         }
 
-        $element = $this->element($document, 'outlineLvl', $wanted);
+        return $changed;
+    }
 
-        if ($paragraph !== null) {
-            $paragraph->appendChild($element);
-
-            return true;
-        }
-
-        // A definition with no `w:pPr` at all — nothing this library writes produces
-        // one, but a template's stylesheet may carry a heading without paragraph
-        // properties — gets one, before `w:rPr` because `CT_Style` puts it there.
+    /**
+     * Gives a definition that arrived without paragraph properties a set of them.
+     *
+     * Nothing this library writes produces such a definition — PHPWord opens `w:pPr`
+     * unconditionally — but a template's stylesheet can carry a heading without them,
+     * and without a `w:pPr` there is nowhere to put the level at all.
+     */
+    private function addParagraphProperties(DOMDocument $document, DOMElement $style, string $level): void
+    {
         $paragraph = $this->element($document, 'pPr');
-        $paragraph->appendChild($element);
-        $run = $this->child($style, 'rPr');
+        $paragraph->appendChild($this->element($document, 'outlineLvl', $level));
 
-        $style->insertBefore($paragraph, $run);
-
-        return true;
+        // Before `w:rPr`, because `CT_Style` puts it there and a reader that finds
+        // them the other way round does not find the definition at all.
+        $style->insertBefore($paragraph, $this->child($style, 'rPr'));
     }
 
     private function child(DOMElement $parent, string $localName): ?DOMElement
