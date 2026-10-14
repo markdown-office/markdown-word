@@ -6,7 +6,7 @@ namespace MarkdownWord\Writer;
 
 use DOMDocument;
 use DOMElement;
-use MarkdownWord\Exception\FileNotWritable;
+use MarkdownWord\Exception\UnreadableDocument;
 use MarkdownWord\Exception\MalformedDocument;
 use MarkdownWord\Xml;
 use ZipArchive;
@@ -37,16 +37,21 @@ use ZipArchive;
  * were body text wearing a heading's size.
  *
  * PHPWord offers no hook for either. `Writer\Word2007\Part\Styles` writes `w:name`
- * from the same string as the `w:styleId`, lowercasing only on the branch where the
- * style came from a `Paragraph`, and a heading reaches the registry through
- * `addFontStyle()`. `w:outlineLvl` is written for a numbering style and nothing else,
- * with no setter anywhere. Both are supplied here, after the file is written.
+ * from the same string as the `w:styleId`, and spells `heading N` in exactly one
+ * place — the `if ($styleType == 'title')` branch of `writeFontStyle()`, which only
+ * `addTitleStyle()` reaches. `writeParagraphStyle()` writes the name verbatim, and a
+ * heading reaches the registry through `addFontStyle()`, whose style type is `text`.
+ * `w:outlineLvl` is written for a numbering style and nothing else, with no setter
+ * anywhere. Both are supplied here, after the file is written.
  *
- * A `w:styleId` on this library's own list is matched exactly: `Heading1` is the
- * built-in heading 1, while `Heading10` and a template's own `Heading1Corporate` are
- * not anything on that list and keep what they came with. A slot a document pointed at
- * a style of its own is deliberately untouched — the registrar skips writing a
- * definition for it, so there is nothing here to correct.
+ * A `w:styleId` of exactly `Heading1`…`Heading9` is matched: those are Word's nine
+ * built-in headings, and a template carrying the seventh is as wrong as one carrying
+ * the first. This is a wider list than {@see \MarkdownWord\Configuration\LookAndFeel}'s,
+ * which defines six — the extra three are never written by this library, and the two
+ * have to be kept in step by hand, because nothing makes them agree. `Heading10` and a
+ * template's own `Heading1Corporate` match nothing and keep what they came with. A slot
+ * a document pointed at a style of its own is deliberately untouched — the registrar
+ * skips writing a definition for it, so there is nothing here to correct.
  *
  * Nothing else in a definition is changed. A document that set a size, a colour or a
  * spacing means them, and rewriting a definition to fix what a reader notices only on
@@ -60,7 +65,7 @@ final class BuiltInHeadingPass
     private const STYLES_PART = 'word/styles.xml';
 
     /**
-     * @throws FileNotWritable When the package cannot be written back.
+     * @throws UnreadableDocument When the package cannot be opened at all.
      * @throws MalformedDocument When `word/styles.xml` is not XML.
      */
     public function applyTo(string $docxPath): void
@@ -68,7 +73,12 @@ final class BuiltInHeadingPass
         $zip = new ZipArchive();
 
         if ($zip->open($docxPath) !== true) {
-            throw new FileNotWritable(sprintf('Unable to open "%s" for writing.', $docxPath));
+            // `UnreadableDocument` and not `FileNotWritable`, because this is the same
+            // condition every sibling pass raises and it is a document that cannot be
+            // read rather than a destination that cannot be written — the pass opens the
+            // package it is about to change, and a caller catching `InvalidInput` for
+            // "that is not a Word document" would otherwise miss it.
+            throw new UnreadableDocument(sprintf('Unable to open "%s" as a zip archive.', $docxPath));
         }
 
         try {
@@ -126,7 +136,7 @@ final class BuiltInHeadingPass
      */
     private function builtInLevelOf(DOMElement $style): ?int
     {
-        $id = $style->getAttribute('w:styleId');
+        $id = $style->getAttributeNS(self::W_NS, 'styleId');
 
         return preg_match('/^Heading([1-9])$/', $id, $match) === 1 ? (int) $match[1] : null;
     }
@@ -138,11 +148,11 @@ final class BuiltInHeadingPass
     {
         $element = $this->child($style, 'name');
 
-        if ($element === null || $element->getAttribute('w:val') === $name) {
+        if ($element === null || $element->getAttributeNS(self::W_NS, 'val') === $name) {
             return false;
         }
 
-        $element->setAttribute('w:val', $name);
+        $element->setAttributeNS(self::W_NS, 'w:val', $name);
 
         return true;
     }
@@ -168,10 +178,17 @@ final class BuiltInHeadingPass
         $changed = false;
 
         if ($existing !== null) {
-            $changed = $existing->getAttribute('w:val') !== $wanted;
-            $existing->setAttribute('w:val', $wanted);
+            $changed = $existing->getAttributeNS(self::W_NS, 'val') !== $wanted;
+            $existing->setAttributeNS(self::W_NS, 'w:val', $wanted);
         } elseif ($paragraph !== null) {
-            $paragraph->appendChild($this->element($document, 'outlineLvl', $wanted));
+            // Before `w:rPr` for the same reason {@see self::addParagraphProperties()}
+            // places the whole `w:pPr` there: `CT_PPr` is the `CT_PPrBase` sequence and
+            // then `rPr?`, so a level appended after one is a definition a validating
+            // reader does not find.
+            $paragraph->insertBefore(
+                $this->element($document, 'outlineLvl', $wanted),
+                $this->child($paragraph, 'rPr'),
+            );
             $changed = true;
         } else {
             $this->addParagraphProperties($document, $style, $wanted);
@@ -216,7 +233,7 @@ final class BuiltInHeadingPass
         $element = $document->createElementNS(self::W_NS, 'w:' . $localName);
 
         if ($value !== '') {
-            $element->setAttribute('w:val', $value);
+            $element->setAttributeNS(self::W_NS, 'w:val', $value);
         }
 
         return $element;

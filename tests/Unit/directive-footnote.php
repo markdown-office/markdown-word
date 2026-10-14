@@ -314,6 +314,30 @@ it('leaves no mark of the library\'s own behind in either writer', function (For
         ->and($written)->not->toContain('word/footnotes.xml');
 })->with(['odt' => Format::Odt, 'rtf' => Format::Rtf]);
 
+it('leaves the size of a note to the reader, not to the document', function () {
+    // The run inside the note carries the document's face so a mark sitting in a heading
+    // does not set the note in that heading's type. It carried the *size* as well, and a
+    // direct `w:sz` outranks the `FootnoteText` paragraph style above it — so a note was
+    // drawn at body size, which is the one thing a footnote is not.
+    //
+    // The size goes in through `overrides` rather than a `styles:` block because the
+    // helper builds with an explicit `Configuration`, which is not the path a frontmatter
+    // `styles:` block takes.
+    $path = Scratch::path('footnote-size', '.docx');
+
+    (new MarkdownToWord(
+        "A sentence.:footnote[the note]\n",
+        overrides: ['styles' => ['paragraph' => ['size' => 12]]],
+    ))->save($path);
+
+    $part = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+    preg_match('~<w:footnote w:id="1".*?</w:footnote>~s', $part, $found);
+    $body = $found[0] ?? '';
+
+    expect($body)->toContain('<w:pStyle w:val="FootnoteText"/>')
+        ->and($body)->not->toContain('<w:sz ');
+});
+
 it('draws the source form in a writer reached after one that can carry footnotes', function (Format $format) {
     // One converter writing two formats is ordinary — a caller producing a `.docx` and
     // a `.rtf` of the same Markdown — and the handler has to be built for the format

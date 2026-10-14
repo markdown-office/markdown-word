@@ -209,6 +209,15 @@ final class FurnitureTokens
             if ($element instanceof Text && $this->markerIn((string) $element->getText()) !== null) {
                 return $index;
             }
+
+            // A link carries its label as one string rather than as child elements, so
+            // a marker inside it is a character further in and not an element of its
+            // own. Not looking for it left the marker where it was, in the finished
+            // document, where the author sees a private-use character and a nonce
+            // instead of the `{page}` they wrote.
+            if ($element instanceof Link && $this->markerIn($element->getText()) !== null) {
+                return $index;
+            }
         }
 
         return null;
@@ -244,13 +253,21 @@ final class FurnitureTokens
             $text = (string) $element->getText();
 
             if ($this->markerIn($text) !== null) {
-                $element->setText((string) preg_replace_callback(
-                    $this->pattern(),
-                    static fn (array $match): string => '{' . $match[1] . '}',
-                    $text,
-                ));
+                $element->setText($this->plain($text));
             }
         }
+    }
+
+    /**
+     * The markers in a string put back as the tokens the author wrote.
+     */
+    private function plain(string $text): string
+    {
+        return (string) preg_replace_callback(
+            $this->pattern(),
+            static fn (array $match): string => '{' . $match[1] . '}',
+            $text,
+        );
     }
 
     private function rebuild(TextRun $run, AbstractElement $element): void
@@ -268,7 +285,17 @@ final class FurnitureTokens
         }
 
         if ($element instanceof Link) {
-            $run->addLink($element->getSource(), $element->getText(), $element->getFontStyle(), null, $element->isInternal());
+            // `addLink()` takes the label as one string, so there is nowhere inside a
+            // link to put a field. The token goes back to the literal the author wrote,
+            // which is what the fallback promises and the only thing a reader can act
+            // on — a private-use character in a running head is neither.
+            $run->addLink(
+                $element->getSource(),
+                $this->plain($element->getText()),
+                $element->getFontStyle(),
+                null,
+                $element->isInternal(),
+            );
 
             return;
         }

@@ -58,12 +58,12 @@ final class MarkdownToWord implements Converter
      * The format the last write went through, and what that document asked of the
      * writer, so {@see self::pendingLosses()} has something to answer with.
      *
-     * `Docx` rather than null, because two of the public entry points —
+     * `Docx` rather than null, and rather than nothing: the two public entry points —
      * {@see self::toPhpWord()} and {@see self::renderIntoContainer()} — render without
      * writing and so never set it, and a directive handler reads it to decide whether it
-     * can carry what it is drawing. Null would read as "not docx" and hand those two a
-     * source form where the document is about to be written as a `.docx`, which is the
-     * format every other part of the library defaults to.
+     * can carry what it is drawing. A handler reads it as `$format ?? Format::Docx`, so
+     * null would mean docx too and the default would be decoration — which is why it is
+     * here, stated rather than relied on.
      */
     private ?Format $format = Format::Docx;
 

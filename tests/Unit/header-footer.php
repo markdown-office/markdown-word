@@ -278,6 +278,34 @@ it('writes a token in a header body as a field too', function () {
         ->and($header)->not->toContain('{page}');
 });
 
+it('writes a token in a table cell in a header as a field', function () {
+    $markdown = "---\nheader:\n  body: |\n    | a | b |\n    | - | - |\n    | x | {page} |\n---\n\nBody.\n";
+
+    $header = TemplateFactory::xmlOf(furnitureDocx($markdown), 'word/header1.xml');
+
+    // A cell is a paragraph like any other, and a marker there was never looked for:
+    // it went into the finished document as the private-use character and its nonce.
+    // The author's `{page}` not coming back is the half that matters — a private-use
+    // character in a running head is neither a field nor something they wrote.
+    expect($header)->toMatch('~<w:instrText[^>]*>\s*PAGE\s*</w:instrText>~')
+        ->and($header)->not->toContain('{page}')
+        ->and($header)->not->toContain("\u{E000}");
+});
+
+it('puts a token inside a link label back the way the author wrote it', function () {
+    $markdown = "---\nheader:\n  body: '[a {page} b](https://example.com)'\n---\n\nBody.\n";
+
+    $header = TemplateFactory::xmlOf(furnitureDocx($markdown), 'word/header1.xml');
+
+    // A field cannot go inside a link: PHPWord's `addLink()` takes the label as one
+    // string, so there is nowhere to put one. The literal is the fallback the class
+    // promises — a line the reader can see and go and fix — and the marker leaking is
+    // the failure it exists to prevent.
+    expect($header)->toMatch('~<w:t[^>]*>a \{page\} b</w:t>~')
+        ->and($header)->toContain('<w:hyperlink')
+        ->and($header)->not->toContain("\u{E000}");
+});
+
 it('writes a date in a header body as a Word date field', function () {
     $markdown = "---\nheader:\n  dateFormat: 'd MMMM yyyy'\n  body: 'Dated {date}'\n---\n\nBody.\n";
 
@@ -397,6 +425,20 @@ it('asks for different even and odd headers when it is asked for', function () {
 
     // And the odd-page header, which without it leaves every odd page bare.
     expect(TemplateFactory::xmlOf($path))->toContain('<w:headerReference w:type="default"');
+});
+
+it('puts a furniture problem on the line of the key, not of the block', function () {
+    // Through a real frontmatter block rather than the hand-built locator the unit test
+    // for `Furniture::validate()` supplies itself. That locator existed and nothing
+    // passed one, so every furniture problem came back naming the line of `header:` —
+    // the line a reader has to read twice to find the key the message is about.
+    expect(fn () => furnitureDocx(
+        "---\nheader:\n  body: Acme\n  align: sideways\n  border: sideways\n---\n\nBody.\n",
+    ))->toThrow(
+        InvalidConfigurationValue::class,
+        'Line 4: In "header": the "align" key is "sideways". It is one of: center, left, right.'
+            . "\nLine 5: In \"header\": the \"border\" key is \"sideways\". It is one of: both, bottom, top.",
+    );
 });
 
 it('refuses a header naming a key nothing reads', function () {

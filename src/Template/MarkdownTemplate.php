@@ -215,15 +215,18 @@ final class MarkdownTemplate
     /**
      * The dialect the document is read with.
      *
-     * Frontmatter by default, which is the opposite of {@see MarkdownToWord}'s: there
-     * the block is configuration a caller may not have written, and here it is where the
-     * values for the template's fields are. Without the extension a leading `---` is a
-     * thematic break and the block is printed at the top of the document.
+     * {@see CommonMarkParser::DEFAULT_FLAVOUR} — which is GFM plus the directive
+     * extension — and not the `gfm` it was, because the template renderer is a second
+     * entry point into the same library and a document naming `::toc` should not get
+     * different syntax for being filled into a `.dotx` than for being converted. It
+     * differs on the frontmatter instead: there the block is where the values for the
+     * template's fields are, and without the extension a leading `---` is a thematic
+     * break and the block is printed at the top of the document.
      */
     private function dialect(): MarkdownParserInterface
     {
         return $this->parser ?? new CommonMarkParser([
-            ...CommonMarkParser::FLAVOURS['gfm'],
+            ...CommonMarkParser::FLAVOURS[CommonMarkParser::DEFAULT_FLAVOUR],
             FrontMatterExtension::class,
         ]);
     }

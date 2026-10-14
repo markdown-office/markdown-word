@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use MarkdownWord\Exception\FileNotWritable;
+use MarkdownWord\Exception\UnreadableDocument;
 use MarkdownWord\Exception\MalformedDocument;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Tests\Support\Scratch;
@@ -213,6 +213,27 @@ it('gives a heading that arrived without paragraph properties a set of them', fu
         ->and(TemplateFactory::styleNameOf($definition))->toBe('heading 2');
 });
 
+it('leaves a styleId that is not a built-in heading alone', function (string $styleId) {
+    // The two negatives the class docblock names. `Heading10` is not heading 10 —
+    // there is no such built-in — and `Heading1Corporate` is a template's own style
+    // that merely starts with the same letters. Renaming either would change how a
+    // reader draws a style the library never wrote, so the match is on the whole id.
+    //
+    // Both carry a name that would be *corrected* if they were matched, so an id
+    // matched too loosely changes them and this catches it. Nothing this library
+    // writes carries either id, which is why they arrive in a hand-built part.
+    $definition = sprintf(
+        '<w:style w:type="paragraph" w:styleId="%s"><w:name w:val="Corp Heading"/><w:pPr/></w:style>',
+        $styleId,
+    );
+    $path = packageWithHeading($definition, 'heading-styles-not-a-heading');
+    $before = TemplateFactory::xmlOf($path, 'word/styles.xml');
+
+    (new BuiltInHeadingPass())->applyTo($path);
+
+    expect(TemplateFactory::xmlOf($path, 'word/styles.xml'))->toBe($before);
+})->with(['Heading10', 'Heading1Corporate', 'Heading0', 'MyHeading1']);
+
 it('rewrites nothing in a stylesheet that is already right', function () {
     // A template's own headings come through here carrying the built-in name and the
     // level that goes with it, which is the case the other tests cannot reach because
@@ -284,7 +305,10 @@ it('says a stylesheet that is not XML is a broken document', function () {
         ->toThrow(MalformedDocument::class);
 });
 
-it('says a file that is not a zip is one it could not write', function () {
+it('says a file that is not a zip is one it could not read', function () {
+    // `UnreadableDocument`, as every sibling pass raises for the same condition, and
+    // not `FileNotWritable`: the pass opens the package it is about to change, and a
+    // caller catching `InvalidInput` for "that is not a Word document" has to see this.
     expect(fn () => (new BuiltInHeadingPass())->applyTo(Scratch::path('heading-styles-nofile', '.docx')))
-        ->toThrow(FileNotWritable::class);
+        ->toThrow(UnreadableDocument::class);
 });

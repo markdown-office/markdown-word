@@ -90,10 +90,6 @@ final class Toc
     {
         $title = $node->getAttributes()->getString('title');
 
-        if ($title !== null && $title !== '') {
-            $this->drawTitle($title, $target);
-        }
-
         // Only `.docx` can carry the field. Emitting the token regardless would put
         // a run of invisible separators and the letters MDWT into an `.odt` or an
         // `.rtf`, where {@see \MarkdownWord\Writer\TocPass} never runs to take it
@@ -109,6 +105,13 @@ final class Toc
             $target->addTextRun($this->styles->paragraphStyleFor(Styles::PARAGRAPH))->addText((string) $node);
 
             return;
+        }
+
+        // After the guard rather than before it. A writer that cannot carry the field
+        // gets the source form and nothing else, and a heading-styled title above it
+        // titles a table of contents that is not there.
+        if ($title !== null && $title !== '') {
+            $this->drawTitle($title, $target);
         }
 
         $this->payloads[] = [

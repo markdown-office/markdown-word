@@ -69,7 +69,12 @@ function furniturePartsOf(string $path): array
     if (str_ends_with($path, '.rtf')) {
         $written = (string) file_get_contents($path);
 
-        return [str_contains($written, '\header'), str_contains($written, '\footer')];
+        // `{\header` and `{\footer`, and not `\header` and `\footer`: a section always
+        // carries `\headery` and `\footery` distances in its `\sectd`, whether or not it
+        // has either. Asking for the shorter spelling matched those, so a document with
+        // no furniture at all came back saying it had both, and the assertion below
+        // passed either way.
+        return [str_contains($written, '{\header'), str_contains($written, '{\footer')];
     }
 
     $zip = new ZipArchive();

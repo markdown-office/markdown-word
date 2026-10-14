@@ -113,9 +113,9 @@ All notable changes to this project are documented here. The format follows
   Written after the file is closed, by `Writer\BuiltInHeadingPass`, because
   PHPWord offers no hook for either: `Writer\Word2007\Part\Styles` takes
   `w:name` from the `w:styleId`, and `w:outlineLvl` is written for numbering
-  styles only. A `w:styleId` outside this library's own list is not touched, so
-  a slot pointed at a style of the document's own keeps it and a template's
-  stylesheet comes through unchanged.
+  styles only. A `w:styleId` that is not one of Word's nine built-in heading
+  ids is not touched, so a slot pointed at a style of the document's own keeps it
+  and a template's stylesheet comes through unchanged.
 
   Verified by opening the built examples in Word 16.113 and reading back what it
   collected, which is also what corrected the second of these two fixes: it was

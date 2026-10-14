@@ -23,8 +23,9 @@ use PhpOffice\PhpWord\Style\Paragraph;
  * The name is the one Word collects by. PHPWord writes a definition's `w:name` from the
  * same string as its `w:styleId`, and a name of `Heading1` is a style *called* Heading1
  * rather than the built-in `heading 1`, so a `TOC \o` finds nothing to collect. There
- * is no hook for it here: PHPWord lowercases a name only on the branch where the style
- * came from a `Paragraph`, and a heading reaches the registry through `addFontStyle()`.
+ * is no hook for it here: `Writer\Word2007\Part\Styles` spells `heading N` only in
+ * the `if ($styleType == 'title')` branch of `writeFontStyle()`, which `addTitleStyle()`
+ * alone reaches, and a heading reaches the registry through `addFontStyle()` instead.
  *
  * The outline level is the one Word does not collect by and every other reader does.
  * It was the obvious suspect for a table of contents that stayed empty once the name was

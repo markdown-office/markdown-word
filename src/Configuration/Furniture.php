@@ -9,10 +9,9 @@ namespace MarkdownWord\Configuration;
  * it that change from page to page.
  *
  * A value object of its own rather than a corner of {@see Options}, because a running
- * head is not a rendering behaviour: it is content a document describes about itself,
- * and a template brings one of its own that a document overrides a slot at a time. The
- * page number and the soft-break rule answer different questions and do not belong in
- * one list of switches.
+ * head is not a rendering behaviour: it is content a document describes about itself.
+ * The page number and the soft-break rule answer different questions and do not
+ * belong in one list of switches.
  *
  * Every property defaults to `null`, so nothing is configured until a document or a
  * template says so, and that is what {@see self::isEmpty()} asks. It is also what makes
@@ -48,19 +47,13 @@ final class Furniture
      * The properties where `null` is a value in its own right rather than the absence of
      * one, and so a merge applies it rather than keeping what the receiver holds.
      *
-     * Empty, and deliberately so: each of these can be turned off by writing its own
-     * value — `page: false` — or by leaving the key out, so a `null` carries nothing to
-     * apply and both ways in drop it. A property that means something when it is null
-     * belongs in this list; without a line here it would be merged as an absence, and
-     * could never be cleared once it had a value.
-     *
      * Empty, unlike {@see \MarkdownWord\Configuration\Options}'s, and deliberately so:
      * that list has two properties because clearing an image base path is a thing a
      * document does, whereas every property here defaults to null already, so dropping
-     * the key and keeping it reach the same object. It is listed rather than
-     * inlined so a property that comes to mean something when it is null has one place
-     * to be named — and so a reader comparing the two classes is comparing the two
-     * decisions rather than assuming they are the same one.
+     * the key and keeping it reach the same object. It is listed rather than inlined so
+     * a property that comes to mean something when it is null has one place to be named
+     * — and so a reader comparing the two classes is comparing the two decisions rather
+     * than assuming they are the same one.
      *
      * @var list<string>
      */
@@ -114,14 +107,19 @@ final class Furniture
     }
 
     /**
-     * Merge a block over this one.
+     * Merge a block over this one, the way {@see Options::withAll()} does.
      *
-     * This is the whole of what a frontmatter's override of a template's header is. A
-     * `null` means "not mentioned" rather than "reset": a document naming a `body` and
-     * saying nothing about the alignment its template set is changing the body, and
-     * reading the absent alignment as a reset would change a slot the author never
-     * mentioned. That is silent data loss rather than a visible mistake, and it is the
-     * one thing a partial override must never do.
+     * A `null` means "not mentioned" rather than "reset": naming a `body` and saying
+     * nothing about the alignment already set changes the body and leaves the
+     * alignment, and reading the absent alignment as a reset would change a slot the
+     * author never mentioned. That is silent data loss rather than a visible mistake,
+     * and it is the one thing a partial merge must never do.
+     *
+     * Not what a document does to a *template's* header. A `.dotx` may carry a header
+     * and footer of its own and a document's do not merge with them — the template's
+     * parts are its own, and a `header:` in the frontmatter is ignored on that path.
+     * This merges one furniture over another in memory, which is what a caller
+     * assembling one by hand needs and what the renderer never does.
      *
      * The two ways in agree on which properties can hold a null at all — that is a
      * property of the class rather than of the caller — so they drop the same keys

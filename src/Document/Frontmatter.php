@@ -460,9 +460,17 @@ final class Frontmatter
                 continue;
             }
 
-            foreach (Furniture::validate($value, null, $section) as $problem) {
-                $problems[] = Validator::locate($problem, $this->lineOf($section));
-            }
+            // The locator is what puts a problem on the line of the key it is about
+            // rather than on the line of `header:`. Handed the property name as written,
+            // and `BlockLines` separates a path with `/`. A key the block does not have
+            // resolves to nothing and the section's own line stands in for it.
+            //
+            // `Furniture::validate()` returns every problem already located, so nothing
+            // is wrapped again here — that would give a reader "Line 2: Line 4:".
+            $locate = fn (string $property): ?int
+                => $this->lineOf($section . '/' . $property) ?? $this->lineOf($section);
+
+            $problems = [...$problems, ...Furniture::validate($value, $locate, $section)];
         }
 
         return $problems;

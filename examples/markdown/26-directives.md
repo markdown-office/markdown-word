@@ -49,7 +49,7 @@ same is true of a table of contents, which needs a field.
 
 ## And through a template
 
-A `.dotx` may carry its own header and footer, and none of the three constructs
+A `.dotx` may carry its own header and footer, and neither of the two constructs
 above reaches a document rendered into one: the template renderer copies its
 elements into the template's own document, and the parts this library writes
 beside a body do not travel with them. Render this file without `--template` to

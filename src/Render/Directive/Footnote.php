@@ -52,10 +52,10 @@ final class Footnote
      * documentation example uses — maps to a setter that does not exist and is dropped
      * for the same reason. The name is the only form that reaches the part.
      *
-     * Word recognises `FootnoteText` as a built-in styleId, so the note is drawn by
-     * the reader's footnote look rather than by this library's, which is the point of
-     * a footnote; the run inside it carries the document's body face so the note is
-     * not set in the heading the mark happens to sit in.
+     * Referenced and not defined. That is the point: Word resolves `FootnoteText` to
+     * its own look from the reference alone, so a document that does not define it
+     * still draws the note as a footnote rather than as body text. Nothing here writes
+     * a definition, and adding one would take the reader's look away.
      */
     private const BODY_STYLE = 'FootnoteText';
 
@@ -127,6 +127,13 @@ final class Footnote
     private function bodyFont(): ?array
     {
         $font = ParagraphStyle::fontPart($this->styles->slot(Styles::PARAGRAPH));
+
+        // `size` and `color` go, and the rest stays. The run needs the document's face
+        // so a mark sitting in a heading does not set the note in that heading's type,
+        // but a direct `w:sz` outranks the `FootnoteText` paragraph style above it, and
+        // a note drawn at body size is not a note — which is the whole of what
+        // {@see self::BODY_STYLE} is there to let the reader decide.
+        unset($font['size'], $font['color']);
 
         return $font === [] ? null : $font;
     }

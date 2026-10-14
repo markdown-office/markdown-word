@@ -47,7 +47,15 @@ final class FurnitureStyle
     /** The air either side of the rule, for the same reason and in the same amount. */
     private const RULE_SPACE = ['space' => ['before' => 120, 'after' => 120]];
 
-    /** @var list<string> The alignments that are a tab stop rather than a justification. */
+    /**
+     * @var list<string> The alignments that are a tab stop rather than a justification.
+     *
+     * A subset of `Furniture::ALIGNS`, and nothing enforces that: an alignment added
+     * there and not here would validate, take `w:jc` for the body, and give the fields
+     * no answer at all — the case this class exists to prevent. Kept as its own list
+     * because it is a different question: not what alignments exist, but which of them
+     * position by tab.
+     */
     private const STOPPED = ['center', 'right'];
 
     /**

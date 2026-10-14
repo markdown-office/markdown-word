@@ -60,7 +60,7 @@ final class Directives
 
     public function drawsBlock(DirectiveBlock $node): bool
     {
-        return $node->getName() !== null && isset($this->block[self::foldName($node->getName())]);
+        return self::claims($node, $this->block);
     }
 
     public function drawsInline(DirectiveInline $node): bool
@@ -77,15 +77,36 @@ final class Directives
      */
     public function drawBlock(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): bool
     {
-        $name = $node->getName();
-
-        if ($name === null || !isset($this->block[self::foldName($name)])) {
+        if (!self::claims($node, $this->block)) {
             return false;
         }
 
-        ($this->block[self::foldName($name)])($node, $target, $context);
+        ($this->block[self::foldName((string) $node->getName())])($node, $target, $context);
 
         return true;
+    }
+
+    /**
+     * Whether a block directive is one of ours.
+     *
+     * The name is not enough on its own. A container and a leaf are different
+     * directive shapes rather than two spellings of one, so `:::toc` is not `::toc`
+     * written with a fence too many — it is a container named `toc`, and this library
+     * draws no containers. Matching on the name claimed it anyway, and the handler
+     * drew a table of contents and stopped: the body went with it, and the reader was
+     * told nothing. `Renderer\DocumentRenderer` descends into a container nothing
+     * claims and draws the body with the fence dropped, which is what this leaves
+     * `:::toc` to.
+     *
+     * @param array<string, callable(DirectiveBlock, AbstractContainer, RenderContext): void> $claimed
+     */
+    private static function claims(DirectiveBlock $node, array $claimed): bool
+    {
+        $name = $node->getName();
+
+        return $name !== null
+            && !$node->isContainer()
+            && isset($claimed[self::foldName($name)]);
     }
 
     public function drawInline(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): bool
@@ -126,7 +147,12 @@ final class Directives
     }
 
     /**
-     * The names this library draws, for a message that has to name them.
+     * The names this library draws, folded the way a lookup folds them.
+     *
+     * For a caller that has to name them — an error message listing what is and is not
+     * claimed, or a diagnostic about a document. Nothing in this library needs it today:
+     * an unknown directive is drawn as the author wrote it rather than refused, so there
+     * is no message listing the alternatives to build.
      *
      * @return list<string>
      */

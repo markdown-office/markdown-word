@@ -135,6 +135,22 @@ it('claims nothing for a container written without a name', function () {
     expect((new Directives())->drawsBlock(blockNodeOf("::: {.note}\nx\n:::\n")))->toBeFalse();
 });
 
+it('claims no container, however it is spelled', function () {
+    // The shapes are different directives rather than two spellings of one, so
+    // `:::toc` is not `::toc` with a fence too many. Claiming it drew a table of
+    // contents and stopped, and the body went with it — a silent loss of whatever
+    // the container held, which is the one outcome an unclaimed directive must never
+    // have. An unclaimed container descends and draws its body instead.
+    $drawing = static function (DirectiveBlock $node, $target, $context): void {
+    };
+
+    $registry = (new Directives())->withBlock('toc', $drawing);
+
+    expect($registry->drawsBlock(blockNodeOf(":::toc\n# Chapter one\n:::\n")))->toBeFalse()
+        ->and($registry->drawsBlock(blockNodeOf("::: TOC\nx\n:::\n")))->toBeFalse()
+        ->and($registry->drawsBlock(blockNodeOf('::toc')))->toBeTrue();
+});
+
 /** The one parsed node of a given shape, so a test can ask about a name rather than count. */
 function inlineNodeOf(string $markdown): DirectiveInline
 {

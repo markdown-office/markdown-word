@@ -699,9 +699,10 @@ whole of what it needs, and it was checked by opening the file in Word rather th
 reading the markup, which is the only way to know it.
 
 Both halves are written after the file is closed, by `Writer\BuiltInHeadingPass`,
-because PHPWord offers no hook for either: `Writer\Word2007\Part\Styles` takes `w:name`
-from the `w:styleId` and lowercases it only on the branch where the style came from a
-`Paragraph`, and `w:outlineLvl` is written for numbering styles only. Nothing else in
+because PHPWord offers no hook for either. `Writer\Word2007\Part\Styles` takes `w:name`
+from the `w:styleId` and spells `heading N` itself in exactly one place — the
+`if ($styleType == 'title')` branch of `writeFontStyle()`, which only `addTitleStyle()`
+reaches — and `w:outlineLvl` is written for numbering styles only. Nothing else in
 a definition is touched, so a size, a colour or a spacing a document set is exactly as
 it was.
 

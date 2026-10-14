@@ -54,6 +54,9 @@ past.
 | `22-corporate-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the templates](#the-templates). |
 | `22-corporate-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |
 | `23-plain-letterhead.docx` | The same report into a template that is a logo and **nothing else** — no styles, and no content control either. The content is appended because the template names no place for it. Compare with `22`. |
+| `24-furniture.docx` | A running head and foot a document describes about itself, under `header:` and `footer:`. The head carries a logo and a wordmark stacked and right-aligned over a rule; the foot a centred `Page 1 of 1` written as Word fields rather than numbers. See [Headers and footers](#headers-and-footers). |
+| `25-toc.docx` | A `::toc` drawn as a real Word field, so the contents are built by Word on F9 rather than written down here. Three footnotes on the page, for the mark and the note beside each other. |
+| `26-directives.docx` | What a directive becomes in each place: a table of contents and a footnote, and three names this library does not draw — an inline one keeps its braces, a leaf one its whole source form, a container its body without its fence. |
 
 Numbering is one sequence and nothing shares a number. `markdown/14-rejected.md` is
 not in this table because `build.php` does not build it — converting it is the failure
@@ -317,7 +320,7 @@ foot of the page is the body, and Word renumbers them if you add or delete one
 above another. Look at the mark after "every region but one" and at the first
 numbered line at the foot of the page: same number.
 
-**`26` is the page for what a directive becomes.** Its first half uses the three
+**`26` is the page for what a directive becomes.** Its first half uses the two
 names this library draws. Its second half uses names it does not: an inline one
 keeps its braces and its attributes, a leaf one keeps its whole source form, and
 a container keeps its body without its fence. A name that means nothing is drawn
@@ -326,7 +329,7 @@ default.
 
 **What to check in `26`:** the paragraph holding `:badge[PRODUCTION]` reads as
 written and is not a paragraph of its own; the `::image[…]` line is one; and the
-container's heading, list and table are all there with no fence above them.
+`:::callout` body is drawn with its fence above it omitted.
 
 Three things on that page cannot be seen there at all, and are there so the
 document says so rather than the page being quietly wrong about itself: a format

@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-use League\CommonMark\Extension\FrontMatter\FrontMatterExtension;
 use MarkdownWord\Configuration;
-use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Template\MarkdownTemplate;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
@@ -28,10 +26,12 @@ use MarkdownWord\Tests\Support\Upstream;
  * So on this path a directive is drawn as what it is. The content control and the
  * fields still work, and the document still says `::toc` where the author wrote it.
  *
- * The parser matters to every test here, which is why it is passed rather than left to
- * the default. `MarkdownTemplate` reads with `gfm` on its own, which does not parse a
- * directive at all — so a document containing one needs the same parser the command
- * line gives it, or there is no directive here to corrupt anything.
+ * The parser is the template's own, which is the default one: the renderer reads with
+ * `CommonMarkParser::DEFAULT_FLAVOUR` so that a document naming a directive gets the
+ * same syntax whether it is converted or filled into a template. It used to pass one
+ * explicitly because the default was `gfm` and did not parse a directive at all — which
+ * is how this file came to be the only place in the library where a `::toc` was known
+ * to survive, and why nothing checked what the default did with one.
  */
 
 beforeEach(fn () => Upstream::install());
@@ -52,11 +52,6 @@ function fillTemplateWithDirectives(): string
     (new MarkdownTemplate(
         Scratch::remember(TemplateFactory::report()),
         Configuration::create(),
-        [],
-        new CommonMarkParser([
-            ...CommonMarkParser::FLAVOURS[CommonMarkParser::DEFAULT_FLAVOUR],
-            FrontMatterExtension::class,
-        ]),
     ))
         ->insert("Hello there :footnote[a note].\n\n::toc\n\n# Chapter\n")
         ->save($document);

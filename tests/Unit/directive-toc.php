@@ -14,6 +14,7 @@ use MarkdownWord\Text\TextExtractor;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\Writer\TocPass;
+use PhpOffice\PhpWord\Element\TextRun;
 
 beforeEach(fn () => Upstream::install());
 afterEach(fn () => Upstream::restore());
@@ -127,6 +128,20 @@ function tocPass(array $placeholders): TocPass
     ));
 }
 
+it('keeps the body of a container written as :::toc', function () {
+    // The authoring slip this guards is three colons instead of two. `::toc` is a
+    // leaf, so `:::toc` is a container of that name — a shape nothing here draws.
+    // Claiming it drew the field and stopped, and the container's contents went with
+    // it: no exception, no reported loss, and a document missing whatever it held.
+    $document = tocBody(":::toc\n# Chapter one\n\nBody text that must survive.\n:::\n");
+
+    expect($document)->toContain('Chapter one')
+        ->and($document)->toContain('Body text that must survive.')
+        // And no field, because nothing drew the container — a container's body is
+        // drawn on its own terms or not at all.
+        ->and(tocFieldsOf($document))->toBe([]);
+});
+
 it('draws a table of contents field for ::toc', function () {
     // The shape is the whole of it: a field is a `begin`, an instruction and an
     // `end`, and a document carrying only the last of those is a field Word has to
@@ -192,6 +207,33 @@ it('writes a title above the field, in the heading look', function () {
         // a number that changes.
         ->and(tocRunPropertiesOf($document, 'Contents'))
         ->toBe(tocRunPropertiesOf($document, 'One'));
+});
+
+it('draws no title where it drew no table of contents either', function () {
+    // The title was drawn before the check that decides whether the field can be
+    // carried, so an `.odt` got a heading-styled "Contents" above a document with no
+    // contents in it. A writer that cannot carry the field gets the source form and
+    // nothing else.
+    //
+    // Asked as a paragraph of its own rather than as a substring: the source form is
+    // `::toc{title="Contents"}`, so the word is in the document either way and only the
+    // paragraph it sits in says whether it was drawn as a heading.
+    $path = Scratch::path('toc-title-without-table', '.odt');
+
+    (new MarkdownToWord("::toc{title=\"Contents\"}\n\n# One\n"))->convertTo(Format::Odt, $path);
+
+    $content = TemplateFactory::xmlOf($path, 'content.xml');
+    preg_match_all('~<text:p\b[^>]*>(.*?)</text:p>~s', $content, $found);
+
+    $paragraphs = array_map(
+        static fn (string $p): string => trim(html_entity_decode(strip_tags(preg_replace('~<[^>]+>~', ' ', $p) ?? ''))),
+        $found[1],
+    );
+
+    // The source form carries the title as an attribute, so the word is inside it
+    // either way; only the paragraph it sits in says whether it was drawn as a heading.
+    expect($paragraphs)->toContain('::toc{title="Contents"}')
+        ->and($paragraphs)->not->toContain('Contents');
 });
 
 it('keeps the title out of the table it titles', function () {
@@ -419,17 +461,23 @@ it('takes the second format\'s loss rather than the first\'s', function () {
 
 it('is carried by toPhpWord(), which never writes and so never sets a format', function () {
     // `toPhpWord()` renders into a PhpWord the caller writes themselves, and writes
-    // nothing — so the format property it would read is whatever it was left at. Left
-    // null that reads as "not docx" and the handler draws the source form, in a
-    // document the caller is about to write as a `.docx`, which is the format every
-    // other part of the library defaults to.
+    // nothing — so the format property it would read is whatever it was left at. It
+    // defaults to `Docx` for exactly that reason: `Toc` reads it as
+    // `$this->format ?? Format::Docx`, so a null would be docx too and the default
+    // would be decoration.
     $converter = new MarkdownToWord("::toc\n\n# One\n");
     $phpWord = $converter->toPhpWord("::toc\n\n# One\n");
 
-    // `TextExtractor` rather than reaching into the tree: it is what a caller reading
-    // a rendered document uses, and the placeholder is a text node exactly as a
-    // footnote's mark would be.
-    $text = MarkdownWord\Text\TextExtractor::fromPhpWord($phpWord);
+    // The placeholder, not the absence of the marker. `TextExtractor` strips the
+    // placeholders out of whatever it reads, so the old assertion — the marker is gone
+    // — passed whether the handler drew a field or fell back to the source form. What
+    // makes the two distinguishable is that a carried `::toc` leaves a placeholder run
+    // behind for `TocPass` to replace, and a source form leaves the words.
+    $runs = array_map(
+        static fn (TextRun $run): string => $run->getText(),
+        $phpWord->getSections()[0]->getElements(),
+    );
 
-    expect($text)->not->toContain(Toc::MARKER);
+    expect($runs[0])->toBe(Toc::MARKER . '0' . Toc::MARKER)
+        ->and(TextExtractor::fromPhpWord($phpWord))->toBe('One');
 });

@@ -11,6 +11,7 @@ use MarkdownWord\Parser\MarkdownParserInterface;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\Element\Header;
 use PhpOffice\PhpWord\Element\Section;
+use PhpOffice\PhpWord\Element\Table;
 use PhpOffice\PhpWord\Element\TextRun;
 
 /**
@@ -191,11 +192,51 @@ final class FurnitureWriter
 
         foreach ($part->getElements() as $element) {
             $style->applyTo($element);
+        }
+
+        foreach ($this->runsOf($part) as $run) {
+            $tokens->expand($run);
+        }
+    }
+
+    /**
+     * Every run in the part, including the ones a table cell holds.
+     *
+     * A marker can land wherever Markdown can put text, and a table cell is a
+     * paragraph like any other. Reaching only the top level left the marker there to
+     * be written out as the private-use character and its nonce, which is the one
+     * outcome the fallback exists to prevent — the author's `{page}` never came back,
+     * and neither did a field.
+     *
+     * A table is walked by hand rather than generically because `Table` and `Row` are
+     * not containers in PHPWord's model; only the cell is, and only the cell holds
+     * anything.
+     *
+     * @return list<TextRun>
+     */
+    private function runsOf(AbstractContainer $part): array
+    {
+        $runs = [];
+
+        foreach ($part->getElements() as $element) {
+            if ($element instanceof Table) {
+                foreach ($element->getRows() as $row) {
+                    foreach ($row->getCells() as $cell) {
+                        foreach ($this->runsOf($cell) as $nested) {
+                            $runs[] = $nested;
+                        }
+                    }
+                }
+
+                continue;
+            }
 
             if ($element instanceof TextRun) {
-                $tokens->expand($element);
+                $runs[] = $element;
             }
         }
+
+        return $runs;
     }
 
     /**
