@@ -208,10 +208,6 @@ final class FurnitureWriter
      * outcome the fallback exists to prevent — the author's `{page}` never came back,
      * and neither did a field.
      *
-     * A table is walked by hand rather than generically because `Table` and `Row` are
-     * not containers in PHPWord's model; only the cell is, and only the cell holds
-     * anything.
-     *
      * @return list<TextRun>
      */
     private function runsOf(AbstractContainer $part): array
@@ -220,19 +216,36 @@ final class FurnitureWriter
 
         foreach ($part->getElements() as $element) {
             if ($element instanceof Table) {
-                foreach ($element->getRows() as $row) {
-                    foreach ($row->getCells() as $cell) {
-                        foreach ($this->runsOf($cell) as $nested) {
-                            $runs[] = $nested;
-                        }
-                    }
-                }
+                $runs = [...$runs, ...$this->runsInTable($element)];
 
                 continue;
             }
 
             if ($element instanceof TextRun) {
                 $runs[] = $element;
+            }
+        }
+
+        return $runs;
+    }
+
+    /**
+     * The runs a table holds, which is every run of every cell.
+     *
+     * Walked by hand rather than generically because `Table` and `Row` are not
+     * containers in PHPWord's model; only the cell is, and only the cell holds
+     * anything. A cell is handed back to {@see self::runsOf()} rather than read one
+     * level down, which is what reaches a table inside one.
+     *
+     * @return list<TextRun>
+     */
+    private function runsInTable(Table $table): array
+    {
+        $runs = [];
+
+        foreach ($table->getRows() as $row) {
+            foreach ($row->getCells() as $cell) {
+                $runs = [...$runs, ...$this->runsOf($cell)];
             }
         }
 

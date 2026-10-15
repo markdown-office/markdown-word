@@ -145,27 +145,4 @@ final class Directives
     {
         return strtolower(trim($name));
     }
-
-    /**
-     * The names this library draws, folded the way a lookup folds them.
-     *
-     * For a caller that has to name them — an error message listing what is and is not
-     * claimed, or a diagnostic about a document. Nothing in this library needs it today:
-     * an unknown directive is drawn as the author wrote it rather than refused, so there
-     * is no message listing the alternatives to build.
-     *
-     * @return list<string>
-     */
-    public function blockNames(): array
-    {
-        return array_keys($this->block);
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function inlineNames(): array
-    {
-        return array_keys($this->inline);
-    }
 }

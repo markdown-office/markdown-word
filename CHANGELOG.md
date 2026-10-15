@@ -123,6 +123,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A `:footnote[…]` in a running head or foot no longer raises.** It is drawn as
+  the directive the author wrote — `:footnote[a note]` — and the conversion
+  completes. It previously ended in `BadMethodCallException: Cannot add Footnote
+  in TextRun`, which is PHPWord's own exception and not an answer a document
+  author can act on.
+
+  A footnote is a mark with a note at the foot of one page, and a running head is
+  read on every page and has no such page, so the mark could only ever have
+  pointed at a note nothing held. The source form is the whole of the answer, and
+  nothing is reported for it: a loss is a property of the *format*, and `.docx`
+  writes a footnote everywhere else. `:footnote[…]` in the body of a document is
+  unaffected and is still a real footnote.
+
 - **An SVG can be written without a raster beside it**, under `svgFallback`, on the
   command line as `--svg-fallback`:
 

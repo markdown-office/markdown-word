@@ -100,9 +100,9 @@ final class Survey
     /**
      * Whether the document has a vector with no raster beside it.
      *
-     * Not a {@see self::FEATURES} key, because it is not a property of the format: the
-     * writer carried the vector perfectly well. It is a property of this document, and it
-     * is asked about here rather than recorded as a feature so that
+     * Not a {@see \MarkdownWord\Format::FEATURES} key, because it is not a property of
+     * the format: the writer carried the vector perfectly well. It is a property of this
+     * document, and it is asked about here rather than recorded as a feature so that
      * {@see \MarkdownWord\Format} does not answer for it.
      */
     public function isVectorOnly(): bool

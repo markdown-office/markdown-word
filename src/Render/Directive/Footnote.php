@@ -24,6 +24,17 @@ use PhpOffice\PhpWord\Element\AbstractContainer;
  * the note to the run therefore emits exactly what Word emits: a `w:r` carrying
  * `w:footnoteReference` between the words either side, inside the one `w:p`.
  *
+ * That is the whole of what `checkValidity()` decides, and it is not enough. The same
+ * method holds a second table — `$validSubcontainers` — that permits a `Footnote` in a
+ * `TextRun` only when that run sits in a **section**, so a run in a header or a footer
+ * is refused with `Cannot add Footnote in TextRun` despite the first table allowing it.
+ * A running head is read on every page and cannot carry a note at the foot of any one
+ * of them, so a mark there would point at a note no page holds: {@see self::numbered()}
+ * asks the question `checkValidity()` asks and the source form goes in. Nothing is
+ * reported for it, because the loss a reader is told about is a property of the *format*
+ * and `.docx` writes footnotes everywhere else; here the author gets back the characters
+ * they typed, which is the one answer they can act on without a sentence explaining it.
+ *
  * That also settles the id. Both halves come from PHPWord's own arithmetic —
  * `getRelationId() + 1` in `Element\Footnote` for the mark and in
  * `Part\Footnotes` for the body — so a mark cannot end up pointing at a note other
@@ -59,6 +70,16 @@ final class Footnote
      */
     private const BODY_STYLE = 'FootnoteText';
 
+    /**
+     * PHPWord's name for a document body, which is the part a note can be numbered in.
+     *
+     * The bare word rather than `Section::class`, because this is what `getDocPart()`
+     * answers: PHPWord stores a container's `protected $container` — `'Header'`,
+     * `'Footer'`, `'Section'` — and never a class name. Its own
+     * `$validSubcontainers` compares against the same bare word.
+     */
+    private const BODY_PART = 'Section';
+
     /** Whether the document asked for a footnote, whatever format it is written in. */
     private bool $used = false;
 
@@ -91,10 +112,17 @@ final class Footnote
 
         $this->used = true;
 
-        // Only `.docx` can carry a footnote. The token a placeholder-and-pass design
-        // would leave behind is not emitted at all, so there is nothing for a writer
-        // that cannot do this to fail to take back out.
-        if (!$this->carries || ($this->format ?? Format::Docx) !== Format::Docx) {
+        // Only `.docx` can carry a footnote, and only a body can number one. The token a
+        // placeholder-and-pass design would leave behind is not emitted at all, so there
+        // is nothing for a writer that cannot do this to fail to take back out.
+        //
+        // The use is recorded above rather than below, so a writer that cannot carry a
+        // note at all says so through {@see \MarkdownWord\Format}. A note refused for
+        // where it stands is not reported even so — the docblock gives the reason.
+        if (!$this->carries
+            || ($this->format ?? Format::Docx) !== Format::Docx
+            || !self::numbered($target)
+        ) {
             $target->addText((string) $node, $this->styles->fontFor($style));
 
             return;
@@ -102,6 +130,18 @@ final class Footnote
 
         $note = $target->addFootnote(self::BODY_STYLE);
         $note->addText($body, $this->bodyFont());
+    }
+
+    /**
+     * Whether a note added to this container would be numbered by Word.
+     *
+     * {@see self::BODY_PART}, and not the container class: PHPWord's second validity
+     * table is about the *part* the container sits in, so a `TextRun` is acceptable
+     * here and unacceptable one level up, and the two look identical from the outside.
+     */
+    private static function numbered(AbstractContainer $target): bool
+    {
+        return $target->getDocPart() === self::BODY_PART;
     }
 
     /**

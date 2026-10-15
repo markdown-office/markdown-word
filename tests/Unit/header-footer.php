@@ -13,6 +13,8 @@ use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
+use MarkdownWord\Render\FurnitureStyle;
+use MarkdownWord\Render\FurnitureTokens;
 use MarkdownWord\Render\FurnitureWriter;
 use MarkdownWord\Render\HtmlFragmentRenderer;
 use MarkdownWord\Render\ImageConversionCollector;
@@ -26,6 +28,8 @@ use MarkdownWord\Render\SvgAttachmentCollector;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use PhpOffice\PhpWord\Element\Field;
+use PhpOffice\PhpWord\Element\TextRun;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 
@@ -236,6 +240,30 @@ it('embeds a raster picture in a header', function () {
         ->and($targets[0])->toStartWith('media/header1_');
 });
 
+it('writes a token in a header as a field and keeps what stands after it', function () {
+    // The marker is what the rebuild starts from, and the rebuild takes the whole tail
+    // of the run — so a line break and a picture written *after* the token are rebuilt
+    // too. Two trailing spaces are what CommonMark takes for a hard break, and they are
+    // inside a YAML literal block so nothing strips them on the way in.
+    $markdown = "---\nheader:\n  body: |\n    Acme {page}  \n    continued ![the logo](logo.png)\n---\n\nBody.\n";
+
+    $path = furnitureDocx($markdown, ['options' => [
+        'imageBasePath' => furnitureImageDirectory(),
+        'images' => Options::IMAGE_EMBED,
+    ]]);
+    $header = TemplateFactory::xmlOf($path, 'word/header1.xml');
+
+    // The field is the token's half and the picture and the break are the tail's: a
+    // rebuild that dropped either would leave a header missing what the author wrote
+    // beside the page number, which is quieter than the marker leak it replaced.
+    expect($header)->toMatch('~<w:instrText[^>]*>\s*PAGE\s*</w:instrText>~')
+        ->and($header)->toMatch('~<w:br/>~')
+        ->and($header)->toMatch('~<w:pict>.*?<v:imagedata r:id="rId1"~s')
+        ->and(TemplateFactory::targetsOf($path, 'word/_rels/header1.xml.rels'))->toHaveCount(1)
+        ->and($header)->not->toContain('{page}')
+        ->and($header)->not->toContain("\u{E000}");
+});
+
 it('turns a link in a header into a real link', function () {
     $markdown = "---\nheader:\n  body: 'Acme — [the site](https://example.com)'\n---\n\nBody.\n";
 
@@ -304,6 +332,48 @@ it('puts a token inside a link label back the way the author wrote it', function
     expect($header)->toMatch('~<w:t[^>]*>a \{page\} b</w:t>~')
         ->and($header)->toContain('<w:hyperlink')
         ->and($header)->not->toContain("\u{E000}");
+});
+
+it('puts a token in a run holding something it cannot rebuild back the way the author wrote it', function () {
+    $tokens = new FurnitureTokens();
+    $run = new TextRun();
+
+    // Built by hand rather than converted, because nothing this library's renderer
+    // puts in a run sits outside `FurnitureTokens::REBUILDABLE` — that is the whole of
+    // what makes the closed list safe, and it is also why this path has no document
+    // that reaches it. The list is there for the day that stops being true, so the
+    // promise is pinned here while the trigger is still unreachable.
+    $run->addText('a ' . $tokens->substitute('{page}') . ' b');
+    $run->addBookmark('anchor');
+
+    $tokens->expand($run);
+
+    // The fallback's two halves: the author's token comes back, and the marker — a
+    // private-use character and a nonce — does not survive into the document, which is
+    // the outcome the class exists to prevent.
+    expect((string) $run->getText())->toContain('a {page} b')
+        ->and((string) $run->getText())->not->toContain("\u{E000}")
+        ->and(array_filter($run->getElements(), fn ($element): bool => $element instanceof Field))->toBe([]);
+});
+
+it('draws a footnote in a running head as the directive the author wrote', function () {
+    $markdown = "---\nheader:\n  body: Acme :footnote[a note]\nfooter:\n  body: Page :footnote[another]\n---\n\nBody.\n";
+
+    $converter = new MarkdownToWord($markdown, parser: furnitureParser());
+    $archive = Scratch::path('furniture', '.docx');
+    $converter->convertTo(Format::Docx, $archive);
+
+    // PHPWord refuses a `Footnote` in a run outside a section — and says so with a
+    // `BadMethodCallException` naming PHPWord's own internals, which is not an answer a
+    // document author can act on. A running head is read on every page and cannot hold
+    // a note at the foot of one, so the source form is the whole of the answer.
+    $header = TemplateFactory::xmlOf($archive, 'word/header1.xml');
+    $footer = TemplateFactory::xmlOf($archive, 'word/footer1.xml');
+
+    expect($header)->toContain('<w:t xml:space="preserve">:footnote[a note]</w:t>')
+        ->and($footer)->toContain('<w:t xml:space="preserve">:footnote[another]</w:t>')
+        ->and($header)->not->toContain('footnoteReference')
+        ->and($footer)->not->toContain('footnoteReference');
 });
 
 it('writes a date in a header body as a Word date field', function () {
