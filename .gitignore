@@ -1,11 +1,6 @@
 # Dependencies, installed by Composer.
 /vendor/
 
-# A local copy of Composer, used by tools/build-phar.php in preference to
-# whichever `composer` happens to be on the PATH so that the archive is built
-# with the version whoever installed the dependencies used.
-/composer.phar
-
 # The lock file *is* committed, so a build is repeatable rather than resolving
 # whatever is newest that morning. The `dependencies` job in tests.yml resolves
 # afresh on a schedule, which is how a new release still gets tested.
@@ -14,7 +9,7 @@
 
 # Everything the build produces.
 
-# The phar, and the directory it is assembled in.
+# The directory the coverage reports are written into.
 /build/
 
 # The documents and previews examples/build.php writes.
@@ -22,14 +17,6 @@
 
 # Scratch space for the tests and the checking scripts.
 /tmp/
-
-# What the phar workflow's own checks used to write into the repository root
-# before it was told to use `tmp/` like everything else. They are here as well
-# so that an old run, or a run from a branch that has not been merged, does not
-# leave them showing up as untracked files.
-/check.md
-/check.docx
-/round-trip.md
 
 # Test runner state.
 /.phpunit.cache/

@@ -5,7 +5,6 @@ declare(strict_types=1);
 use League\CommonMark\Extension\FrontMatter\FrontMatterExtension;
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Options;
-use MarkdownWord\Console\Application;
 use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
@@ -302,27 +301,3 @@ it('drops a typeface and a run colour in an .rtf and keeps them elsewhere', func
         expect($body)->toContain('A31515');
     }
 })->with(Format::cases());
-
-it('refuses a template for the two formats that cannot use one', function (Format $format, bool $refused) {
-    $input = Scratch::path('templated.md');
-    file_put_contents($input, "# Notes\n");
-
-    // A real template rather than any `.docx`: a document without a `${body}`
-    // region is refused for being the wrong shape, which would be true of the
-    // `.docx` row too and say nothing about the format.
-    $run = runCli([
-        'to-' . $format->value,
-        $input,
-        '-t',
-        TemplateFactory::placeholder(),
-        '-o',
-        Scratch::path('out', $format->extension()),
-    ]);
-
-    expect($run['code'])->toBe($refused ? Application::FAILURE : Application::SUCCESS)
-        ->and($run['err'])->toContain($refused ? 'A template cannot be filled in' : ' → ');
-})->with([
-    'docx' => [Format::Docx, false],
-    'odt' => [Format::Odt, true],
-    'rtf' => [Format::Rtf, true],
-]);

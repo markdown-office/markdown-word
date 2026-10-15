@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use MarkdownWord\Console\UpstreamDeprecations;
 use MarkdownWord\Converter;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\WordToMarkdown;
 use MarkdownWord\Tests\Support\Scratch;
+use MarkdownWord\Tests\Support\Upstream;
 
 /*
  * The shape of the public interface.
@@ -22,8 +22,8 @@ use MarkdownWord\Tests\Support\Scratch;
  * decoration.
  */
 
-beforeEach(fn () => UpstreamDeprecations::install());
-afterEach(fn () => UpstreamDeprecations::restore());
+beforeEach(fn () => Upstream::install());
+afterEach(fn () => Upstream::restore());
 
 /**
  * @return array<string, class-string<Converter>>
@@ -166,7 +166,7 @@ it('takes either a file or the content in both directions', function () {
     saveDocument("# Subject\n", $document);
 
     // A path, and the bytes themselves, are both accepted — the same rule in
-    // both directions, and the same rule the command line works by.
+    // both directions.
     expect((new MarkdownToWord($markdown))->convert())->toStartWith('PK');
     expect((new MarkdownToWord('# Subject'))->convert())->toStartWith('PK');
     expect((new WordToMarkdown($document))->convert())->toContain('# Subject');

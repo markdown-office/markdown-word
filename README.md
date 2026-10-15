@@ -1,7 +1,6 @@
 # markdown-word
 
 [![tests](https://github.com/markdown-office/markdown-word/actions/workflows/tests.yml/badge.svg)](https://github.com/markdown-office/markdown-word/actions/workflows/tests.yml)
-[![phar](https://github.com/markdown-office/markdown-word/actions/workflows/phar.yml/badge.svg)](https://github.com/markdown-office/markdown-word/actions/workflows/phar.yml)
 [![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=markdown-office_markdown-word&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=markdown-office_markdown-word&metric=coverage)](https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word)
 
@@ -45,7 +44,7 @@ result as a string instead when that is what is wanted:
 
 So there is no need to read a file first. A string that names a file that exists
 is read from it, and anything else is taken as the content — the same rule in
-both directions, and the one the command line works by:
+both directions:
 
 ```php
 (new MarkdownToWord('notes.md'))->save('notes.docx');                  // a path
@@ -76,12 +75,13 @@ $word = new MarkdownToWord(file_get_contents('notes.md'));
 $back = (new WordToMarkdown($word->convert()))->convert();
 ```
 
-Or from a terminal, with no PHP to write. The direction is worked out from the
-file, so there is nothing to choose:
+Or from a terminal, with no PHP to write. That is [`mdoffice`][mdoffice], the
+command line for this library and for Markdown to PowerPoint, which requires
+this package and drives it:
 
 ```sh
-mdword README.md          # writes README.docx
-mdword README.docx        # writes README.md
+mdoffice word README.md    # writes README.docx
+mdoffice word README.docx  # writes README.md
 ```
 
 ## Installation
@@ -90,21 +90,9 @@ mdword README.docx        # writes README.md
 composer require markdown-office/markdown-word
 ```
 
-That installs the command line along with the library, because `composer.json`
-declares `bin: ["bin/mdword"]` — after a Composer install it is at
-`vendor/bin/mdword`.
-
-Or the whole thing as one file, with nothing installed but PHP:
-
-```sh
-curl -L -o mdword.phar https://github.com/markdown-office/markdown-word/releases/latest/download/mdword.phar
-chmod +x mdword.phar
-./mdword.phar --version
-```
-
-The `chmod +x` is not optional. A download from a GitHub release does not carry
-the executable bit, and without it `./mdword.phar` fails with *permission
-denied*.
+That is the library and nothing else. There is no `bin` entry, so a Composer
+install of this package puts no command in `vendor/bin`; if you want the one
+above, ask for `mdoffice` as well.
 
 See [Requirements](#requirements) for what PHP and which extensions it needs.
 Where to get help: [the issue tracker][issues].
@@ -144,7 +132,6 @@ composer test:spec         # just the conformance suite
 composer test:roundtrip    # just the round-trip suite
 composer test:readme       # just the examples on this page
 composer test:coverage     # with a report in build/coverage
-composer build:phar        # writes build/mdword.phar
 php smoke.php              # does the library work on this version of PHP?
 php stress.php             # malformed input across every configuration
 php examples/build.php     # a document for every example in examples/
@@ -157,9 +144,8 @@ of parser. Every result has to be a valid `.docx`. It is what caught the escapin
 defect described below.
 
 The examples on this page are `tests/Readme/examples.php`, one test each, and
-they run with everything else. The `mdword` one-liners are driven through the
-application, so the documentation cannot quietly stop describing what the code
-does.
+they run with everything else, so the documentation cannot quietly stop
+describing what the code does.
 
 Tests are written with [Pest][pest] 5, against PHPUnit 13.
 
@@ -167,17 +153,14 @@ Tests are written with [Pest][pest] 5, against PHPUnit 13.
 
 | Workflow | What it does |
 | --- | --- |
-| `tests` | `composer validate --strict`, `composer audit`, the README examples and the command line, then the suite on PHP 8.4 and 8.5 with a coverage report |
-| `phar` | builds `mdword.phar`, runs it on its own, uploads it, and attaches it to a release when a tag is pushed |
+| `tests` | `composer validate --strict`, `composer audit`, the README examples, then the suite on PHP 8.4 and 8.5 with a coverage report |
 | `sonarcloud` (a job in `tests`) | static analysis on [SonarCloud][sonarcloud], failing the build when the quality gate is red |
 
 PHP 8.2 is in the matrix too, but the test suite cannot run there: **Pest 5
 requires PHP 8.4**, while the library itself supports 8.2. That gap is covered by
-`smoke.php`, which uses no test framework and checks that both directions and the
-command line work on whatever PHP it is given, and by `stress.php` beside it.
-Pointed at a phar, `smoke.php` runs the archive as well — see
-[Requirements](#requirements). Between the two, every supported version is
-exercised.
+`smoke.php`, which uses no test framework and checks that both directions work on
+whatever PHP it is given, and by `stress.php` beside it. Between the two, every
+supported version is exercised.
 
 Everything installs what `composer.lock` pins, so a build is repeatable. A weekly
 `dependencies` job resolves afresh instead and runs the suite against the result,
@@ -319,7 +302,7 @@ at side by side.
 ## Output formats
 
 `.docx` is the format everything defaults to: `toDocx()` and `convert()` are what
-they were, and `mdword to-docx` is what a run with nothing else said does. The
+they were, and it is what a conversion asked for nothing else produces. The
 other two are there for the readers that want them, and each has to say for
 itself what it cannot carry — a document that quietly lost its lists is worse
 than one that says it has none, because the loss is only visible by comparing
@@ -337,13 +320,6 @@ $converter->convertTo(Format::Rtf, 'notes.rtf');
 
 $bytes = $converter->toOdt('notes.md');               // → the document's bytes
 $bytes = $converter->toRtf('notes.md');
-```
-
-```sh
-mdword to-docx notes.md
-mdword to-odt  notes.md
-mdword to-rtf  notes.md
-mdword notes.md --to odt
 ```
 
 All three go through the same staging the `.docx` path has always used: the
@@ -436,18 +412,11 @@ foreach ($converter->pendingLosses() as $loss) {
 }
 ```
 
-`mdword` prints the same lines on standard error, where the rest of its progress
-goes, so a piped result stays clean:
-
-```sh
-$ mdword to-rtf notes.md
-mdword: rtf cannot carry named-styles: headings and other named styles are written as body text
-mdword: rtf cannot carry lists: every list item is left out of the document
-mdword: notes.md → notes.rtf
-```
-
-A `.docx` drops nothing and is what the other two are measured against, so a run
-into one never prints a line of this kind.
+Nothing reports them for you: writing the document is the library's job and
+deciding where a warning goes is the caller's, so a caller that wants the losses
+on standard error rather than in a return value prints them. A `.docx` drops
+nothing and is what the other two are measured against, so a run into one never
+produces a line of this kind.
 
 ### What is not here
 
@@ -459,7 +428,8 @@ field. Those are text, and reading them back is the honest answer to be asked fo
 template that has not been filled in.
 
 **A template is a `.docx` or a `.dotx`.** PHPWord's template processor reads that
-package and nothing else, so `mdword to-odt --template` is refused rather than half
+package and nothing else, so there is nothing to render one into for either of
+the other two formats, and asking for both at once is refused rather than half
 attempted. A `.dotx` is the same package with its body declared as a template's, and
 whatever it is rendered into, the result is a document — see [Word
 templates](#word-templates).
@@ -470,118 +440,24 @@ than going in silently flattened.
 
 ## Command line
 
-`mdword` is the whole library at a terminal, and it works out for itself which
-way the data has to go. A Word document is a zip archive and Markdown is text,
-and the four bytes that say which is which are part of the format rather than a
-convention — so the *name* of the file is never consulted, and a Markdown file
-called `notes.docx` still converts the right way. `--to docx`, `--to odt`,
-`--to rtf` or `--to markdown` says it outright, which is the only way to be
-explicit when reading from a pipe.
-
-From a checkout, `php bin/mdword`. As a single file with nothing installed,
-`php mdword.phar`.
-
-The commands still exist for a script to use, where being explicit is worth more
-than being short:
+There is none in this repository. The command line is [`mdoffice`][mdoffice],
+one program for Markdown to Word and to PowerPoint, which requires this package
+and calls it rather than reimplementing any of it:
 
 ```sh
-mdword to-docx notes.md
-mdword to-odt notes.md
-mdword to-rtf notes.md
-mdword to-markdown report.docx
+composer require markdown-office/mdoffice
+
+mdoffice word notes.md                 # → notes.docx
+mdoffice word report.docx              # → report.md
+mdoffice word notes.md --to odt        # → notes.odt
+mdoffice word notes.md --template report.dotx
 ```
 
-Using one direction's option with the other says which command it belongs to
-rather than that it is unknown. The result goes to standard output and progress
-goes to standard error, so it composes with everything else:
-
-```sh
-cat notes.md | mdword --to docx - -o - | pbcopy
-```
-
-With no `-o`, the result is written beside the input with the extension swapped.
-Reading from standard input there is no name to derive, so it goes to standard
-output instead. A run whose result would land on its own input stops rather than
-overwriting it.
-
-The options both directions share:
-
-| Option | Meaning |
-| --- | --- |
-| `-o, --output <file>` | where the result goes; `-` for standard output |
-| `--to <docx\|word\|odt\|rtf\|markdown\|md>` | which way to convert; detected from the file otherwise |
-
-`to-docx`, `to-odt` and `to-rtf` also take:
-
-| Option | Meaning |
-| --- | --- |
-| `-c, --config <file.php>` | a file returning the styles and options to use |
-| `--theme <name>` | a named look to draw in; a `styles:` block still wins over it |
-| `-t, --template <file.docx\|.dotx>` | render into a Word template rather than a new document |
-| `--images <mode>` | `embed`, `placeholder` or `skip` |
-| `--no-images` | shorthand for `--images skip` |
-| `--image-base <dir>` | where relative image paths resolve from |
-| `--svg-fallback <mode>` | `raster` writes a raster beside each SVG, `none` writes the vector alone |
-| `--table-width <n>` | table width in fiftieths of a percent; `5000` is full width |
-| `--plain` | no code colouring, no quote style, no table borders, no added spacing |
-
-`--template` takes a `.docx` or a `.dotx`; `to-odt` and `to-rtf` refuse either,
-because a template is a Word package and there is nothing to render into otherwise.
-Whichever of the two it is, the result is a `.docx`: a filled-in template is a
-document, and [Word templates](#word-templates) is why.
-
-`to-markdown` also takes:
-
-| Option | Meaning |
-| --- | --- |
-| `--media <dir>` | take the images out of the document, beside the Markdown |
-| `--line-ending <lf\|crlf>` | what the output file uses between lines |
-| `--setext` | write first- and second-level headings underlined |
-| `--no-fence` | leave monospaced paragraphs as text rather than a code block |
-| `--no-header` | do not treat the first table row as a header |
-
-`mdword help` lists them all, and `mdword to-docx --help` the ones for one
-direction. The help and the parser are separate lists — one is for reading, one
-is for parsing — and a test holds them to each other, so neither can mention
-something the other does not have.
-
-**The flags outrank the document.** `--images`, `--image-base`, `--table-width` and
-`--plain` are the top of the four-source order below, so a `tableWidth:` in a
-document's own `---` block loses to a `--table-width` typed beside it. The
-`imageBasePath` the command line works out for itself — the directory the input file
-happens to sit in — is a default and loses to a document that names its own assets;
-`--image-base` is how you say it instead.
-
-**The command line reads frontmatter.** Unlike `new MarkdownToWord($markdown)` with
-the default parser, `mdword` builds its parser with `FrontMatterExtension`, so a
-document that carries its own configuration gets it from a terminal as well as from
-code. Without the extension a leading `---` is a thematic break and the rest of the
-block is printed at the top of the document.
-
-**A document that cannot be used says so and stops.** A wrong key in a `---` block, a
-value that is not what it is used as, or an image that is on disk and in a format
-nothing can embed: the message is printed as it stands, with no class name and no
-line from this repository, because it is the caller's mistake to fix and not a defect.
-Exit status is 1.
-
-A mistake is reported in a sentence, with what to do about it, and the exit code is
-non-zero — a template with nowhere for the content names the controls it does have,
-rather than silently appending the body below a letterhead's signature block where it
-would look like a finished document.
-
-### The phar
-
-```sh
-composer build:phar        # build/mdword.phar
-```
-
-One self-contained file, about a megabyte, needing nothing but PHP. The
-development dependencies are left out, which is most of why it is a megabyte
-rather than ten: the test suite is several times the size of the library.
-
-The build installs the runtime dependencies into a directory of its own rather
-than into the project, so your `vendor/` keeps its test tools, and it checks the
-result by converting a document in both directions before reporting success.
+It installs as `vendor/bin/mdoffice` and ships as a PHAR and as a self-contained
+executable, and its own page documents the options. Everything below about how a
+conversion behaves — which direction a file goes in, what a template renders
+into, what an `.rtf` cannot carry — is a claim about this library, and is what
+`mdoffice word` calls.
 
 ## Supported Markdown
 
@@ -915,8 +791,8 @@ A `.dotx` and a `.docx` are the same archive with one line of `[Content_Types].x
 different, and that line is what Word decides a file by. A package typed as a template
 is opened by *creating a new document from it* — double-clicking a filled-in `.dotx`
 gives you `Document1.docx` rather than the file you were sent, and anything
-dispatching on MIME type treats it as a template. So `to-docx` writes a document, and
-says so by writing one:
+dispatching on MIME type treats it as a template. So rendering into one writes a
+document, and says so by writing one:
 
 ```php
 $template = new MarkdownTemplate('report-template.dotx');
@@ -975,10 +851,6 @@ use MarkdownWord\Template\ContentFallback;
     ->contentFallback(ContentFallback::Error)
     ->insert($markdown)
     ->save('letter.docx');
-```
-
-```sh
-mdword to-docx letterhead.dotx notes.md --require-control
 ```
 
 Either raises a `NoContentControl` naming the controls the template *does* have — a
@@ -1150,13 +1022,9 @@ model, from a file it was given, is enough to be careful here. The boundary is *
 a path lands*, not where it was written from: a document in `docs/` naming a template
 one directory up is inside the working directory and is a template, not an escape.
 
-```sh
-$ mdword to-docx notes.md      # template_file: report.dotx, beside notes.md
-$ mdword to-docx notes.md --template other.dotx   # the flag outranks the block
-```
-
-A relative name has nothing to resolve against when the Markdown comes from standard
-input, which is reported rather than guessed at from the working directory.
+Reading and resolving the key is all this library does with it; deciding that a
+document naming a template is rendered into one, and what then outranks what, is
+`mdoffice word`'s, and is documented there.
 
 Read the block off a parsed document and merge it with whatever else is in play:
 
@@ -1192,11 +1060,18 @@ differently on purpose — the first means "not configured, the default wins", t
 second "not mentioned, the current value stands" — and merging is the second kind.
 
 > **Pass an array, not a `Configuration`,** for the command line layer.
-> `MarkdownToWord`'s fourth constructor argument takes either, and
-> `Application::converter()` and `MarkdownTemplate` pass theirs on. An array is
-> sparse — a key nobody mentioned leaves the frontmatter standing — where a
-> `Configuration` names every setting there is, so handed to the merger it puts the
-> defaults above the frontmatter along with everything else.
+> `MarkdownToWord`'s fourth constructor argument takes either, and `MarkdownTemplate`
+> passes its own on. An array is sparse — a key nobody mentioned leaves the
+> frontmatter standing — where a `Configuration` names every setting there is, so
+> handed to the merger it puts the defaults above the frontmatter along with
+> everything else.
+
+**The default parser does not read the block.** The default flavour is
+GitHub-Flavored Markdown plus this project's own directives, and neither knows
+what front matter is, so a leading `---` is a thematic break and the rest of the
+block is printed at the top of the document. Ask for
+`CommonMarkParser::withAllExtensions()`, which carries `FrontMatterExtension`, when
+a document is to configure itself.
 
 `Frontmatter` also reads the block for its own sake, if a caller wants it rather
 than the configuration: `getString()`, `getInt()`, `getBool()`, `getArray()`,
@@ -1288,11 +1163,7 @@ Validator::assertValid($config->toArray()); // throws, listing all of them
 ### Themes
 
 A theme is a directory holding a `theme.yml` and, usually, a `styles.yml`. Four ship
-with the library:
-
-```sh
-$ mdword to-docx --theme corporate notes.md
-```
+with the library, in `themes/`:
 
 | Theme | What it is for |
 | --- | --- |
@@ -1349,10 +1220,9 @@ and also scientific notation, and YAML resolves it to infinity before the theme 
 Quoted, it is a colour; unquoted, it is a load-time error rather than a document drawn in
 the wrong ink.
 
-A theme works with `--template` too. The template keeps its own style definitions, and the
-theme is written onto the text as direct formatting over them — so `--theme` reaches the
-document there as it does anywhere else, and a flag beats a `theme:` in the document's own
-block.
+A theme applies to a document rendered into a template too. The template keeps its own
+style definitions, and the theme is written onto the text as direct formatting over them
+— so a theme reaches the document there as it does anywhere else.
 
 `bulletList` and `orderedList` name a numbering style, and what that name buys you depends
 on the format. In an `.odt` it becomes the `text:list-style` the document's lists refer to,
@@ -1373,11 +1243,7 @@ for WebP and PHPWord has never added any, so a `.webp` is decoded with GD and wr
 into the document as PNG. Failing on a format every browser has supported for years
 seemed worse than a bigger file; but a PNG of a photograph is several times the size
 of the WebP it came from and the picture is a re-encoding rather than the original
-bytes, so it is reported:
-
-```sh
-mdword: converted assets/hero.webp (image/webp) to PNG for embedding
-```
+bytes, so it is reported rather than swallowed:
 
 ```php
 $converter = new MarkdownToWord($markdown, $config);
@@ -1636,21 +1502,13 @@ raster of it, so something has to draw the raster; without the extension an SVG 
 rather than going in silently flattened.
 
 `symfony/yaml` is a requirement rather than a suggestion. It is what reads the
-[frontmatter](#frontmatter) block, and it is bundled into the phar, so there is
-nothing extra to install either way.
+[frontmatter](#frontmatter) block, and a document whose block nobody reads is a
+document that ignores its own configuration.
 
 Working on the library needs PHP 8.4+, because Pest 5 does. That is a floor for
 the *test suite* only: the published package installs on 8.2, and the library is
 checked on 8.2 by the `minimum` job, which runs `smoke.php` and `stress.php`
-there. The phar is a program with its own dependencies inside it, so the library
-passing says nothing about whether the archive runs — `smoke.php` takes the path
-to one and runs it in a child process, converting a document through it both
-ways:
-
-```sh
-composer build:phar
-php smoke.php build/mdword.phar
-```
+there.
 
 ## Notes
 
@@ -1700,16 +1558,16 @@ php smoke.php build/mdword.phar
   offset`). It comes from `PhpWord\Style::getStyle()` being called with a null
   name while writing a paragraph that carries no numbering of its own, which
   every list item does. The output is correct and nothing reachable from this
-  library's API can avoid it, so the command line and the test suite silence
-  that one message from that one file rather than switching deprecation
-  reporting off. Embedding the library in an application leaves it visible.
+  library's API can avoid it, so the library does nothing about it: a program that
+  embeds this package sees it, as it should. The command line silences that one
+  message from that one file rather than switching deprecation reporting off, and
+  so does this repository's test suite.
 - **Hyperlinks around images** are rendered as the image without the link.
   PHPWord's `Link` element holds only a string, so there is nowhere to put it.
 - **An image in a format Word cannot embed is re-encoded as PNG.** PHPWord takes
   JPEG, GIF, PNG, BMP and TIFF and refuses the rest, so a `.webp` is decoded with GD
   on the way in — losslessly for the pixels, and several times larger for the file.
-  It is never done quietly: `pendingImageConversions()` has it afterwards and
-  `mdword` prints a line.
+  It is never done quietly: `pendingImageConversions()` has it afterwards.
 - **Image alt text and link titles are written by a pass over the finished
   file.** PHPWord has nowhere to put either through its API — it emits
   `o:title` as a literal empty string — so they are filled in while the archive
@@ -1727,7 +1585,7 @@ php smoke.php build/mdword.phar
 - **A document in memory is written to the system temp directory to be read
   back**, because `ext-zip` only opens files. It is removed once the archive is
   closed. The library does not write anywhere near its own install directory, so
-  nothing appears in your `vendor/` and the phar works unchanged.
+  nothing appears in your `vendor/`.
 - **Raw HTML never becomes markup in the document.** This is worth stating
   precisely, because the default does more than remove tags: a fragment of HTML
   is parsed and *rebuilt* as Word content. `<b>`, `<i>`, `<s>` and `<code>`
@@ -1758,6 +1616,7 @@ LGPL-3.0.
 
 [commonmark]: https://github.com/thephpleague/commonmark
 [issues]: https://github.com/markdown-office/markdown-word/issues
+[mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word
 [sonar-token]: https://sonarcloud.io/account/security
 [pest]: https://pestphp.com

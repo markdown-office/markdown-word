@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use MarkdownWord\Configuration;
-use MarkdownWord\Console\Application;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Template\MarkdownTemplate;
 use MarkdownWord\Text\TextExtractor;
@@ -327,17 +326,16 @@ pest()->afterEach(function (): void {
 /**
  * A file in the scratch directory with the given contents, and its path.
  *
- * The name may carry its own extension — the command line derives an output name
- * from it, and a few tests are about the name rather than only the bytes — and a
- * random suffix is added so that no two tests collide.
+ * The name's own extension is kept — a few tests are about the name rather than
+ * only the bytes — and a random suffix is added so that no two tests collide.
  */
-function inputFile(string $name, string $contents, ?string $extension = null): string
+function inputFile(string $name, string $contents): string
 {
     $given = pathinfo($name, PATHINFO_EXTENSION);
 
     $path = Scratch::path(
         pathinfo($name, PATHINFO_FILENAME),
-        $extension ?? ($given === '' ? '.md' : '.' . $given),
+        $given === '' ? '.md' : '.' . $given,
     );
 
     file_put_contents($path, $contents);
@@ -390,39 +388,6 @@ function saveTemplateDocument(MarkdownTemplate $template, string $path): void
     withoutUpstreamDeprecations(static function () use ($template, $path): void {
         $template->save($path);
     });
-}
-
-/**
- * Run the command line in process, and hand back what it did.
- *
- * @param list<string> $argv
- * @return array{code: int, out: string, err: string}
- */
-function runCli(array $argv, string $stdin = ''): array
-{
-    $out = fopen('php://memory', 'r+b');
-    $err = fopen('php://memory', 'r+b');
-    $in = fopen('php://memory', 'r+b');
-
-    fwrite($in, $stdin);
-    rewind($in);
-
-    $code = (new Application($out, $err, $in))->run($argv);
-
-    rewind($out);
-    rewind($err);
-
-    $result = [
-        'code' => $code,
-        'out' => (string) stream_get_contents($out),
-        'err' => (string) stream_get_contents($err),
-    ];
-
-    fclose($out);
-    fclose($err);
-    fclose($in);
-
-    return $result;
 }
 
 /**

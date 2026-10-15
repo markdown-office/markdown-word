@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use MarkdownWord\Console\UpstreamDeprecations;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
@@ -116,25 +115,26 @@ it('tells a document with a body that parses from one that does not', function (
 /*
  * One defect in one dependency, filtered by one filter.
  *
- * tests/Support/Upstream used to carry its own copy of the rule, which had already
- * drifted from the library's; that class says what the drift was. It delegates
- * now, so the test that matters is that the library's filter is the one in place
- * and it still does its job.
+ * The filter is the one in tests/Support/Upstream and nowhere else, because there
+ * is nothing here for a second copy to drift from. What has to hold is that it is
+ * really in place — a helper that silently did not install would leave every test
+ * passing and every document-writing test marked deprecated — and that it swallows
+ * the one known defect and nothing else.
  */
-it('filters the known upstream deprecation with the library\'s own filter', function () {
+it('filters the known upstream deprecation and nothing else', function () {
     Upstream::install();
 
     try {
-        // Whatever sits on the stack above the runner's own handler is the
-        // filter, and `set_error_handler()` hands it back. It has to be a closure
-        // the library declared: a copy here would look the same and answer
-        // differently, which is what the two used to do.
+        // Whatever sits on the stack above the runner's own handler is the filter,
+        // and `set_error_handler()` hands it back. It has to be the closure
+        // `Upstream` declared: anything else on top means something installed a
+        // second handler over it, which is what the copy this replaced used to do.
         $onTop = set_error_handler(static fn (): bool => false);
         restore_error_handler();
 
         expect($onTop)->toBeInstanceOf(Closure::class)
             ->and((new ReflectionFunction($onTop))->getFileName())
-            ->toBe((new ReflectionClass(UpstreamDeprecations::class))->getFileName());
+            ->toBe((new ReflectionClass(Upstream::class))->getFileName());
 
         // And it answers for the one known defect, and for nothing else: the
         // message from that file, the message from anywhere else, and the same

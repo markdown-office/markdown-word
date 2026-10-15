@@ -169,8 +169,9 @@ final class WordToMarkdown implements Converter
      *
      * The file is moved into place rather than opened where it lies, because
      * `file_put_contents()` opens an existing name with `O_TRUNC` and a name can
-     * be a hard link: `mdword to-markdown original.docx -o alias.docx`, where the
-     * two are one inode, would empty the document still being read. `realpath()`
+     * be a hard link — the caller naming `alias.docx` for a document that is
+     * `original.docx`, where the two are one inode, would empty the document still
+     * being read. `realpath()`
      * sees two paths, so an overwrite guard built on it cannot see the case
      * either. Moving replaces the name and leaves the inode alone — which matters
      * for the Markdown a caller named and for an image, whose name came out of

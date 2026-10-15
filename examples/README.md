@@ -191,7 +191,9 @@ the check is on the block.
 **`imageBasePath`** is how a relative path in the Markdown finds its file, and in
 these examples it points at `examples/markdown`, so `assets/logo.png` resolves. Pass
 `Configuration::create()->withOptions(['imageBasePath' => …])`, or `--image-base` on
-the command line, and the same Markdown works from any working directory.
+`mdoffice word` — the command line lives in
+[`markdown-office/mdoffice`](https://github.com/markdown-office/mdoffice), not in this
+repository — and the same Markdown works from any working directory.
 
 **`imageMaxWidth`** is in centimetres and is applied to every picture, so
 `15-images-embed.docx` is at 8cm against a default of 15cm — a little over half the text
@@ -209,13 +211,8 @@ supported it, so the renderer decodes it with GD and writes it into the document
 PNG. The alternative was failing, and failing on a format every browser has supported
 for years seemed worse than a bigger file. But a PNG of a photograph is several times
 the size of the WebP it came from, and the picture is a re-encoding rather than the
-original bytes — so it is never done quietly. `mdword` prints a line for each one:
-
-```
-mdword: converted …/assets/test_landscape.webp (image/webp) to PNG for embedding
-```
-
-and a caller in code can ask afterwards:
+original bytes — so it is never done quietly, and a caller in code can ask
+afterwards:
 
 ```php
 $converter = new MarkdownToWord($markdown, $config);
@@ -334,13 +331,16 @@ written and is not a paragraph of its own; the `::image[…]` line is one; and t
 Three things on that page cannot be seen there at all, and are there so the
 document says so rather than the page being quietly wrong about itself: a format
 with no footnote writer, and everything above when rendered **into a `.dotx`**.
+`build.php` writes neither — it is the library being exercised, not a command
+line — so those two are made by hand with
+[`mdoffice`](https://github.com/markdown-office/mdoffice):
 
 ```bash
 # An .odt has no footnote writer: source form back, loss reported.
-php bin/mdword to-odt examples/markdown/26-directives.md -o tmp/26.odt
+mdoffice word to-odt examples/markdown/26-directives.md -o tmp/26.odt
 
 # Into a template: the parts written beside a body do not travel with the elements.
-php bin/mdword to-docx examples/markdown/26-directives.md \
+mdoffice word to-docx examples/markdown/26-directives.md \
   --template=examples/templates/meridian-qbr.dotx -o tmp/26-template.docx
 ```
 

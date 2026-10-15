@@ -10,35 +10,30 @@ declare(strict_types=1);
  * the library supports there would otherwise be nothing running: a syntax error,
  * a missing extension or a broken autoloader would not be noticed until somebody
  * tried to install it. This uses no test framework, so it runs anywhere the
- * library claims to run, and it checks both directions plus the command line —
- * `stress.php` only exercises the way into Word.
+ * library claims to run, and it checks both directions.
  *
  * ```sh
- * php smoke.php                  # the library, from a checkout
- * php smoke.php build/mdword.phar   # a phar as well, if one has been built
+ * php smoke.php
  * ```
- *
- * The phar is a program of its own with its own dependencies inside it, so the
- * library passing says nothing about whether the archive that ships it runs.
- * Pointed at one, this runs it in a child process and converts a document through
- * it both ways: the extensions and `phar.readonly` it needs belong to the PHP
- * that runs it, so no other check could answer for it.
  */
 
 require __DIR__ . '/vendor/autoload.php';
 
-use MarkdownWord\Console\Application;
-use MarkdownWord\Console\UpstreamDeprecations;
+// Not through the autoloader: the minimum-version job installs with `--no-dev`,
+// which leaves `autoload-dev` out, so the class the filter lives in is not
+// autoloadable here. It is a plain file, so requiring it is enough.
+require_once __DIR__ . '/tests/Support/Upstream.php';
+
 use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\WordToMarkdown;
 
 $checks = 0;
 $failures = 0;
-$phar = $argv[1] ?? getenv('MDWORD_PHAR') ?: null;
 
 // One dependency emits a deprecation for every list item it writes, and the run
 // would print thousands of somebody else's lines; see the class for why.
-UpstreamDeprecations::install();
+Upstream::install();
 
 $work = __DIR__ . '/tmp/smoke';
 @mkdir($work, 0o777, true);
@@ -131,7 +126,7 @@ $sample = <<<'MD'
 $docx = $work . '/sample.docx';
 
 check('Markdown converts to a Word document', static function () use ($sample, $docx): bool|string {
-    UpstreamDeprecations::quietly(
+    Upstream::quietly(
         static fn () => (new MarkdownToWord($sample))->save($docx),
     );
 
@@ -213,11 +208,11 @@ foreach ([
 check('a round trip keeps the text', static function () use ($markdown, $work): bool|string {
     $again = $work . '/again.docx';
 
-    UpstreamDeprecations::quietly(
+    Upstream::quietly(
         static fn () => (new MarkdownToWord($markdown))->save($again),
     );
 
-    $readBack = UpstreamDeprecations::quietly(
+    $readBack = Upstream::quietly(
         static fn (): string => (new WordToMarkdown($again))->convert(),
     );
 
@@ -230,7 +225,7 @@ check('a round trip keeps the text', static function () use ($markdown, $work): 
 });
 
 check('a document in memory converts back too', static function () use ($sample): bool|string {
-    $bytes = UpstreamDeprecations::quietly(
+    $bytes = Upstream::quietly(
         static fn (): string => (new MarkdownToWord())->toDocx($sample),
     );
 
@@ -249,124 +244,9 @@ check('something that is not a document is reported, not swallowed', static func
     return 'no exception was thrown';
 });
 
-check('the command line converts in both directions', static function () use ($sample, $work): bool|string {
-    $source = $work . '/cli.md';
-    file_put_contents($source, $sample);
-
-    $document = $work . '/cli.docx';
-    $markdownOut = $work . '/cli-back.md';
-
-    $out = fopen('php://memory', 'r+b');
-    $err = fopen('php://memory', 'r+b');
-    $in = fopen('php://memory', 'r+b');
-
-    $first = (new Application($out, $err, $in))->run(['to-docx', $source, '-o', $document]);
-
-    rewind($err);
-    $said = trim((string) stream_get_contents($err));
-
-    if ($first !== 0 || !is_file($document)) {
-        fclose($out);
-        fclose($err);
-        fclose($in);
-
-        return 'to-docx exited ' . $first . ($said === '' ? '' : ': ' . $said);
-    }
-
-    $second = (new Application($out, $err, $in))->run(['to-markdown', $document, '-o', $markdownOut]);
-
-    fclose($out);
-    fclose($err);
-    fclose($in);
-
-    if ($second !== 0 || !str_contains((string) @file_get_contents($markdownOut), '# Heading')) {
-        return 'to-markdown exited ' . $second;
-    }
-
-    return true;
-});
-
-check('the command line reports its version', static function (): bool|string {
-    $out = fopen('php://memory', 'r+b');
-    $err = fopen('php://memory', 'r+b');
-    $in = fopen('php://memory', 'r+b');
-
-    $exit = (new Application($out, $err, $in))->run(['--version']);
-
-    rewind($out);
-    $text = (string) stream_get_contents($out);
-
-    fclose($out);
-    fclose($err);
-    fclose($in);
-
-    return $exit === 0 && str_contains($text, Application::NAME)
-        ? true
-        : 'exited ' . $exit . ' saying "' . trim($text) . '"';
-});
-
-if ($phar !== null && $phar !== '') {
-    $havePhar = is_file($phar);
-
-    check('there is a phar at that path', static function () use ($phar, $havePhar): bool|string {
-        return $havePhar ? true : 'there is no file at "' . $phar . '"';
-    });
-
-    if (!$havePhar) {
-        // Reported once: the two checks below would only say it again, in the past
-        // tense, about a file that is not there.
-        echo "SKIP  the phar was not run: there is nothing at that path\n";
-    } else {
-        check('the phar runs on this version of PHP', static function () use ($phar): bool|string {
-            // A child process, because a phar is a program of its own: what is
-            // being checked is that *that* program starts, with whatever it carries
-            // inside it, rather than that this process can reach inside the archive.
-            $code = runPhar([$phar, '--version']);
-
-            if ($code === null) {
-                return true;
-            }
-
-            return $code === 0 ? true : 'it exited ' . $code;
-        });
-
-        check('the phar converts in both directions', static function () use ($phar, $work): bool|string {
-            $source = $work . '/phar.md';
-            $document = $work . '/phar.docx';
-            $readBack = $work . '/phar-back.md';
-
-            file_put_contents($source, "# Built\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n");
-
-            $forward = runPhar([$phar, 'to-docx', $source, '-o', $document]);
-
-            if ($forward === null) {
-                return true;
-            }
-
-            if ($forward !== 0) {
-                return 'to-docx exited ' . $forward;
-            }
-
-            $reverse = runPhar([$phar, 'to-markdown', $document, '-o', $readBack]);
-
-            if ($reverse === null) {
-                return true;
-            }
-
-            if ($reverse !== 0) {
-                return 'to-markdown exited ' . $reverse;
-            }
-
-            return is_file($readBack) && str_contains((string) @file_get_contents($readBack), '# Built')
-                ? true
-                : 'nothing came back out of the phar';
-        });
-    }
-}
-
 echo "\n{$checks} checks, {$failures} failure(s)\n";
 
-UpstreamDeprecations::restore();
+Upstream::restore();
 
 removeTree($work);
 
@@ -389,39 +269,4 @@ function removeTree(string $directory): void
     }
 
     @rmdir($directory);
-}
-
-/**
- * Runs the phar in a child process and hands back its exit code.
- *
- * Null where no child process could be started — `proc_open` disabled, which some
- * build hosts do — so the caller can skip rather than report a phar that was never
- * asked a question.
- *
- * The command is an array, so it is executed directly rather than through a shell
- * and nothing here has to be quoted: a path with a space in it is one argument
- * rather than two.
- *
- * @param list<string> $arguments
- */
-function runPhar(array $arguments): ?int
-{
-    $pipes = [];
-    $process = function_exists('proc_open')
-        ? @proc_open(array_merge([PHP_BINARY], $arguments), [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes)
-        : null;
-
-    if (!is_resource($process)) {
-        echo "SKIP  no child process could be started, so the phar was not run\n";
-
-        return null;
-    }
-
-    echo (string) stream_get_contents($pipes[1]);
-    echo (string) stream_get_contents($pipes[2]);
-
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-
-    return proc_close($process);
 }
