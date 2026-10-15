@@ -11,7 +11,11 @@ use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
+use MarkdownWord\Render\Directive\Footnote;
+use MarkdownWord\Render\Directive\Toc;
+use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
+use MarkdownWord\Render\FurnitureWriter;
 use MarkdownWord\Render\HtmlFragmentRenderer;
 use MarkdownWord\Render\ImageConversionCollector;
 use MarkdownWord\Render\SvgAttachmentCollector;
@@ -28,6 +32,7 @@ use MarkdownWord\Writer\OdtWriter;
 use MarkdownWord\Writer\RtfWriter;
 use MarkdownWord\Writer\Survey;
 use PhpOffice\PhpWord\Element\AbstractContainer;
+use PhpOffice\PhpWord\Element\Section;
 use PhpOffice\PhpWord\PhpWord;
 
 /**
@@ -45,11 +50,22 @@ final class MarkdownToWord implements Converter
 
     private ?SvgAttachmentCollector $vectors = null;
 
+    private ?Toc $toc = null;
+
+    private ?Footnote $footnotes = null;
+
     /**
      * The format the last write went through, and what that document asked of the
      * writer, so {@see self::pendingLosses()} has something to answer with.
+     *
+     * `Docx` rather than null, and rather than nothing: the two public entry points —
+     * {@see self::toPhpWord()} and {@see self::renderIntoContainer()} — render without
+     * writing and so never set it, and a directive handler reads it to decide whether it
+     * can carry what it is drawing. A handler reads it as `$format ?? Format::Docx`, so
+     * null would mean docx too and the default would be decoration — which is why it is
+     * here, stated rather than relied on.
      */
-    private ?Format $format = null;
+    private ?Format $format = Format::Docx;
 
     private ?Survey $survey = null;
 
@@ -74,12 +90,23 @@ final class MarkdownToWord implements Converter
      *        names every setting there is, so it puts the built-in look above the
      *        frontmatter along with everything else — and, for the same reason, above a
      *        theme as well. See {@see \MarkdownWord\Configuration::withTheme()}.
+     * @param bool $detached Whether the rendered elements are going to be copied into
+     *        *another* document rather than written from here — which is what the
+     *        template renderer does, and what `deferredHyperlinks` exists for.
+     *
+     *        A part this library writes beside a body cannot travel: the elements are
+     *        carried over and the parts they were registered in are not. So a footnote, a
+     *        header part and the field a `::toc` placeholder stands for are each drawn as
+     *        what they are instead, because emitting them here leaves a document carrying
+     *        a footnote reference to a note the package does not contain, and a run of
+     *        invisible separators where a table of contents should be.
      */
     public function __construct(
         private readonly ?string $source = null,
         private readonly Configuration $config = new Configuration(),
         private readonly ?MarkdownParserInterface $parser = null,
         private readonly Configuration|array|null $overrides = null,
+        private readonly bool $detached = false,
     ) {
     }
 
@@ -371,12 +398,12 @@ final class MarkdownToWord implements Converter
     private function write(Format $format, PhpWord $phpWord, ?string $target): string
     {
         $this->format = $format;
-        $this->survey = Survey::of($phpWord, $this->images, $this->vectors);
+        $this->survey = Survey::of($phpWord, $this->images, $this->vectors, $this->toc, $this->footnotes);
 
         return match ($format) {
             Format::Docx => $target === null
-                ? DocxWriter::toString($phpWord, $this->links, $this->images, $this->vectors)
-                : DocxWriter::write($phpWord, $target, $this->links, $this->images, $this->vectors),
+                ? DocxWriter::toString($phpWord, $this->links, $this->images, $this->vectors, $this->toc)
+                : DocxWriter::write($phpWord, $target, $this->links, $this->images, $this->vectors, $this->toc),
             Format::Odt => $target === null
                 ? OdtWriter::toString($phpWord, $this->links, $this->images)
                 : OdtWriter::write($phpWord, $target, $this->links, $this->images),
@@ -468,12 +495,29 @@ final class MarkdownToWord implements Converter
         $this->conversions ??= new ImageConversionCollector();
         $this->vectors ??= new SvgAttachmentCollector();
 
+        // One registry for both renderers: an inline directive is handled by the
+        // inline renderer and a block one by the document renderer, and a name
+        // means the same thing whichever of the two meets it.
+        $directives = new Directives();
+
+        // Rebuilt per render rather than cached on the converter, because each reads
+        // `$this->format` when it is drawn and a cached one keeps the format of the
+        // *first* render. One converter writing a `.docx` and then an `.odt` would hand
+        // the second a handler for the wrong format.
+        $this->toc = new Toc($config->getOptions(), $styles, $this->format, carries: !$this->detached);
+        $this->footnotes = new Footnote($styles, $this->format, carries: !$this->detached);
+
+        $directives = $directives
+            ->withBlock('toc', $this->toc)
+            ->withInline('footnote', $this->footnotes);
+
         $inlines = new InlineRenderer(
             $styles,
             new ImageResolver($config->getOptions(), $this->images, $this->conversions, $this->vectors, $this->format),
             $this->links,
             $html,
             $config->getOptions()->deferredHyperlinks,
+            $directives,
         );
 
         $renderer = new DocumentRenderer(
@@ -485,8 +529,23 @@ final class MarkdownToWord implements Converter
             // config file or a theme all name them.
             new NumberingRegistry($config, $phpWord),
             $html,
+            $directives,
         );
 
         $renderer->render($document, $container);
+
+        // The running head and foot the document's frontmatter describes. Only for a
+        // whole section: a render into a container of its own — a template's content
+        // control, a table cell — is somewhere a page has no top or bottom to put
+        // them on, and PHPWord would write a part belonging to no section.
+        // Only when the package is ours to write. A header part added to a scratch
+        // document the template renderer then empties is a header in no output at all.
+        if ($container instanceof Section && !$this->detached) {
+            (new FurnitureWriter())->draw(
+                $renderer,
+                Frontmatter::fromDocument($document, $this->lastMarkdown),
+                $container,
+            );
+        }
     }
 }

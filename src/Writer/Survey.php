@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Writer;
 
+use MarkdownWord\Render\Directive\Footnote;
+use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\ImageDescriptionCollector;
 use MarkdownWord\Render\SvgAttachmentCollector;
 use PhpOffice\PhpWord\Element\AbstractContainer;
@@ -57,11 +59,21 @@ final class Survey
         PhpWord $phpWord,
         ?ImageDescriptionCollector $images = null,
         ?SvgAttachmentCollector $vectors = null,
+        ?Toc $tocs = null,
+        ?Footnote $footnotes = null,
     ): self {
         $survey = new self();
 
         foreach ($phpWord->getSections() as $section) {
             $survey->walk($section, false);
+
+            if ($section->getHeaders() !== []) {
+                $survey->used['header'] = true;
+            }
+
+            if ($section->getFooters() !== []) {
+                $survey->used['footer'] = true;
+            }
         }
 
         if ($images?->anyDescribed() === true) {
@@ -72,6 +84,14 @@ final class Survey
             $survey->used['svg-vector'] = true;
         }
 
+        if ($tocs?->isUsed() === true) {
+            $survey->used['table-of-contents'] = true;
+        }
+
+        if ($footnotes?->isUsed() === true) {
+            $survey->used['footnotes'] = true;
+        }
+
         $survey->vectorOnly = $vectors?->pendingWithoutRaster() === true;
 
         return $survey;
@@ -80,9 +100,9 @@ final class Survey
     /**
      * Whether the document has a vector with no raster beside it.
      *
-     * Not a {@see self::FEATURES} key, because it is not a property of the format: the
-     * writer carried the vector perfectly well. It is a property of this document, and it
-     * is asked about here rather than recorded as a feature so that
+     * Not a {@see \MarkdownWord\Format::FEATURES} key, because it is not a property of
+     * the format: the writer carried the vector perfectly well. It is a property of this
+     * document, and it is asked about here rather than recorded as a feature so that
      * {@see \MarkdownWord\Format} does not answer for it.
      */
     public function isVectorOnly(): bool

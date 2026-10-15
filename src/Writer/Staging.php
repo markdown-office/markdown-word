@@ -181,7 +181,17 @@ final class Staging
     private static function followLink(string $path): string
     {
         for ($hop = 0; $hop < self::MAX_LINKS; $hop++) {
-            $target = @readlink($path);
+            // `is_link()` rather than a bare `readlink()`, because the target of a
+            // conversion usually does not exist yet and a suppressed warning from
+            // `readlink()` is still handed to a test runner's error handler, which
+            // turns it into a failure. The check is also the cheaper one: it is a
+            // property of the directory entry, where `readlink()` on a path that is
+            // not there is a syscall that fails.
+            if (!is_link($path)) {
+                return $path;
+            }
+
+            $target = readlink($path);
 
             if ($target === false) {
                 return $path;

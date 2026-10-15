@@ -166,6 +166,45 @@ it('does not claim again what the code does not do', function (string $claim) {
     // what its one caller wanted. It built a `.docx` that Word opens by spawning a
     // new document, and a `.dotx` that it opens as an ordinary file.
     'the docx-to-template conversion is named for a document' => 'function asDocument(',
+    // Four docblocks on this branch described something other than what the code does,
+    // and three of them were read as a specification and would have been wrong about it.
+
+    // `CommonMarkParser`'s constructor docblock still said `null` selects GFM after the
+    // default flavour became `directives`, so a caller reading it would set an explicit
+    // list and believe they had changed nothing.
+    'a null parser extension list still means gfm' => '`null` selects the default, GFM',
+    // `FurnitureWriter` took a `Furniture $template` nothing ever passed, which made the
+    // README's "frontmatter wins over a .dotx per key" look implemented. It was not: a
+    // template's header is its own part, and nothing merges into it.
+    'a template header is merged with the document\'s own' => 'What a template already has in this slot',
+    // `Furniture::NULLABLE` said it kept "the same list" as `Options` for "the same
+    // reason", and it does neither — it is empty where `Options` has two names, which is
+    // a different decision and one a reader would have assumed was the same one.
+    // A narrower form of the same mistake: `Options` points at `Reverse\Options` and that
+    // pair really does keep one list between them, so the phrase is only a claim when
+    // the other class does not have the property at all — which is what happened when
+    // `Furniture` copied the wording onto a class with an empty list.
+    'the two NULLABLE lists are the same list' => 'keeps the same list for the same reason, and that list is',
+    // A `readlink()` on a target that usually does not exist. The `@` silenced it in
+    // production but a test runner's handler is called for suppressed diagnostics too,
+    // so every `.odt` and `.rtf` conversion test failed on it.
+    'a symlink target is read before it is known to be there' => '@readlink($path)',
+    // A heading style is named `Heading1`, which is a style *called* Heading1 and not
+    // the built-in `heading 1`. Nothing visible is wrong with it; a table of contents
+    // is the one thing that notices, and says so in German rather than in English.
+    'a heading style is the built-in heading style' => 'so `Heading1` reaches a reader',
+    // The outline level was written as the cure for a table of contents that stayed
+    // empty once the name was fixed, and LibreOffice reads the level rather than the
+    // name, so it was not a guess. Word does not collect by it at all: with the names
+    // right and no levels, Word builds the contents with page numbers.
+    'a TOC needs the outline level, not only the style name' => 'still collects nothing',
+    // `Survey::isVectorOnly()` said it was "not a `self::FEATURES` key", and `Survey`
+    // has no `FEATURES` constant — the list is `Format::FEATURES`, and it is private
+    // there. A `{@see}` to a symbol that does not exist is a contract a reader cannot
+    // follow and nothing checks, which is why the phrase is pinned rather than only
+    // corrected. `Footnote`'s docblock made the same kind of claim about PHPWord, and
+    // reading only the check it named is what let a footnote in a running head raise.
+    'a `{@see}` can name a constant the class does not have' => '{@see self::FEATURES}',
 ]);
 
 it('has no decorative dividers in it', function () {

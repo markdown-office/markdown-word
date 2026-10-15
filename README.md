@@ -388,6 +388,9 @@ look](#the-built-in-look) for the other half of that sentence.
 | A WebP picture | carried as PNG | carried as PNG | carried as PNG |
 | A picture's alternative text | carried | carried | dropped |
 | An SVG | carried, vector beside its raster | flattened to a raster | flattened to a raster |
+| `:footnote[…]` | carried as a Word footnote | source form back | source form back |
+| A header and a footer | carried | not carried | carried |
+| `::toc` | carried as a field | source form back | source form back |
 | Rendering into a template | carried | not available | not available |
 
 Five of those are worth naming in full, because they are the ones a reader is
@@ -597,7 +600,8 @@ result by converting a document in both directions before reporting success.
 | `---` | a paragraph with a bottom border |
 | Raw HTML | rebuilt as Word content, or shown as text, or dropped |
 | Footnotes, description lists | with `CommonMarkParser::extended()` |
-| Directives — `:name[…]`, `::name[…]`, `:::name` … `:::` | with `CommonMarkParser::directives()`; parsed but not yet drawn, see [Directives](#directives) |
+| A table of contents | `::toc`; see [A table of contents](#a-table-of-contents) |
+| Directives — `:name[…]`, `::name[…]`, `:::name` … `:::` | on by default; a name nothing draws comes back as the characters it was written as, see [Directives](#directives) |
 
 A link whose label contains formatting, such as `[**bold** link](url)`, becomes a
 genuine Word hyperlink *with* the bold applied. PHPWord cannot express that
@@ -607,7 +611,7 @@ into a `w:hyperlink` element while writing the file.
 ### Directives
 
 The [Generic Directives RFC](https://talk.commonmark.org/t/generic-directives-plugins-syntax/444)
-is parsed by `CommonMarkParser::directives()`, from
+is parsed by `CommonMarkParser`, from
 [`markdown-office/commonmark-generic-directives`](https://github.com/markdown-office/commonmark-generic-directives).
 Three shapes, told apart by their colons and by nothing else:
 
@@ -621,33 +625,220 @@ Inside the container.
 :::
 ```
 
-It is a parser, not a default. A directive is a word the author chose, so
-`Status :green[go]` is a sentence today and a node the day this is on by default
-— and a converter nobody asked to change should not change the syntax of every
-document converted after it.
-
-**What reaches a Word document is a decision this library has not made yet, and
-what happens today is a loss rather than a rendering.** The renderer has no case
-for either node type, and both walks end in "nothing claimed this node, so render
-whatever it holds":
+**A directive this library does not draw is drawn as the source form.** That is
+what makes the syntax safe to have on by default, and it is a real decision
+rather than an absence of one. It is the node rendered back into its own
+syntax, not the author's bytes, so three things come out slightly changed:
+attribute values are re-quoted where they were bare, runs of whitespace inside a
+label collapse, and the brackets of an empty label are not written. A sentence
+containing a directive you have not heard of therefore still reads as the
+sentence you wrote, and `:green[go   fast]` reads as `:green[go fast]`.
 
 | Written | In the document |
 | --- | --- |
-| `:::callout{type=info}` … `:::` | the body, as ordinary Markdown; the container itself is gone |
-| `:badge[PRODUCTION]{type=success}` | the label `PRODUCTION`; the name and the attributes are gone |
-| `::image[caption]{src="chart.png"}` | nothing at all — a leaf has no body to fall back on |
+| `:::callout{type=info}` … `:::` | the body, as ordinary Markdown; the fence is gone |
+| `:badge[PRODUCTION]{type=success}` | `:badge[PRODUCTION]{type="success"}` — the same characters back |
+| `::image[caption]{src="chart.png"}` | `::image[caption]{src="chart.png"}` |
 
-Two directives differing only in their attributes therefore produce the same
-document, and a document written entirely in leaf directives raises
-`NothingToConvert` — it parsed, and rendered to nothing at all. Both are asserted
-in `tests/Unit/directive-grammar.php` and both are titled temporary: they are
-what the grammar does before the rendering catches up, not a decision to keep.
+A container is transparent because its body is the author's own Markdown and the
+fence is not; drawing the fence would put `:callout` in the document as a line of
+its own. A leaf has no body to fall back on, so the alternative to drawing it was
+dropping it — which took the paragraph it stood between with it.
 
-Names are not checked. `GenericDirectiveExtension` takes a `DirectiveRegistry`
-that makes it strict — an unregistered name raises `UnknownDirective` rather than
-being silently ignored — but `CommonMarkParser` builds its extensions from class
-names and cannot pass one in, so strict mode is not reachable through the factory
-yet. Which default this library wants is a question for its users.
+The third row is what a change of default turns on. Directives were once opt-in,
+because `Status :green[go]` is a sentence and a parser nobody asked to change
+should not change the syntax of every document converted after it. That reasoning
+still holds for a *drawn* name, so it is kept by drawing only the names this
+library has an implementation for, and everything else returns the characters as
+typed. Two directives differing only in their attributes still produce two
+different lines.
+
+What a name means is a decision per name, and it lives in
+[`src/Render/Directives.php`](src/Render/Directives.php) rather than in the
+parser. Names are matched without regard to case, since a document cannot be asked
+to care.
+
+Names are not otherwise checked. `GenericDirectiveExtension` takes a
+`DirectiveRegistry` that makes it strict — an unregistered name raises
+`UnknownDirective` rather than being rendered as text — but `CommonMarkParser`
+builds its extensions from class names and cannot pass one in, so strict mode is
+not reachable through the factory.
+
+### A table of contents
+
+`::toc` writes a real Word table-of-contents field. Word builds it from the
+headings when the document opens, and only a field keeps it right as the
+document grows — a list of lines written here would be wrong the moment a
+section moved.
+
+```markdown
+::toc
+::toc{depth=2}
+::toc{title="Contents"}
+::toc{numbers=false}
+```
+
+| Attribute | |
+| --- | --- |
+| `depth` | how many heading levels, `1` to `6`. Defaults to `maxHeadingLevel` |
+| `title` | a heading above the field |
+| `numbers` | `false` leaves page numbers out (Word's `\n`) |
+
+Three details are worth knowing, because all of them are visible in the file:
+
+**The headings must carry the built-in names.** A `.docx` identifies a built-in style
+by the `w:name` in its definition, and Word spells those `heading 1` … `heading 9`. A
+definition carrying `w:name="Heading1"` is a style *called* Heading1 — it resembles the
+built-in heading and is not it — and Word collects nothing, which it says in the field
+rather than in a dialog:
+
+> Es wurden keine Einträge für das Inhaltsverzeichnis gefunden.
+
+With the names right, Word collects every heading with its page number. That is the
+whole of what it needs, and it was checked by opening the file in Word rather than by
+reading the markup, which is the only way to know it.
+
+Both halves are written after the file is closed, by `Writer\BuiltInHeadingPass`,
+because PHPWord offers no hook for either. `Writer\Word2007\Part\Styles` takes `w:name`
+from the `w:styleId` and spells `heading N` itself in exactly one place — the
+`if ($styleType == 'title')` branch of `writeFontStyle()`, which only `addTitleStyle()`
+reaches — and `w:outlineLvl` is written for numbering styles only. Nothing else in
+a definition is touched, so a size, a colour or a spacing a document set is exactly as
+it was.
+
+**The outline level is for everyone else.** A heading style is also expected to say what
+level it is, and Word writes one on every heading style in its own template — but Word
+does not collect by it, `TOC \o` reads the style. LibreOffice reads the level and not
+the name: the same document is `<text:p>Findings</text:p>` without one and
+`<text:h text:outline-level="1">Findings</text:h>` with it. Without it, these headings
+were body text to anything that is not Word.
+
+**There are no cached entries.** Word fills the field in on open; until it
+does, the field says *Press F9 to build the table of contents.* A cached
+alternative is possible and is worse — the page numbers would have to be
+guessed, and a table of contents claiming everything is on page 1 misleads
+precisely the reader who cannot refresh it.
+
+**`title` is drawn in the heading look but not with the heading style.** A title
+that carried a heading style would list itself as the first entry of the contents
+it titles.
+
+Only `.docx` can carry the field. An `.odt` or an `.rtf` gets the source form
+back — `::toc` as a paragraph — and says so through the usual
+`Format::drops()` channel, the same as any other thing a format cannot hold.
+
+### Footnotes
+
+`:footnote[…]` is a Word footnote, with its mark where the directive stood and its
+body at the foot of the page.
+
+```markdown
+Trading closed ahead of plan :footnote[The western figure excludes two hires.] in
+every region.
+```
+
+The body is **text, never Markdown** — the directive's label goes in as written.
+The mark is a real superscript reference and the body is numbered by Word, so the
+notes renumber themselves when one is inserted or deleted above.
+
+Two things about the syntax, both from the directive grammar rather than from this
+library:
+
+- **The label goes in one pair of brackets.** `:footnote[n=12]`. Written
+  `:footnote:[n=12]` the second colon starts something else and the note ends up
+  empty — which is drawn as the source form rather than as a mark pointing at
+  nothing.
+- **A mark cannot sit flush against a word.** `plan:footnote[…]` is prose — the
+  grammar leaves a colon after a word alone, because `status:error` is prose too.
+  There has to be a space or punctuation in front of the colon, so the document
+  reads `plan :footnote[…]` with a visible space before the mark.
+- **A mark on a line of its own is a paragraph holding a mark.** `:footnote` is an
+  inline directive, so one between two blank lines is not an annotation of the sentence
+  above it — it is a whole paragraph with nothing in it but a superscript, and a reader
+  sees an empty line. Put it at the end of the sentence it belongs to.
+
+Only `.docx` carries a footnote: neither other format has a writer for one, so
+they get the source form back and the loss is reported the usual way.
+
+**Through a `.dotx` template, every one of these three is drawn as its source
+form.** The template renderer copies elements into the template's own document
+rather than writing a package, so the parts this library writes *beside* a body
+never travel — a footnote part, a header part, the field a `::toc` placeholder
+stands for. Emitting them anyway leaves a document carrying a footnote
+reference to a note it does not contain and a run of invisible separators where
+a table of contents should be. So `::toc` and `:footnote` are drawn as
+`:footnote[…]`, `:footnote` reads as written rather than as a mark, and a
+`header:` block has no effect. Render without a template to use them.
+
+### Headers and footers
+
+A document's running head and foot come from its frontmatter, and the body of
+each is **Markdown** — the same renderer, so bold, links and images all work.
+
+```markdown
+---
+options:
+  imageMaxWidth: 4
+header:
+  body: |
+    ![Logo](assets/logo.png)
+
+    **Meridian Analytics**
+  align: right
+  border: bottom
+  firstPage: true
+footer:
+  body: |
+    Page {page} of {total} — {filename}
+  align: center
+```
+
+A blank line is what separates them. Two lines with nothing between them are one
+paragraph, and an image inside a paragraph is inline — text flows beside it rather
+than under it. Leave the line empty to stack them, or set `softBreak: lineBreak` to
+have every line break in the document become one.
+
+| Key | |
+| --- | --- |
+| `body` | Markdown for the part |
+| `align` | `left`, `center`, `right` — a tab stop for the fields |
+| `border` | `top`, `bottom`, `both` |
+| `firstPage` | `true` gives page 1 a header of its own |
+| `even` | `true` gives even pages one, and turns on `w:evenAndOddHeaders` |
+
+`{page}`, `{total}`, `{date}`, `{chapter}` and `{filename}` become **real Word
+fields** — `PAGE`, `NUMPAGES`, `DATE`, `STYLEREF`, `FILENAME` — not text
+substituted at conversion time. A page number written into the file is wrong by
+the time the document is printed; the field is not. The `date`, `chapter`,
+`page`, `total` and `filename` keys draw the same field without a token, and
+`dateFormat` chooses the picture a date is written in.
+
+Three things that are easy to get wrong, and are therefore worth stating:
+
+**Size a header logo with `options: imageMaxWidth`,** because there is no
+per-image width. The default is 15 cm, which is a body picture's width and fills
+a third of the page as a logo. It is a global cap, so it applies to the body as
+well — the alternative, a per-image attribute, is a syntax this library would
+have to invent.
+
+**`firstPage: true` applies to the whole section, not just the header.** Word's
+`<w:titlePg/>` has no finer setting, so page 1 then looks for a *first-page
+footer* as well — and a document that gave only an ordinary footer has none, so
+page 1 has no footer. Give `footer:` a `firstPage` too, or do not ask for one.
+
+**An empty `header:` writes no header part at all.** Not an empty band on every
+page — which is what writing the part unconditionally would give a template that
+already carries a header of its own.
+
+A `.dotx` may carry its own header and footer, and this does not merge with
+them: the template's parts are its own, and a `header:` in the frontmatter is
+ignored on that path. Set the header in the template, or render without one.
+
+`.docx` and `.rtf` both carry a header and a footer. `.odt` carries neither —
+PHPWord has no part for either — so a document declaring one gets the loss
+reported through `Format::drops()`. A link in a header works; alt text and an
+SVG logo do not, because the passes that write those rewrite `word/document.xml`
+and not the header parts.
 
 ## Word templates
 
@@ -1397,9 +1588,9 @@ Use a different Markdown dialect:
 ```php
 use MarkdownWord\Parser\CommonMarkParser;
 
-new MarkdownToWord(null, $config, CommonMarkParser::commonMarkOnly());
+new MarkdownToWord(null, $config, CommonMarkParser::commonMarkOnly());   // no directives
 new MarkdownToWord(null, $config, CommonMarkParser::extended());      // + footnotes
-new MarkdownToWord(null, $config, CommonMarkParser::directives());    // + directives
+new MarkdownToWord(null, $config, CommonMarkParser::directives());    // the default
 new MarkdownToWord(null, $config, CommonMarkParser::withAllExtensions());
 ```
 

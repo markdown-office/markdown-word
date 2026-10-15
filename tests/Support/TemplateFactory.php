@@ -582,4 +582,87 @@ private static function write(PhpWord $phpWord, string $name): string
 
         return $contents;
     }
+
+    /**
+     * Every `w:style` definition in a package's stylesheet, keyed by its `w:styleId`.
+     *
+     * Namespace-aware, because `getElementsByTagName('w:style')` matches on the
+     * qualified name and finds nothing in a parsed part — the prefix is a binding and
+     * not part of the name.
+     *
+     * Each definition is serialized on its own, so the `xmlns:w` it inherits from
+     * `w:styles` is put back onto it: a fragment without it parses to elements that
+     * are in no namespace at all, which silently defeats every namespace-aware lookup
+     * made against one.
+     *
+     * @return array<string, string> styleId to the whole `<w:style>` element
+     */
+    public static function styleDefinitions(string $docx): array
+    {
+        $dom = new DOMDocument();
+        $dom->loadXML(self::xmlOf($docx, 'word/styles.xml'));
+
+        $found = [];
+
+        foreach ($dom->getElementsByTagNameNS(self::W_NS, 'style') as $style) {
+            $style->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:w', self::W_NS);
+
+            $found[$style->getAttribute('w:styleId')] = (string) $dom->saveXML($style);
+        }
+
+        return $found;
+    }
+
+    /**
+     * The `w:name` a definition carries, or null when it carries none.
+     */
+    public static function styleNameOf(string $definition): ?string
+    {
+        return preg_match('/<w:name w:val="([^"]+)"/', $definition, $match) === 1
+            ? html_entity_decode($match[1], ENT_QUOTES | ENT_XML1)
+            : null;
+    }
+
+    /**
+     * The `w:outlineLvl` a definition carries, or null when it carries none.
+     *
+     * The value as a string, because "carries no level" and "carries level `0`" are
+     * different answers and an `int|null` return would collapse them for a caller that
+     * compared loosely.
+     */
+    public static function outlineLevelOf(string $definition): ?string
+    {
+        return preg_match('/<w:outlineLvl w:val="([^"]+)"/', $definition, $match) === 1 ? $match[1] : null;
+    }
+
+    /**
+     * The element names inside a definition's `w:pPr`, in the order they are written.
+     *
+     * The order is the whole of what is returned, because that is what is worth
+     * asserting: `CT_PPrBase` is a sequence rather than a choice, so a definition whose
+     * children are all the right elements in the wrong order is still a broken one.
+     *
+     * @return list<string>
+     */
+    public static function paragraphPropertiesOf(string $definition): array
+    {
+        $dom = new DOMDocument();
+        $dom->loadXML($definition);
+
+        $paragraph = $dom->getElementsByTagNameNS(self::W_NS, 'pPr')->item(0);
+
+        if (!$paragraph instanceof DOMElement) {
+            return [];
+        }
+
+        $names = [];
+
+        foreach ($paragraph->childNodes as $child) {
+            if ($child instanceof DOMElement) {
+                $names[] = $child->localName;
+            }
+        }
+
+        return $names;
+    }
 }

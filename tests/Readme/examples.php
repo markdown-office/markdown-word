@@ -617,21 +617,25 @@ it('parser flavours', function () {
 });
 
 it('the directives table on the page, run', function () {
-    // The page claims three shapes parse and none of them is drawn. Both halves are
-    // checked against a rendered document, because "what a directive looks like in
-    // Word" is a claim about the render and not about the markup.
+    // The page claims three shapes parse and what each becomes in Word. Every
+    // claim is checked against a rendered document, because "what a directive
+    // looks like in Word" is a claim about the render and not about the markup.
     $render = static fn (string $markdown): string => TextExtractor::fromPhpWord(
         (new MarkdownToWord(null, new Configuration(), CommonMarkParser::directives()))->toPhpWord($markdown),
     );
 
-    // The container's body is there and the container is not.
+    // The container's body is there and the fence is not, because a container's
+    // body is the author's own Markdown and the fence is not.
     expect($render(":::callout{type=info}\nInside the container.\n:::\n"))->toBe('Inside the container.');
 
-    // The inline directive keeps its label and nothing else.
-    expect($render("Ship it :badge[PRODUCTION]{type=success} today.\n"))->toBe('Ship it PRODUCTION today.');
+    // A name nothing draws comes back as the characters it was written as, so a
+    // sentence that happens to contain one is the sentence the author wrote.
+    expect($render("Ship it :badge[PRODUCTION]{type=success} today.\n"))
+        ->toBe('Ship it :badge[PRODUCTION]{type="success"} today.');
 
-    // A leaf has no body, so it leaves nothing behind.
-    expect($render("::image[caption]{src=\"chart.png\"}\n"))->toBe('');
+    // A leaf has no body to descend into, so it is drawn rather than dropped —
+    // dropping it would take the paragraph it stood between with it.
+    expect($render("::image[caption]{src=\"chart.png\"}\n"))->toBe('::image[caption]{src="chart.png"}');
 });
 
 it('the default parser: what needs extended() and what does not', function () {
@@ -724,4 +728,174 @@ it('orders the four sources the way the table on the page says', function () {
         ->and($level(ConfigurationMerger::resolve(frontmatter: $frontmatter, configFile: $fromFile)))->toBe(3)
         ->and($level(ConfigurationMerger::resolve(commandLine: $commandLine, frontmatter: $frontmatter)))->toBe(2)
         ->and($level(ConfigurationMerger::resolve(commandLine: $commandLine, frontmatter: $frontmatter, configFile: $fromFile)))->toBe(2);
+});
+
+/**
+ * The `w:pStyle` of the paragraph carrying the table of contents' title, or an
+ * empty string when it carries none.
+ */
+function readmeTocTitleStyle(string $body): string
+{
+    $dom = new DOMDocument();
+    $dom->loadXML($body);
+    $xpath = new DOMXPath($dom);
+    $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+    foreach ($xpath->query('//w:p') ?: [] as $paragraph) {
+        if (str_contains($paragraph->textContent, 'Contents')) {
+            foreach ($xpath->query('.//w:pStyle', $paragraph) ?: [] as $style) {
+                return $style->getAttribute('w:val');
+            }
+
+            return '';
+        }
+    }
+
+    return '';
+}
+
+it('the table of contents section, run', function () {
+    // Every claim on that section is about what Word is told rather than about what
+    // the document looks like, so each is read back out of the written file. A claim
+    // about a field can only be checked in the XML.
+    $document = Scratch::path('readme-toc');
+    (new MarkdownToWord("::toc{title=\"Contents\"}\n\n# One\n\n## Two\n"))->save($document);
+
+    $body = TemplateFactory::xmlOf($document);
+
+    // A field, and a complete one: a `begin` with nothing to close it is a document
+    // Word will not build a table of contents in.
+    expect($body)->toContain('TOC \\o "1-6" \\h \\z \\u')
+        ->and($body)->toContain('w:fldCharType="begin"')
+        ->and($body)->toContain('w:fldCharType="end"');
+
+    // Marked dirty, so Word evaluates it rather than showing the placeholder.
+    expect($body)->toContain('w:dirty="true"');
+
+    // The title above it, in the heading look but without the heading style, which
+    // is the whole of what stops it listing itself. Asked of the paragraph holding
+    // the title rather than of the document: a document with an `# One` in it has a
+    // `Heading1` of its own, and that is one more reason the two cannot be told
+    // apart by counting.
+    expect($body)->toContain('Contents')
+        ->and(readmeTocTitleStyle($body))->not->toContain('Heading1');
+
+    // And no cached entry claiming a page number nobody computed.
+    expect($body)->not->toContain('PAGEREF');
+});
+
+it('the header and footer section, run', function () {
+    // Checked against the written parts rather than the render: a claim about a field
+    // or a tab stop is a claim about XML, and one about alignment is a claim about a
+    // paragraph property that a reader resolves.
+    $markdown = <<<'MD'
+        ---
+        header:
+          body: |
+            **Meridian Analytics**
+          align: right
+          border: bottom
+          firstPage: true
+        footer:
+          body: |
+            Page {page} of {total}
+          align: center
+        ---
+
+        # Body
+        MD;
+
+    $path = Scratch::path('readme-furniture');
+    (new MarkdownToWord($markdown, parser: readmeFurnitureParser()))->save($path);
+
+    $body = TemplateFactory::xmlOf($path);
+
+    // Both parts, and the first page referenced, which is what `<w:titlePg/>` means.
+    expect($body)->toContain('<w:headerReference w:type="default"')
+        ->and($body)->toContain('<w:headerReference w:type="first"')
+        ->and($body)->toContain('<w:footerReference w:type="default"')
+        ->and($body)->toContain('<w:titlePg/>');
+
+    $header = TemplateFactory::xmlOf($path, 'word/header1.xml');
+    $footer = TemplateFactory::xmlOf($path, 'word/footer1.xml');
+
+    // Alignment and the rule under the head.
+    expect($header)->toContain('<w:jc w:val="right"/>')
+        ->and($header)->toContain('pBdr')
+        ->and($footer)->toContain('<w:jc w:val="center"/>');
+
+    // The page numbers are fields, not the number one, which is what makes them
+    // right on the page the document lands on.
+    expect($footer)->toContain('<w:instrText xml:space="preserve"> PAGE </w:instrText>')
+        ->and($footer)->toContain('<w:instrText xml:space="preserve"> NUMPAGES </w:instrText>');
+});
+
+it('writes no header part for a document that names no header', function () {
+    // The empty-form claim. Asserting the part is absent rather than empty is the
+    // whole difference: an empty part is a blank band on every page of a document
+    // that asked for nothing.
+    $path = Scratch::path('readme-no-furniture');
+    (new MarkdownToWord("# Body\n", parser: readmeFurnitureParser()))->save($path);
+
+    $zip = new ZipArchive();
+    $zip->open($path);
+    $parts = [];
+
+    for ($index = 0; $index < $zip->numFiles; $index++) {
+        $parts[] = (string) $zip->getNameIndex($index);
+    }
+
+    $zip->close();
+
+    expect(array_values(array_filter($parts, static fn (string $p): bool => str_contains($p, 'header') || str_contains($p, 'footer'))))
+        ->toBe([]);
+});
+
+/** A parser that reads the frontmatter a `header:` block lives in. */
+function readmeFurnitureParser(): MarkdownWord\Parser\CommonMarkParser
+{
+    return new MarkdownWord\Parser\CommonMarkParser([
+        ...MarkdownWord\Parser\CommonMarkParser::FLAVOURS[MarkdownWord\Parser\CommonMarkParser::DEFAULT_FLAVOUR],
+        League\CommonMark\Extension\FrontMatter\FrontMatterExtension::class,
+    ]);
+}
+
+it('the footnotes section, run', function () {
+    // The claim that decides whether this is a footnote at all: the mark is inside
+    // the sentence, in the same paragraph as the words on either side of it, rather
+    // than in a paragraph of its own. Everything else about a footnote follows from
+    // that.
+    $markdown = "Ahead of plan :footnote[n=12] in the west.\n";
+
+    $path = Scratch::path('readme-footnote');
+    (new MarkdownToWord($markdown, parser: readmeFurnitureParser()))->save($path);
+
+    $body = TemplateFactory::xmlOf($path);
+
+    expect($body)->toContain('w:footnoteReference');
+
+    // One paragraph holding the words and the mark, which is what the count is for:
+    // a `w:p` of its own for the reference would take the count to two.
+    expect(substr_count($body, '<w:p>'))->toBe(1);
+
+    // And the part, whose ids have to be the ones the marks point at.
+    $notes = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+
+    expect($notes)->toContain('n=12')
+        ->and(preg_match('/w:footnoteReference w:id="(\d+)"/', $body, $mark) === 1)
+        ->and($notes)->toContain('<w:footnote w:id="' . $mark[1] . '"');
+});
+
+it('leaves the note body out of the sentence', function () {
+    // A footnote's body is not part of the document's wording: Word draws it at the
+    // foot of the page. Read as text it landed mid-sentence, which is a claim about
+    // the document that is true nowhere in it.
+    $converter = new MarkdownToWord(
+        "Ahead of plan :footnote[n=12] in the west.\n",
+        parser: readmeFurnitureParser(),
+    );
+
+    expect(MarkdownWord\Text\TextExtractor::fromPhpWord($converter->toPhpWord(
+        "Ahead of plan :footnote[n=12] in the west.\n",
+    )))->toBe('Ahead of plan  in the west.');
 });

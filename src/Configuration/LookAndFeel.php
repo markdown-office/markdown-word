@@ -17,19 +17,21 @@ namespace MarkdownWord\Configuration;
  * names the style the paragraph references, and
  * {@see \MarkdownWord\Render\StyleRegistrar} writes a definition of it into a
  * document built from scratch, so the `w:pStyle` a `.docx` heading carries
- * resolves to something. It does not make the heading a heading: PHPWord writes
- * the definition's `w:name` from the same string as its `w:styleId`, and
- * `Heading1` is not the canonical `heading 1`, so a reader that maps built-in
- * styles by name treats it as a style of its own. Direct formatting rides
+ * resolves to something. The definition it writes is not yet a built-in one —
+ * PHPWord gives it a `w:name` of `Heading1`, and `Heading1` is not the canonical
+ * `heading 1` — so the name is corrected afterwards by
+ * {@see \MarkdownWord\Writer\BuiltInHeadingPass}, not here. Direct formatting rides
  * alongside the name rather than instead of it, and it is the properties every
  * reader sees: the name is what a template's own `Heading1` has to be called for
  * the template's look to apply, and nothing more.
  *
  * A style name alone is not an outline level, and nothing here pretends it is.
  * PHPWord's paragraph writer emits `w:outlineLvl` only for a numbered paragraph,
- * so there is no setting here that would change that —
- * `tests/Unit/look-and-feel.php` says what the name does and does not amount
- * to.
+ * so there is no setting here that would change that — a level is added afterwards
+ * by {@see \MarkdownWord\Writer\BuiltInHeadingPass}, which is not a slot anyone
+ * configures and which matches Word's nine built-in heading ids rather than the six
+ * written here. `tests/Unit/look-and-feel.php` says what the name does and does not
+ * amount to.
  *
  * A slot configured with a style *name* means the opposite — a template saying
  * what its own `Heading1` looks like — and is left exactly as it was written.

@@ -6,7 +6,135 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: directives are parsed by default.** `new CommonMarkParser()` now takes
+  the `directives` flavour rather than `gfm`, so `:name[…]`, `::name[…]` and
+  `:::name` … `:::` parse in every document without opting in.
+  `CommonMarkParser::commonMarkOnly()` and `extended()` still decline them.
+
+  This is a change of behaviour rather than an addition, and the reason the syntax
+  used to be opt-in still stands: `Status :green[go]` is a sentence, and a parser
+  nobody asked to change should not change the syntax of every document converted
+  after it.
+
+  What answers it is that **a directive this library does not draw is drawn as the
+  author wrote it** — the node round-trips to its source form, so an unclaimed name
+  comes back out as the characters the author typed. Before this, the renderer drew
+  a directive's label and discarded its name and attributes, so
+  `:badge[PRODUCTION]{type=success}` and `:badge[DRAFT]{type=info}` produced
+  identical sentences; a leaf, having no body to fall back on, was dropped entirely
+  along with the paragraph it stood between.
+
+  A container stays transparent — its body is the author's Markdown and the fence is
+  not — so a `::callout` remains ordinary text in the document rather than a line
+  reading `:callout`.
+
+  Only a name with an implementation changes a document. Names live in
+  `src/Render/Directives.php` rather than in the parser.
+
 ### Added
+
+- **A document can describe its own header and footer**, under `header:` and
+  `footer:` in the `---` block. The body of each is Markdown, drawn by the same
+  renderer, so a logo, bold text and a link all work:
+
+  ```markdown
+  ---
+  header:
+    body: |
+      ![Logo](assets/logo.png)
+
+      **Meridian Analytics**
+    align: right
+    border: bottom
+  footer:
+    body: |
+      Page {page} of {total}
+    align: center
+  ---
+  ```
+
+  `{page}`, `{total}`, `{date}`, `{chapter}` and `{filename}` become real Word
+  fields — `PAGE`, `NUMPAGES`, `DATE`, `STYLEREF`, `FILENAME` — rather than text
+  written down at conversion time, which is what makes a page number right on
+  the page the document lands on.
+
+  An empty block writes no part at all, rather than an empty band on every page of
+  a document that asked for nothing.
+
+  The blank line after the logo is what stacks it above the text. Two lines with
+  nothing between them are one paragraph, and an image inside a paragraph is
+  inline, so the text runs beside it.
+
+  A `.dotx` may carry a header and footer of its own, and these do not merge with
+  them: the template's parts are its own, and a `header:` in the frontmatter is
+  ignored on that path. Set the header in the template, or render without one.
+
+  `.odt` carries neither, and says so through `Format::drops()`. `.rtf` carries
+  both — the footer is written by `Writer\RTF\Part\Document` rather than by a
+  part of its own, which is worth knowing before concluding from a missing
+  `Footer.php` that it cannot.
+
+- **A footnote, as `:footnote[…]`.** A real Word footnote — a superscript mark
+  where the directive stood, the body at the foot of the page, numbered by Word so
+  the notes renumber themselves. The label is text and not Markdown, which is the
+  directives package's own decision about a leaf label.
+
+  Two limits of the grammar are worth knowing: the label goes in one pair of
+  brackets (`:footnote[n=12]`, not `:footnote:[n=12]`, which parses as an empty
+  label), and a mark cannot sit flush against a word, because the grammar leaves a
+  colon after a word alone.
+
+- **A table of contents, as `::toc`.** A real Word `TOC` field with no cached
+  entries, marked dirty, with `w:updateFields` set so Word builds it on open.
+  An `.odt` or an `.rtf` gets the source form back rather than the placeholder a
+  field would have been written into.
+
+- **A heading is now the built-in heading style, by name and by level.** Every
+  heading style was defined as `w:styleId="Heading1"` with `w:name="Heading1"`,
+  which is a style *called* Heading1 — and a `.docx` identifies a built-in style
+  by the `w:name` in its definition, which Word spells `heading 1`. Word collects
+  a `TOC \o` by that name, so it collected nothing:
+
+  > Es wurden keine Einträge für das Inhaltsverzeichnis gefunden.
+
+  The definitions now carry `w:name="heading 1"` … `heading 6`, and Word builds
+  the contents with page numbers. The size, colour and spacing a document set are
+  left exactly as they were.
+
+  Each definition also gets the `w:outlineLvl` a heading style is expected to
+  carry, zero-based, 0 … 5. Word does not collect by it — `TOC \o` reads the
+  style — but every other reader does: LibreOffice reads the level and not the
+  name, and the same document is a plain `<text:p>` without one and a real
+  `<text:h text:outline-level="1">` with it. These headings were body text to
+  anything that was not Word.
+
+  Written after the file is closed, by `Writer\BuiltInHeadingPass`, because
+  PHPWord offers no hook for either: `Writer\Word2007\Part\Styles` takes
+  `w:name` from the `w:styleId`, and `w:outlineLvl` is written for numbering
+  styles only. A `w:styleId` that is not one of Word's nine built-in heading
+  ids is not touched, so a slot pointed at a style of the document's own keeps it
+  and a template's stylesheet comes through unchanged.
+
+  Verified by opening the built examples in Word 16.113 and reading back what it
+  collected, which is also what corrected the second of these two fixes: it was
+  written as the cure for a symptom that the name alone had already cured.
+
+### Fixed
+
+- **A `:footnote[…]` in a running head or foot no longer raises.** It is drawn as
+  the directive the author wrote — `:footnote[a note]` — and the conversion
+  completes. It previously ended in `BadMethodCallException: Cannot add Footnote
+  in TextRun`, which is PHPWord's own exception and not an answer a document
+  author can act on.
+
+  A footnote is a mark with a note at the foot of one page, and a running head is
+  read on every page and has no such page, so the mark could only ever have
+  pointed at a note nothing held. The source form is the whole of the answer, and
+  nothing is reported for it: a loss is a property of the *format*, and `.docx`
+  writes a footnote everywhere else. `:footnote[…]` in the body of a document is
+  unaffected and is still a real footnote.
 
 - **An SVG can be written without a raster beside it**, under `svgFallback`, on the
   command line as `--svg-fallback`:

@@ -16,10 +16,22 @@ use PhpOffice\PhpWord\Style\Paragraph;
  * A fresh `styles.xml` carries only `Normal` and `FootnoteReference`, so the
  * `w:pStyle` a heading carries has nothing to resolve against. Defining them keeps a
  * standalone document self-contained while still using the styleIds Word recognises.
- * What that does not do is make a heading one: PHPWord writes the definition's
- * `w:name` from the same string as its `w:styleId`, so `Heading1` reaches a reader
- * as a style of its own rather than as the canonical `heading 1`, and nothing here
- * sets an outline level.
+ * What that does not do is make a heading one: a definition is missing both the built-in
+ * name and the outline level, and both are corrected afterwards by
+ * {@see \MarkdownWord\Writer\BuiltInHeadingPass} rather than here.
+ *
+ * The name is the one Word collects by. PHPWord writes a definition's `w:name` from the
+ * same string as its `w:styleId`, and a name of `Heading1` is a style *called* Heading1
+ * rather than the built-in `heading 1`, so a `TOC \o` finds nothing to collect. There
+ * is no hook for it here: `Writer\Word2007\Part\Styles` spells `heading N` only in
+ * the `if ($styleType == 'title')` branch of `writeFontStyle()`, which `addTitleStyle()`
+ * alone reaches, and a heading reaches the registry through `addFontStyle()` instead.
+ *
+ * The outline level is the one Word does not collect by and every other reader does.
+ * It was the obvious suspect for a table of contents that stayed empty once the name was
+ * right — LibreOffice reads the level rather than the name, so a document without one
+ * is body text to it — but asking Word settles it the other way, and a guess dressed as
+ * a finding is worse than no finding.
  *
  * The definition is taken from the slot rather than from a table here, so a document
  * that overrides a heading writes a definition of its own and not the library's.

@@ -22,6 +22,8 @@ use League\CommonMark\Node\Block\Document;
 use League\CommonMark\Node\Block\Paragraph;
 use League\CommonMark\Node\Inline\Text;
 use League\CommonMark\Node\Node;
+use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
+use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\LookAndFeel;
 use MarkdownWord\Configuration\Options;
@@ -61,6 +63,7 @@ final class DocumentRenderer
         private readonly InlineRenderer $inlines,
         private readonly NumberingRegistry $numbering,
         private readonly HtmlFragmentRenderer $html,
+        private readonly Directives $directives = new Directives(),
     ) {
     }
 
@@ -144,8 +147,48 @@ final class DocumentRenderer
             return;
         }
 
+        // A container directive holds Markdown, so a container nothing claims
+        // falls through to the same descent every other unhandled block gets —
+        // its body is drawn and the fence is not, which is the most a container
+        // can mean without a name for what it is.
+        if ($node instanceof DirectiveBlock && $this->directives->drawBlock($node, $target, $context)) {
+            return;
+        }
+
         if ($node->hasChildren()) {
             $this->renderChildren($node->children(), $target, $context);
+
+            return;
+        }
+
+        $this->renderUnclaimedDirective($node, $target, $context);
+    }
+
+    /**
+     * A directive with a name nothing claims, drawn as the author wrote it.
+     *
+     * The alternative is to drop it, which is what happened before any name was
+     * registered, and it is wrong once directives are on by default: `Status
+     * :green[go]` is a sentence, and a parser that silently removed the
+     * `:green[` out of it would be changing prose rather than reading it.
+     *
+     * A leaf has no body, so dropping it loses its label as well and leaves a
+     * hole where a paragraph used to be. Drawn as its source form it is at least
+     * the line the author can see and go and fix.
+     *
+     * `__toString()` round-trips to the source syntax, which is why this is
+     * three lines rather than a reconstruction of the name, label and attributes.
+     */
+    private function renderUnclaimedDirective(Node $node, AbstractContainer $target, RenderContext $context): void
+    {
+        if ($node instanceof DirectiveBlock) {
+            $this->emitParagraph([new Text((string) $node)], $target, $context, Styles::PARAGRAPH);
+
+            return;
+        }
+
+        if ($node instanceof DirectiveInline) {
+            $this->inlines->render([new Text((string) $node)], $target);
         }
     }
 

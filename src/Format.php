@@ -83,6 +83,10 @@ enum Format: string
                 'shading',
                 'paragraph-border',
                 'svg-vector',
+                'table-of-contents',
+                'header',
+                'footer',
+                'footnotes',
             ],
             // `Writer\RTF\Element\AbstractElement::writeOpening()` wants a
             // `Style\Paragraph` and this library's named styles are `Style\Font`;
@@ -100,6 +104,8 @@ enum Format: string
                 'image-alt-text',
                 'jpeg-label',
                 'svg-vector',
+                'table-of-contents',
+                'footnotes',
             ],
         };
     }
@@ -162,5 +168,9 @@ enum Format: string
         'image-alt-text' => 'a picture is left with no alternative text',
         'jpeg-label' => 'a JPEG is written into the file labelled as a PNG',
         'svg-vector' => 'an SVG is flattened into a raster and cannot be scaled like a vector',
+        'table-of-contents' => 'a table of contents is left as the text ::toc rather than as a field Word can build',
+        'header' => 'the running head at the top of every page is left out',
+        'footer' => 'the running foot at the bottom of every page is left out',
+        'footnotes' => 'a footnote is left as the text :footnote[...] rather than as a note at the foot of the page',
     ];
 }

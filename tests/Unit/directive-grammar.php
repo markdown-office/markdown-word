@@ -7,9 +7,10 @@ use MarkdownOffice\CommonMark\Directive\DirectiveType;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration;
-use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Tests\Support\Scratch;
+use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Text\TextExtractor;
 
 /*
@@ -120,23 +121,27 @@ it('reads a directive\'s attributes off the node', function () {
         ->toHaveKey('title', 'a } b');
 });
 
-it('is not in the default parser, or in any of the other factories', function () {
+it('is the default parser, and can still be asked for or refused', function () {
     $markdown = "Ship it :badge[PRODUCTION] today.\n";
 
-    // The difference is the whole reason this is a factory rather than a default:
-    // without the extension `:badge[PRODUCTION]` is literal text inside a
-    // sentence, and with it the same bytes are a node.
-    expect(directivesIn($markdown, new CommonMarkParser()))->toBe([])
+    // The default changed when directives were switched on, so this is the test
+    // that fails if it is switched back; the other two are what would fail if it
+    // could not be turned off.
+    expect(directivesIn($markdown))->toHaveCount(1)
+        ->and(directivesIn($markdown, new CommonMarkParser()))->toHaveCount(1)
+        ->and(directivesIn($markdown, CommonMarkParser::directives()))->toHaveCount(1)
         ->and(directivesIn($markdown, CommonMarkParser::commonMarkOnly()))->toBe([])
         ->and(directivesIn($markdown, CommonMarkParser::extended()))->toBe([])
-        ->and(directivesIn($markdown, CommonMarkParser::withAllExtensions()))->toBe([])
-        ->and(directivesIn($markdown, CommonMarkParser::directives()))->toHaveCount(1);
+        ->and(directivesIn($markdown, CommonMarkParser::withAllExtensions()))->toBe([]);
 
-    // And the default renders the author's sentence rather than a word of it.
-    expect(renderText($markdown))->toContain(':badge[PRODUCTION]');
+    // And either parser renders an unclaimed name as the characters it was given,
+    // so the sentence is the one the author wrote.
+    expect(renderText($markdown))->toBe('Ship it :badge[PRODUCTION] today.');
 });
 
-it('draws a container\'s body and drops the container — temporarily', function () {
+it('draws a container\'s body and drops the fence', function () {
+    // Transparent, because the body is the author's own Markdown and drawing the
+    // fence as well would put `:callout` in the document as a line of its own.
     $markdown = <<<'MD'
         Before.
 
@@ -147,36 +152,28 @@ it('draws a container\'s body and drops the container — temporarily', function
         After.
         MD;
 
-    // What is missing is the thing a directive *is*: its name, its type, and the
-    // boundary it drew. The document a reader gets is the one the same bytes
-    // produce with the container written out, which is the loss stated as itself.
-    expect(renderDirectives($markdown))->toBe("Before.\nInside the container.\nAfter.")
-        ->and(renderDirectives("Before.\n\nInside the container.\n\nAfter.\n"))->toBe("Before.\nInside the container.\nAfter.");
+    expect(renderDirectives($markdown))->toBe("Before.\nInside the container.\nAfter.");
 });
 
-it('draws an inline directive as its label — temporarily', function () {
-    // The label is drawn and the attributes are not, so two directives differing
-    // only in `{type=…}` come out identical — which is the loss a caller cannot
-    // see until they read the source back.
+it('draws an inline directive nobody claims as the source form', function () {
+    // A label alone would drop the syntax around it, so two directives differing
+    // only in `{type=…}` would come out as two sentences indistinguishable in a
+    // document that never used a directive. `directive-rendering.php` asserts
+    // this behaviour and why the default-flavour change rests on it.
     expect(renderDirectives("Ship it :badge[PRODUCTION]{type=success} today.\n"))
-        ->toBe('Ship it PRODUCTION today.')
+        ->toBe('Ship it :badge[PRODUCTION]{type="success"} today.')
         ->and(renderDirectives("Ship it :badge[DRAFT]{type=info} today.\n"))
-        ->toBe('Ship it DRAFT today.');
+        ->toBe('Ship it :badge[DRAFT]{type="info"} today.');
 });
 
-it('drops a leaf directive entirely, label and all — temporarily', function () {
-    // A leaf has no body, so there is nothing left to draw. It is not shown as
-    // text either, and the paragraph it stood between does not survive as an
-    // empty one.
+it('draws a leaf nobody claims as a paragraph, label and all', function () {
+    // A leaf has no body to descend into, so before there was anything to draw it
+    // disappeared and took the paragraph it stood between with it.
     expect(renderDirectives("Before.\n\n::image[caption]{src=\"chart.png\"}\n\nAfter.\n"))
-        ->toBe("Before.\nAfter.")
-        ->and(renderDirectives("Before.\n\nAfter.\n"))->toBe("Before.\nAfter.");
+        ->toBe("Before.\n::image[caption]{src=\"chart.png\"}\nAfter.");
 });
 
 it('leaves a container\'s Markdown as Markdown', function () {
-    // The container is transparent, so everything inside it goes through the
-    // renderer exactly as if the fences were not there. This is the one part of
-    // the behaviour that is certainly not temporary.
     expect(renderDirectives(":::callout\n# Heading\n\n- one\n- two\n:::\n"))
         ->toBe(renderDirectives("# Heading\n\n- one\n- two\n"));
 });
@@ -184,25 +181,28 @@ it('leaves a container\'s Markdown as Markdown', function () {
 it('is permissive: any well-formed name parses', function () {
     // The RFC describes no fixed vocabulary and the extension is given no
     // registry, so a name nobody has heard of is still a directive. Strict mode —
-    // an unregistered name raising `UnknownDirective` rather than being ignored —
-    // is a decision about which default this library wants, and it is not made
-    // here; see `CommonMarkParser::directives()`.
+    // an unregistered name raising `UnknownDirective` — is deliberately not
+    // reachable, because a name a document has not met yet is prose until
+    // something draws it otherwise.
     expect(directivesIn(":anything[at all]{k=v}\n"))->toHaveCount(1)
         ->and(directivesIn("::whatever\n"))->toHaveCount(1);
 });
 
-it('reports a document of nothing but leaf directives as having nothing in it', function () {
-    // The one input a dropped directive can turn into an error. The renderer draws
-    // nothing, so the document reads as empty and `NothingToConvert` is raised for
-    // a document that plainly had Markdown in it.
+it('counts a document of nothing but directives as having something in it', function () {
+    // The one input a dropped directive used to turn into an empty document. A
+    // leaf drawn as its source form is content, so a document made only of
+    // leaves converts rather than coming back empty.
     //
-    // Asserted because it is a question and not an answer — whether a directive
-    // counts as content is the same decision as how a directive is drawn, and both
-    // belong to whoever writes the renderer. Pinned now so that whoever decides
-    // sees the cost rather than discovering it.
-    $converter = new MarkdownToWord(null, new Configuration(), CommonMarkParser::directives());
+    // The source goes to the constructor rather than being left null: `convert()`
+    // raises `NothingToConvert` for a converter that has no input at all, which is
+    // a different thing and would let this pass without saying anything about how
+    // a leaf is drawn. The old version of this test made exactly that mistake.
+    $markdown = "::image{src=\"chart.png\"}\n";
+    $document = Scratch::path('leaf-only');
 
-    expect($converter->toPhpWord("::image{src=\"chart.png\"}\n")->getSections()[0]->getElements())->toBe([]);
+    (new MarkdownToWord($markdown, new Configuration(), CommonMarkParser::directives()))->save($document);
 
-    expect(fn () => $converter->convert())->toThrow(NothingToConvert::class);
+    expect(TemplateFactory::xmlOf($document))->toContain('::image')
+        ->and((new MarkdownToWord($markdown, new Configuration(), CommonMarkParser::directives()))->convert())
+        ->toStartWith('PK');
 });

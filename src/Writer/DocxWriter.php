@@ -10,27 +10,32 @@ use MarkdownWord\Exception\UnreadableDocument;
 use MarkdownWord\Format;
 use MarkdownWord\Render\ImageDescriptionCollector;
 use MarkdownWord\Render\LinkPayloadCollector;
+use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\SvgAttachmentCollector;
 use PhpOffice\PhpWord\PhpWord;
 
 /**
  * Writes a `PhpWord` document to `.docx`.
  *
- * On top of PHPWord's own writer this makes three extra passes over the archive,
- * each reopening it:
+ * On top of PHPWord's own writer this makes a pass over the archive for each of
+ * these, each reopening it:
  *
  *  - {@see HyperlinkPass} replaces the placeholders left behind by
  *    {@see \MarkdownWord\Render\LinkPayloadCollector} with real `w:hyperlink`
  *    elements. Without it, a link whose label contains emphasis would lose
  *    either the link or the formatting.
+ *  - {@see \MarkdownWord\Writer\TocPass} replaces the placeholder a `::toc`
+ *    leaves with the field Word builds the contents into.
+ *  - {@see BuiltInHeadingPass} gives each heading definition the built-in name
+ *    and outline level, which PHPWord writes under the `w:styleId` instead.
  *  - {@see ImageDescriptionPass} fills in the alternative text of the images,
  *    which PHPWord writes as an empty string.
- *  - {@see SvgPass} puts the vector back behind the raster Word draws, for the SVG
- *    images PHPWord could only have taken as a picture.
+ *  - {@see \MarkdownWord\Writer\SvgPass} puts the vector back behind the raster
+ *    Word draws, for the SVG images PHPWord could only have taken as a picture.
  *
- * All three are OOXML concerns: each edits a part of a `.docx` that the other two
- * formats do not have. {@see OdtWriter} and {@see RtfWriter} are the same
- * arrangement with whichever of the three the format can actually express.
+ * All of them are OOXML concerns: each edits a part of a `.docx` that the other
+ * two formats do not have. {@see OdtWriter} and {@see RtfWriter} are the same
+ * arrangement with whichever of them the format can actually express.
  *
  * {@see self::write()} and {@see self::toString()} both stage the archive in the
  * system temp directory and patch it there, so neither a document written to
@@ -57,13 +62,14 @@ final class DocxWriter
         ?LinkPayloadCollector $links = null,
         ?ImageDescriptionCollector $images = null,
         ?SvgAttachmentCollector $vectors = null,
+        ?Toc $tocs = null,
     ): string {
         return Staging::write(
             $phpWord,
             Format::Docx->writer(),
             $path,
-            static function (string $staged) use ($links, $images, $vectors): void {
-                self::patch($staged, $links, $images, $vectors);
+            static function (string $staged) use ($links, $images, $vectors, $tocs): void {
+                self::patch($staged, $links, $images, $vectors, $tocs);
             },
         );
     }
@@ -81,12 +87,13 @@ final class DocxWriter
         ?LinkPayloadCollector $links = null,
         ?ImageDescriptionCollector $images = null,
         ?SvgAttachmentCollector $vectors = null,
+        ?Toc $tocs = null,
     ): string {
         return Staging::toString(
             $phpWord,
             Format::Docx->writer(),
-            static function (string $staged) use ($links, $images, $vectors): void {
-                self::patch($staged, $links, $images, $vectors);
+            static function (string $staged) use ($links, $images, $vectors, $tocs): void {
+                self::patch($staged, $links, $images, $vectors, $tocs);
             },
         );
     }
@@ -112,10 +119,17 @@ final class DocxWriter
         ?LinkPayloadCollector $links,
         ?ImageDescriptionCollector $images,
         ?SvgAttachmentCollector $vectors,
+        ?Toc $tocs,
     ): void {
         if ($links?->hasPayloads() === true) {
             self::patchHyperlinks($docxPath, $links->payloads());
         }
+
+        if ($tocs !== null && $tocs->payloads() !== []) {
+            (new TocPass($tocs->payloads()))->applyTo($docxPath);
+        }
+
+        (new BuiltInHeadingPass())->applyTo($docxPath);
 
         $descriptions = $images?->take() ?? [];
 

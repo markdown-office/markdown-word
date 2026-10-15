@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord\Document;
 
 use League\CommonMark\Node\Block\Document;
+use MarkdownWord\Configuration\Furniture;
 use MarkdownWord\Configuration\Validator;
 use MarkdownWord\Exception\InvalidConfiguration;
 use MarkdownWord\Exception\InvalidConfigurationValue;
@@ -24,6 +25,12 @@ use MarkdownWord\Exception\InvalidConfigurationValue;
  * conversion, so they are read here and resolved beside the other configuration —
  * mixing them into `Options` would put a key in the configuration that no renderer
  * looks at, and leave a path unchecked.
+ *
+ * `header` and `footer` are a third shape, and not one to be handed on: what a running
+ * head is made of is content rather than a rendering behaviour, so it is read into
+ * {@see Furniture} through {@see self::header()} and {@see self::footer()} instead,
+ * which is also what lets a document override one slot of a template's header and keep
+ * the rest.
  *
  * The block is also where the source is: {@see self::lineOf()} answers where in a
  * file a given key sits, which is what lets a mistake in it be reported as "line 7"
@@ -231,6 +238,30 @@ final class Frontmatter
     }
 
     /**
+     * The header a document describes, or an empty one.
+     *
+     * Read into {@see Furniture} rather than passed on with {@see self::toConfigurationArray()}
+     * because a running head is not a rendering behaviour switch: what goes in it is
+     * content — a body, a page number, a chapter reference — and {@see \MarkdownWord\Configuration\Options}
+     * has no `with*()` that would read one. A document that names no header gets an
+     * empty one rather than null, so a caller can ask {@see Furniture::isEmpty()} and
+     * write no header part at all.
+     */
+    public function header(): Furniture
+    {
+        return Furniture::fromArray($this->getArray('header'));
+    }
+
+    /**
+     * The footer a document describes, or an empty one. {@see self::header()} for the
+     * shape and the reason.
+     */
+    public function footer(): Furniture
+    {
+        return Furniture::fromArray($this->getArray('footer'));
+    }
+
+    /**
      * The part of the block that configures the conversion.
      *
      * Only the two sub-keys {@see \MarkdownWord\Configuration} understands are passed
@@ -382,6 +413,64 @@ final class Frontmatter
                     $this->lineOf($section),
                 );
             }
+        }
+
+        return [...$problems, ...$this->furnitureProblems()];
+    }
+
+    /**
+     * Everything wrong with a `header:` or `footer:` block.
+     *
+     * {@see Furniture} drops a key it does not hold and a block it cannot read, so
+     * without this a mis-indented `algin: right` leaves a header with no alignment and
+     * nothing anywhere in the run saying why — and a `header:` written as a plain value
+     * leaves a document with no header at all, reported as neither.
+     *
+     * @return list<string>
+     */
+    private function furnitureProblems(): array
+    {
+        $problems = [];
+
+        foreach (['header', 'footer'] as $section) {
+            if (!$this->has($section)) {
+                continue;
+            }
+
+            // A key with nothing under it is a document saying "no overrides", which is
+            // not the same claim as one that never mentioned a header and is the ordinary
+            // way to write one — so it is left unremarked, and writes no part at all.
+            $value = $this->get($section);
+
+            if ($value === null) {
+                continue;
+            }
+
+            if (self::mappingOf($value) === null) {
+                $problems[] = Validator::locate(
+                    sprintf(
+                        'The "%s" key of the frontmatter block is %s, which is not a mapping of keys. '
+                        . 'Each key goes on its own line, indented beneath it.',
+                        $section,
+                        Validator::show($value),
+                    ),
+                    $this->lineOf($section),
+                );
+
+                continue;
+            }
+
+            // The locator is what puts a problem on the line of the key it is about
+            // rather than on the line of `header:`. Handed the property name as written,
+            // and `BlockLines` separates a path with `/`. A key the block does not have
+            // resolves to nothing and the section's own line stands in for it.
+            //
+            // `Furniture::validate()` returns every problem already located, so nothing
+            // is wrapped again here — that would give a reader "Line 2: Line 4:".
+            $locate = fn (string $property): ?int
+                => $this->lineOf($section . '/' . $property) ?? $this->lineOf($section);
+
+            $problems = [...$problems, ...Furniture::validate($value, $locate, $section)];
         }
 
         return $problems;
