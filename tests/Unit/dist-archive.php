@@ -44,11 +44,21 @@ function gitLines(string $arguments): array
 }
 
 /**
- * The files in the dist archive for the working tree, directories left out.
+ * The tree the dist archive is built from, or `HEAD` when nothing is uncommitted.
  *
  * `git stash create` is what lets an uncommitted `.gitattributes` reach
  * `git archive`, which otherwise only ever sees commits, and it leaves the
  * working tree and HEAD alone so a test can rely on it.
+ */
+function distArchiveTree(): string
+{
+    $created = gitLines('stash create');
+
+    return $created === [] ? 'HEAD' : $created[0];
+}
+
+/**
+ * The files in the dist archive for the working tree, directories left out.
  *
  * @return list<string>
  */
@@ -60,11 +70,8 @@ function distArchiveFiles(): array
         return $files;
     }
 
-    $created = gitLines('stash create');
-    $tree = $created === [] ? 'HEAD' : $created[0];
-
     $archive = Scratch::path('dist', '.zip');
-    gitLines(sprintf('archive --format=zip --output=%s %s', escapeshellarg($archive), escapeshellarg($tree)));
+    gitLines(sprintf('archive --format=zip --output=%s %s', escapeshellarg($archive), escapeshellarg(distArchiveTree())));
 
     $zip = new ZipArchive();
 
@@ -95,22 +102,26 @@ it('does not ship the lock file, which pins nothing for a consumer', function ()
     expect(distArchiveFiles())->not->toContain('composer.lock');
 });
 
-it('keeps the lock file in the repository, which the phar build reads', function () {
-    // Both rules are the reason. tools/build-phar.php copies the lock next to the
-    // manifest and installs with `--no-dev` there, so the repository needs one;
-    // no consumer ever reads it.
+it('keeps the lock file in the repository, which this repository\'s installs pin to', function () {
+    // Both rules are the reason. No consumer ever reads the lock, which is what the
+    // export-ignore is for, but this repository's own installs are meant to be the
+    // ones the lock describes: `composer validate --strict` fails outright when the
+    // two disagree, and a build that resolved afresh would test whatever was newest
+    // that morning rather than what was reviewed.
     expect(gitLines('ls-files --error-unmatch composer.lock'))->toBe(['composer.lock']);
 });
 
 it('ships the library whole, and what a consumer needs to reach it', function () {
     $files = distArchiveFiles();
 
-    expect(array_values(array_intersect(['composer.json', 'LICENSE', 'README.md', 'bin/mdword'], $files)))
-        ->toBe(['composer.json', 'LICENSE', 'README.md', 'bin/mdword']);
+    expect(array_values(array_intersect(['composer.json', 'LICENSE', 'README.md'], $files)))
+        ->toBe(['composer.json', 'LICENSE', 'README.md']);
 
-    // Every tracked source file, because a rule that reached `src/` would leave a
-    // package containing a command and no library behind it.
-    $tracked = gitLines('ls-files src');
+    // Every source file in the tree being archived, because a rule that reached
+    // `src/` would strip the package of everything it exists to be. Read out of that
+    // same tree rather than out of the index, so the two sides of the comparison
+    // cannot differ by a deletion that has not been staged yet.
+    $tracked = gitLines(sprintf('ls-tree --name-only -r %s -- src', escapeshellarg(distArchiveTree())));
     sort($tracked);
 
     $shipped = array_values(array_filter(

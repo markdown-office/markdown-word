@@ -63,8 +63,9 @@ decorative image:
 
 The same renderer, on a `.webp`. Word cannot embed one and PHPWord has never added
 support, so this file is decoded with GD and written into the document as PNG. The
-conversion is reported rather than performed quietly — `mdword` prints a line for it,
-and `MarkdownToWord::pendingImageConversions()` has it afterwards.
+conversion is reported rather than performed quietly —
+`MarkdownToWord::pendingImageConversions()` has it afterwards, and a program
+driving this library can print it.
 
 ![A photograph, converted on the way in](assets/test_landscape.webp)
 

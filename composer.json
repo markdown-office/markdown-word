@@ -1,6 +1,6 @@
 {
     "name": "markdown-office/markdown-word",
-    "description": "Pure PHP Markdown to Word (DOCX) generator and back, built on PHPWord. Full CommonMark and GitHub-Flavored Markdown support, configurable styling, Word template rendering, and a command line utility.",
+    "description": "Pure PHP Markdown to Word (DOCX) generator and back, built on PHPWord. Full CommonMark and GitHub-Flavored Markdown support, configurable styling, Word template rendering, and a table of contents, footnotes and a document's own header and footer.",
     "type": "library",
     "keywords": [
         "markdown",
@@ -11,14 +11,12 @@
         "gfm",
         "converter",
         "template",
-        "cli",
-        "phar",
         "pandoc"
     ],
     "license": "MIT",
     "authors": [
         {
-            "name": "Fabian Gra\u00dfl",
+            "name": "Fabian Graßl",
             "email": "mail@fabiangrassl.de"
         }
     ],
@@ -62,21 +60,14 @@
         "test:roundtrip": "pest --testsuite=roundtrip",
         "test:readme": "pest --testsuite=readme",
         "test:coverage": "pest --coverage --min=91 --coverage-clover=build/coverage/clover.xml --coverage-html=build/coverage/html",
-        "cli": "@php bin/mdword --version",
         "check": [
             "@composer validate --strict",
             "@check:audit",
-            "@check:cli",
             "@php smoke.php",
             "@php stress.php",
             "@php vendor/bin/pest"
         ],
         "check:audit": "@composer audit --no-interaction",
-        "check:cli": "@cli",
-        "check:coverage": "@test:coverage",
-        "build:phar": "@php -d phar.readonly=0 tools/build-phar.php"
-    },
-    "bin": [
-        "bin/mdword"
-    ]
+        "check:coverage": "@test:coverage"
+    }
 }

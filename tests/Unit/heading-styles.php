@@ -265,13 +265,13 @@ it('corrects a level that disagrees with the name rather than leaving both', fun
     expect(TemplateFactory::outlineLevelOf(TemplateFactory::styleDefinitions($path)['Heading3']))->toBe('2');
 });
 
-it('is written for a document rendered through the command line too', function () {
+it('is written for a document written out rather than assembled', function () {
     // The pass is in the writer rather than in the renderer, so it cannot be reached by
-    // a document that does not go through `DocxWriter` — which is worth asserting,
-    // since a `::toc` in a document converted some other way would silently collect
-    // nothing again.
-    $path = Scratch::path('heading-styles-cli');
-    runCli(['to-docx', Scratch::remember(inputFile('heading-styles-cli.md', "# One\n\n## Two\n")), '-o', $path]);
+    // a document that is never written to a file — which is worth asserting, since a
+    // `::toc` in such a document would silently collect nothing again.
+    $path = Scratch::path('heading-styles-written');
+
+    (new MarkdownToWord("# One\n\n## Two\n"))->save($path);
 
     expect(headingStyles($path))
         ->toHaveKey('Heading1')

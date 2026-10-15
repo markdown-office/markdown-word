@@ -23,13 +23,18 @@ declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
 
+// Not through the autoloader: the minimum-version job installs with `--no-dev`,
+// which leaves `autoload-dev` out, so the class the filter lives in is not
+// autoloadable here. It is a plain file, so requiring it is enough.
+require_once __DIR__ . '/tests/Support/Upstream.php';
+
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Options;
-use MarkdownWord\Console\UpstreamDeprecations;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Template\ContentControl;
 use MarkdownWord\Template\MarkdownTemplate;
+use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\Text\TextExtractor;
 use MarkdownWord\Xml;
 use PhpOffice\PhpWord\IOFactory;
@@ -37,7 +42,7 @@ use PhpOffice\PhpWord\PhpWord;
 
 // One dependency emits a deprecation for every list item it writes, and the run
 // would print thousands of somebody else's lines; see the class for why.
-UpstreamDeprecations::install();
+Upstream::install();
 
 $work = __DIR__ . '/tmp/stress';
 @mkdir($work, 0o777, true);
@@ -342,7 +347,7 @@ foreach ($templateConfigurations as $configName => $config) {
     }
 }
 
-UpstreamDeprecations::restore();
+Upstream::restore();
 
 self_removeTree($work);
 

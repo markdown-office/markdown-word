@@ -29,11 +29,11 @@ image is there; there is nothing beside the file to lose.
 Word has no support for WebP and PHPWord has never added any, so this one is decoded
 with GD and written into the document as PNG. That is a decision the run made on your
 behalf and it is not free — a PNG of a photograph is several times the size of the
-WebP it came from — so `mdword` says so on standard error, and
-`MarkdownToWord::pendingImageConversions()` has it afterwards:
+WebP it came from — so it is never done quietly:
+`MarkdownToWord::pendingImageConversions()` has it afterwards, as
 
 ```
-mdword: converted …/assets/test_landscape.webp (image/webp) to PNG for embedding
+[['source' => '…/assets/test_landscape.webp', 'format' => 'image/webp', 'embeddedAs' => 'PNG']]
 ```
 
 An earlier version of this file embedded neither picture and said nothing about it:

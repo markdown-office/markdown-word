@@ -179,9 +179,15 @@ final class Frontmatter
      * A path rather than a name, because a template is a file and a document that
      * travels on its own has to be able to say which. It is not folded into
      * `toConfigurationArray()` because nothing in {@see \MarkdownWord\Configuration}
-     * reads a path: the renderer asks for it beside the other configuration, where it
-     * can be resolved and held to a directory rather than passed along as a string
-     * nobody has checked — see {@see \MarkdownWord\Template\TemplateFile}.
+     * reads a path: it is asked for beside the other configuration, where it can be
+     * resolved and held to a directory rather than passed along as a string nobody has
+     * checked — see {@see \MarkdownWord\Template\TemplateFile}.
+     *
+     * Nothing in this library calls it. The command line, which moved to
+     * `markdown-office/mdoffice`, is what asks — a document naming its own template
+     * has to be told where the template is, and the caller holding the string is the
+     * caller that has to decide. **A caller would be in another repository**, so the
+     * absence of one in `src/` is not the absence of a user.
      *
      * Null when the block names no template, which is the ordinary case and not a
      * failure. Returned as written, because resolving it is a filesystem operation

@@ -54,11 +54,6 @@ jobs:
       - name: The examples in the README work
         run: vendor/bin/pest --testsuite=readme
 
-      # Not `vendor/bin/mdword`: Composer symlinks a dependency's binaries, not
-      # the root package's own, so from a checkout the script is run directly.
-      - name: The command line runs
-        run: php bin/mdword --version
-
   # Static analysis, on every pull request including a fork's.
   #
   # SonarCloud below is the richer analysis, and it only runs on `main` and on
@@ -101,14 +96,6 @@ jobs:
           echo '1a2fb5460c142502d3cd06272529c18b19fda004ada974bd2581cb9fd6c0a53b  tmp/phpstan.phar' \
             | sha256sum --check --strict
 
-      # `bin/mdword` is named as a file rather than as the `bin` directory because
-      # PHPStan takes its input by the `.php` suffix and this one has none — its
-      # name is the command users type. Given the directory it answers "No files
-      # found to analyse", so the entry point went unanalysed until it was named
-      # here, and naming it found `$argv might not be defined` on the same run.
-      # The Sonar scan has the same blind spot and cannot be reached this way; see
-      # sonar-project.properties.
-      #
       # Level 1, because that is the highest level this code passes without a
       # single `ignoreErrors`, a baseline or a suppression comment. It is not a
       # weak gate: it catches unknown classes, unknown functions, wrong argument
@@ -137,14 +124,14 @@ jobs:
             --level=1 \
             --autoload-file=vendor/autoload.php \
             --no-progress \
-            src bin/mdword tools tests examples/build.php
+            src tools tests examples/build.php
 
   # The library on the oldest PHP it claims to support.
   #
   # Pest 5 needs PHP 8.4, so the test suite cannot run here. What can — and must —
   # is proof that the library itself works on this version: that it parses,
-  # writes, reads back and that its command line runs. A version-specific syntax
-  # error or a broken autoloader is exactly what this catches.
+  # writes and reads back. A version-specific syntax error or a broken
+  # autoloader is exactly what this catches.
   minimum:
     name: php 8.2 (minimum)
     runs-on: ubuntu-latest

@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- **The command line has moved to [`markdown-office/mdoffice`](https://github.com/markdown-office/mdoffice),
+  and `vendor/bin/mdword` is gone.** The classes under `MarkdownWord\Console`,
+  the `bin/mdword` entry point and the `composer build:phar` script are all
+  removed from this package, which is a library and nothing else.
+
+  A terminal tool is a different thing from a converter: it decides which file is
+  read, where the result is written, what a flag means and what exit status to
+  return, none of which a caller embedding this package wants decided for it. It
+  also wanted to be one program for every office format rather than one per
+  library, which is not a shape a library can have — `mdoffice` converts Markdown
+  to Word and to PowerPoint side by side and calls this package for the first.
+
+  `composer require markdown-office/markdown-word` still installs everything the
+  library is, and a `composer.json` naming `mdword` in `bin` is gone, so nothing
+  is added to `vendor/bin` any more. Ask for `mdoffice` as well for the command.
+
 ### Changed
 
 - **BREAKING: directives are parsed by default.** `new CommonMarkParser()` now takes

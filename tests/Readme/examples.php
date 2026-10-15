@@ -5,7 +5,6 @@ declare(strict_types=1);
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Options;
 use MarkdownWord\Configuration\Styles;
-use MarkdownWord\Console\Application;
 use MarkdownWord\Converter;
 use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
@@ -44,7 +43,7 @@ use PhpOffice\PhpWord\TemplateProcessor;
 
 // Writing a document reaches the one known upstream deprecation described in
 // tests/Support/Upstream, so the filter spans the whole file rather than each
-// test, as it does in the console tests.
+// test.
 beforeEach(fn () => Upstream::install());
 afterEach(fn () => Upstream::restore());
 
@@ -235,32 +234,11 @@ it('a round trip is two of them', function () {
 
 // Installation
 
-it('installation: the package, the bin entry and the version', function () {
-    $composer = json_decode(
-        (string) file_get_contents(dirname(__DIR__, 2) . '/composer.json'),
-        true,
-        flags: JSON_THROW_ON_ERROR,
-    );
-
-    // `composer require` puts the CLI in `vendor/bin` because of the `bin` entry,
-    // so a page naming `vendor/bin/mdword` and a `bin` naming something else is a
-    // page that is wrong.
-    expect($composer['name'])->toBe('markdown-office/markdown-word')
-        ->and($composer['bin'])->toBe(['bin/mdword'])
-        ->and(is_file(dirname(__DIR__, 2) . '/bin/mdword'))->toBeTrue();
-
-    $version = runCli(['--version']);
-
-    expect($version['code'])->toBe(0)
-        ->and(trim($version['out']))->toBe(Application::NAME . ' ' . Application::VERSION);
-});
-
 it('installation: the package the page asks for is this package', function () {
-    // Neither of the two commands the page prints can be run here: `composer
-    // require` needs the package published, and the release download needs a tag.
-    // What can be checked is that the name on the page is the name in
-    // `composer.json` — a rename that missed the README is the drift that matters,
-    // and it is invisible until somebody follows the page and gets a 404.
+    // The command the page prints cannot be run here: `composer require` needs the
+    // package published. What can be checked is that the name on the page is the
+    // name in `composer.json` — a rename that missed the README is the drift that
+    // matters, and it is invisible until somebody follows the page and gets a 404.
     $readme = (string) file_get_contents(dirname(__DIR__, 2) . '/README.md');
 
     expect($readme)->toMatch('/composer require ([\w.-]+\/[\w.-]+)/');
@@ -274,36 +252,6 @@ it('installation: the package the page asks for is this package', function () {
     );
 
     expect($match[1])->toBe($composer['name']);
-});
-
-// The command line
-
-it('the command line works the direction out for itself', function () {
-    $markdown = inputFile('cli.md', "# From the command line\n");
-    $document = Scratch::path('cli');
-    $readBack = Scratch::path('cli-1', '.md');
-    $shortTarget = Scratch::path('cli-3');
-
-    (new MarkdownToWord($markdown))->save($document);
-
-    $fromMarkdown = runCli(['to-docx', $markdown, '-o', Scratch::path('cli-1')]);
-    $fromDocument = runCli(['to-markdown', $document, '-o', $readBack]);
-    $detected = runCli([$markdown, '-o', Scratch::path('cli-2')]);
-    $piped = runCli(['--to', 'docx', '-', '-o', '-'], "# Piped in\n");
-
-    expect($fromMarkdown['code'])->toBe(0)
-        ->and($fromDocument['code'])->toBe(0)
-        ->and($detected['code'])->toBe(0)
-        ->and($piped['code'])->toBe(0)
-        ->and($piped['out'])->toStartWith('PK')
-        ->and((string) file_get_contents($readBack))->toContain('# From the command line');
-
-    // `--to` takes a short name for either direction as well as the long one.
-    $short = runCli(['--to', 'word', $markdown, '-o', $shortTarget]);
-    $shorter = runCli(['--to', 'md', $shortTarget, '-o', '-']);
-
-    expect($short['code'])->toBe(0)
-        ->and($shorter['out'])->toContain('# From the command line');
 });
 
 // Word to Markdown

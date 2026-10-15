@@ -17,9 +17,10 @@
 /stress.php         export-ignore
 /sonar-project.properties export-ignore
 
-# Tracked, but not shipped. tools/build-phar.php copies the lock beside the
-# manifest and installs with `--no-dev` there, which must resolve nothing, so the
-# repository needs it. A consumer's install never reads it: Composer does not
-# consult a dependency's lock, so it would arrive as a file of pins the install
-# ignored, disagreeing with the versions actually installed.
+# Tracked, but not shipped. A consumer's install never reads it: Composer does
+# not consult a dependency's lock, so it would arrive as a file of pins the
+# install ignored, disagreeing with the versions actually installed. This
+# repository's own installs are the ones meant to read it — `composer validate
+# --strict` fails when the two disagree, and a build is meant to be the install
+# the lock describes.
 /composer.lock      export-ignore

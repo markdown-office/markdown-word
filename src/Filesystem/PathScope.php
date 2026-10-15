@@ -72,7 +72,8 @@ final class PathScope
      *
      * {@see self::canonical()} for a directory on disk, and {@see self::literal()} for one
      * inside the archive this is running from — which is what the built-in themes are when
-     * this library is a `.phar`, and is the case {@see self::canonical()} cannot serve
+     * this library has been bundled into a `.phar`, and is the case
+     * {@see self::canonical()} cannot serve
      * because `realpath()` does not resolve a `phar://` path at all.
      */
     private static function root(string $path): ?string
@@ -126,7 +127,8 @@ final class PathScope
      * A path this library's own directory resolved, however it had to be resolved.
      *
      * For the built-in themes, which are on disk under a checkout and inside the archive
-     * under a `.phar`. Null where neither resolved, which every caller here reads as "there
+     * when the library has been bundled into a `.phar`. Null where neither resolved,
+     * which every caller here reads as "there
      * is no such thing".
      */
     public static function resolve(string $path): ?string
