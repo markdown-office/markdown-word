@@ -157,6 +157,17 @@ it('does not claim again what the code does not do', function (string $claim) {
     // document naming one and the CLI called the flag `.docx` only. A `.docx` template
     // renders into a `.docx`, so "a template is a .docx" read as excluding the other.
     'a template is a .docx' => 'A template is a `.docx`.',
+    // `WordPackage::mainPartOf()`'s docblock named "the command line checking that a
+    // region is in a template" as its caller. No such call existed — not in the command
+    // line, which was removed, and not under `src/`, which never had one — so the
+    // comment described a caller that existed nowhere, and the method has none in this
+    // repository at all. Read against the rule that a method with no caller outside
+    // `tests/` is dead, that is an invitation to delete working public API.
+    //
+    // Guarded narrowly, on the whole phrase rather than on "the command line":
+    // `ConfigurationMerger`, `Loss`, `Input` and others use that phrase correctly, for
+    // the override layer as a concept rather than for a program.
+    'mainPartOf names a caller that exists nowhere' => 'checking that a region is in a template',
     'the template flag takes a .docx only' => '`--template` is `.docx` only',
     // `template_file` was read into the block and used by nothing at all, so this
     // described a key that no renderer consulted as one somebody did.

@@ -88,9 +88,22 @@ final class WordPackage
     }
 
     /**
-     * For the callers that only need to know where to read — the command line
-     * checking that a region is in a template — and so must not be handed a copy
-     * of a file that is not theirs to change.
+     * The part of a package on disk that holds its body, by the package's own
+     * convention rather than by substitution.
+     *
+     * For a caller holding a `.docx` or `.dotx` as a path — which is what
+     * {@see \MarkdownWord\Template\MarkdownTemplate} is given — and needing to read a
+     * part out of it without first opening it themselves.
+     *
+     * **No caller in this repository.** The command line that used to be named here
+     * never called it, and nothing under `src/` does either. It is public API for a
+     * caller in another package, which is why its absence from `src/` is not the
+     * absence of a user — see the same note on
+     * {@see \MarkdownWord\Document\Frontmatter::templateFile()}.
+     *
+     * The fallback rather than an exception when the package cannot be opened: a
+     * caller that is about to read from it will fail on the read, and a method named
+     * "where would the body be" is not the place to decide whether the file is one.
      */
     public static function mainPartOf(string $path): string
     {

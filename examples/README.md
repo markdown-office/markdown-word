@@ -191,7 +191,9 @@ the check is on the block.
 **`imageBasePath`** is how a relative path in the Markdown finds its file, and in
 these examples it points at `examples/markdown`, so `assets/logo.png` resolves. Pass
 `Configuration::create()->withOptions(['imageBasePath' => …])`, or `--image-base` on
-the command line, and the same Markdown works from any working directory.
+`mdoffice word` — the command line lives in
+[`markdown-office/mdoffice`](https://github.com/markdown-office/mdoffice), not in this
+repository — and the same Markdown works from any working directory.
 
 **`imageMaxWidth`** is in centimetres and is applied to every picture, so
 `15-images-embed.docx` is at 8cm against a default of 15cm — a little over half the text
