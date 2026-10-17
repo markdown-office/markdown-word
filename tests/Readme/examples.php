@@ -234,24 +234,33 @@ it('a round trip is two of them', function () {
 
 // Installation
 
-it('installation: the package the page asks for is this package', function () {
+it('installation: the package the page asks for is one that can be installed', function () {
     // The command the page prints cannot be run here: `composer require` needs the
-    // package published. What can be checked is that the name on the page is the
-    // name in `composer.json` — a rename that missed the README is the drift that
-    // matters, and it is invisible until somebody follows the page and gets a 404.
+    // package published. What can be checked is which name the page gives — and the
+    // name that matters is the one Packagist answers to, not the one in
+    // `composer.json`.
+    //
+    // Those two were the same until this repository moved to the `markdown-office`
+    // organisation and was never registered there, so the page read
+    // `markdown-office/markdown-word` and a reader who followed it got a 404. This
+    // test compared the page with the manifest, which agreed with each other and were
+    // both wrong, so it passed through the whole of that.
+    //
+    // The manifest keeps the new name, because that is what the package is called from
+    // here on; the page gives the published name, because that is what installs.
+    // So the check is against the name Packagist has, and it changes when either moves.
     $readme = (string) file_get_contents(dirname(__DIR__, 2) . '/README.md');
 
     expect($readme)->toMatch('/composer require ([\w.-]+\/[\w.-]+)/');
 
     preg_match('/composer require ([\w.-]+\/[\w.-]+)/', $readme, $match);
 
-    $composer = json_decode(
-        (string) file_get_contents(dirname(__DIR__, 2) . '/composer.json'),
-        true,
-        flags: JSON_THROW_ON_ERROR,
-    );
+    // The published name, from the release that carries it. Not a second list here:
+    // a page naming a package that does not exist is the failure this is for, and a
+    // name nobody maintains anywhere is a claim the suite cannot keep honest.
+    $published = 'fabeat/markdown-word';
 
-    expect($match[1])->toBe($composer['name']);
+    expect($match[1])->toBe($published);
 });
 
 // Word to Markdown
