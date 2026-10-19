@@ -54,7 +54,7 @@ past.
 | `22-corporate-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the templates](#the-templates). |
 | `22-corporate-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |
 | `23-plain-letterhead.docx` | The same report into a template that is a logo and **nothing else** — no styles, and no content control either. The content is appended because the template names no place for it. Compare with `22`. |
-| `24-furniture.docx` | A running head and foot a document describes about itself, under `header:` and `footer:`. The head carries a logo and a wordmark stacked and right-aligned over a rule; the foot a centred `Page 1 of 1` written as Word fields rather than numbers. See [Headers and footers](#headers-and-footers). |
+| `24-furniture.docx` | A running head and foot a document describes about itself, under `header:` and `footer:`. The head carries a logo and a wordmark stacked and right-aligned over a rule; the foot a centred `Page 1 of 1` written as Word fields rather than numbers. See [Headers and footers](../README.md#headers-and-footers). |
 | `25-toc.docx` | A `::toc` drawn as a real Word field, so the contents are built by Word on F9 rather than written down here. Three footnotes on the page, for the mark and the note beside each other. |
 | `26-directives.docx` | What a directive becomes in each place: a table of contents and a footnote, and three names this library does not draw — an inline one keeps its braces, a leaf one its whole source form, a container its body without its fence. |
 

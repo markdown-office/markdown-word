@@ -618,14 +618,10 @@ final class DocumentReader
 
         $result = [];
         $pending = [];
-        $index = 0;
 
-        while ($index < count($units)) {
-            $unit = $units[$index];
-
+        foreach ($units as $unit) {
             if ($this->isMonospaceParagraph($unit)) {
                 $pending[] = $unit;
-                $index++;
 
                 continue;
             }
@@ -633,7 +629,6 @@ final class DocumentReader
             $result = array_merge($result, $this->flushCodeBlock($pending));
             $pending = [];
             $result[] = $unit;
-            $index++;
         }
 
         return array_merge($result, $this->flushCodeBlock($pending));

@@ -251,15 +251,15 @@ it('keeps the vector out of the way when the picture is skipped', function () {
 });
 
 it('does not claim the vector is there when the picture was not embedded', function () {
-    // The vector is attached by matching bytes in the archive. With nothing embedded
-    // there is nothing to attach to, and the count has to say so rather than the pass
+    // The position is how the vector is matched to its picture, and a document of text
+    // has no picture at any index. The count has to say so rather than the pass
     // inventing a relationship.
     $path = scratchDirectory('noembed') . '/noembed.docx';
 
     (new MarkdownToWord("# Text only\n", Configuration::create()))->save($path);
 
     $attached = (new SvgPass())->applyTo($path, [
-        ['fallback' => sha1('nothing in this document'), 'vector' => svgSource()],
+        ['position' => 0, 'name' => 'image1.svg', 'vector' => svgSource(), 'raster' => true],
     ]);
 
     expect($attached)->toBe(0)

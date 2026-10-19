@@ -39,7 +39,6 @@ final class SpecFile
     private static function parse(string $contents): array
     {
         $examples = [];
-        $section = '';
 
         // The format is a fence of backticks containing "example", the Markdown
         // input, a line with a single dot, the expected HTML, then the closing
@@ -56,7 +55,7 @@ final class SpecFile
 
         preg_match_all('/^#{1,6} +(?<heading>.+)$/m', $contents, $headings, PREG_OFFSET_CAPTURE);
         $offsets = [];
-        foreach ($headings[0] as $index => [$text, $offset]) {
+        foreach ($headings[0] as [$text, $offset]) {
             $offsets[$offset] = trim($text);
         }
 

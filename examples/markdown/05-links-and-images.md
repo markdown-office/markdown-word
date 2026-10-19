@@ -87,3 +87,8 @@ client:
 A file that *is* there and cannot be used is a different case: an SVG, or a truncated
 download. That one raises `Exception\UnsupportedImageFormat` rather than quietly
 replacing the picture with its caption — see `15-images.md`.
+
+[one]: https://example.com/reference/one
+[two]: https://example.com/reference/two
+[collapsed]: https://example.com/reference/collapsed
+[shortcut]: https://example.com/reference/shortcut

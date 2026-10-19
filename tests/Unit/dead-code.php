@@ -216,6 +216,12 @@ it('does not claim again what the code does not do', function (string $claim) {
     // corrected. `Footnote`'s docblock made the same kind of claim about PHPWord, and
     // reading only the check it named is what let a footnote in a running head raise.
     'a `{@see}` can name a constant the class does not have' => '{@see self::FEATURES}',
+    // The test read as a description of an implementation that no longer exists. A
+    // vector is paired with its picture by the picture's position among the
+    // document's pictures — PHPWord names media parts as it writes them, so the
+    // bytes say nothing about which element became the part — and the attachment
+    // the test built still carried the `fallback` key that byte-matching wanted.
+    'a vector is attached by matching bytes' => 'The vector is attached by matching bytes in the archive',
 ]);
 
 it('has no decorative dividers in it', function () {
