@@ -4,52 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Removed
-
-- **The command line has moved to [`markdown-office/mdoffice`](https://github.com/markdown-office/mdoffice),
-  and `vendor/bin/mdword` is gone.** The classes under `MarkdownWord\Console`,
-  the `bin/mdword` entry point and the `composer build:phar` script are all
-  removed from this package, which is a library and nothing else.
-
-  A terminal tool is a different thing from a converter: it decides which file is
-  read, where the result is written, what a flag means and what exit status to
-  return, none of which a caller embedding this package wants decided for it. It
-  also wanted to be one program for every office format rather than one per
-  library, which is not a shape a library can have — `mdoffice` converts Markdown
-  to Word and to PowerPoint side by side and calls this package for the first.
-
-  Installing this package still gives the whole library, and a `composer.json`
-  naming `mdword` in `bin` is gone, so nothing is added to `vendor/bin` any more.
-  Ask for `mdoffice` as well for the command.
-
-### Changed
-
-- **BREAKING: directives are parsed by default.** `new CommonMarkParser()` now takes
-  the `directives` flavour rather than `gfm`, so `:name[…]`, `::name[…]` and
-  `:::name` … `:::` parse in every document without opting in.
-  `CommonMarkParser::commonMarkOnly()` and `extended()` still decline them.
-
-  This is a change of behaviour rather than an addition, and the reason the syntax
-  used to be opt-in still stands: `Status :green[go]` is a sentence, and a parser
-  nobody asked to change should not change the syntax of every document converted
-  after it.
-
-  What answers it is that **a directive this library does not draw is drawn as the
-  author wrote it** — the node round-trips to its source form, so an unclaimed name
-  comes back out as the characters the author typed. Before this, the renderer drew
-  a directive's label and discarded its name and attributes, so
-  `:badge[PRODUCTION]{type=success}` and `:badge[DRAFT]{type=info}` produced
-  identical sentences; a leaf, having no body to fall back on, was dropped entirely
-  along with the paragraph it stood between.
-
-  A container stays transparent — its body is the author's Markdown and the fence is
-  not — so a `::callout` remains ordinary text in the document rather than a line
-  reading `:callout`.
-
-  Only a name with an implementation changes a document. Names live in
-  `src/Render/Directives.php` rather than in the parser.
+## [0.2.0] - 2026-10-19
 
 ### Added
 
@@ -139,114 +94,188 @@ All notable changes to this project are documented here. The format follows
   collected, which is also what corrected the second of these two fixes: it was
   written as the cure for a symptom that the name alone had already cured.
 
-### Fixed
+- **`*.dotx` templates.** `MarkdownTemplate` and `template_file:` both
+  accept a Word template as well as a Word document. Which of the two it is makes no
+  difference to the result: **a filled-in template is always a document.** A `.dotx`
+  is a `.docx` with one line of `[Content_Types].xml` different, and Word opens a
+  package typed as a template by creating a *new* document from it — so leaving that
+  line alone produced a file that double-clicked into `Document1.docx` rather than
+  opening, and that anything dispatching on MIME type read as a template.
 
-- **`05-links-and-images.docx` shows reference links rather than the words that look
-  like them.** The page says its reference links are "defined at the bottom of the
-  file" and the file defined none of them, so `05` rendered as literal text —
-  `[reference link][one]` and the rest — and a page about links demonstrated the
-  opposite. The four definitions are at the bottom now, and the four resolve.
+  **Fixes a silent loss of content.** The same line says which part holds the body,
+  and it is not always `word/document.xml` — documents from Word Online carry
+  `word/document22.xml`, which is why PHPWord looks the name up. Its lookup matches
+  the *document* content type, so on a template it matched nothing, fell back to
+  `word/document.xml`, and wrote there. The finished file kept
+  `${body}${slot}${/body}` in its real body and carried the rendered Markdown in a
+  part nothing pointed at: the content was gone, with every word of the template's
+  own text in place. `HyperlinkPass` threw `MalformedDocument` on such a template
+  rather than losing the links; the region's own check reported "the template has no
+  `${body}` region" for a template that had one.
 
-  `[foo][bar]` under "Escaping" is the other half and is left as it is: it exists to
-  show what a reference that resolves to nothing looks like, and it still does.
+  The type is now settled on the way in, where one rewrite answers both. The template
+  on disk is never opened for writing: the copy the renderer works from is ours, and
+  is removed when the renderer goes.
 
-- **A `:footnote[…]` in a running head or foot no longer raises.** It is drawn as
-  the directive the author wrote — `:footnote[a note]` — and the conversion
-  completes. It previously ended in `BadMethodCallException: Cannot add Footnote
-  in TextRun`, which is PHPWord's own exception and not an answer a document
-  author can act on.
+- **`template_file:` in a document's frontmatter** now renders into the template it
+  names. The key was documented in the README and explained in `Frontmatter`'s
+  docblock, and nothing read it: the block was parsed, the key was kept, and a
+  document with no template at all came out. A template named by the caller outranks
+  it, which is the order the precedence table already gives every other setting.
 
-  A footnote is a mark with a note at the foot of one page, and a running head is
-  read on every page and has no such page, so the mark could only ever have
-  pointed at a note nothing held. The source form is the whole of the answer, and
-  nothing is reported for it: a loss is a property of the *format*, and `.docx`
-  writes a footnote everywhere else. `:footnote[…]` in the body of a document is
-  unaffected and is still a real footnote.
+  It is a path a document writes, so it is held to `PathScope` for the reason a
+  `theme:` is: resolved with `realpath()` and landed inside the working directory or
+  the directory the Markdown was read from. The boundary is *where a path lands*, not
+  where it was written from — a document in `docs/` naming a template one directory
+  up is inside the working directory and is a template, not an escape.
 
-- **An SVG can be written without a raster beside it**, under `svgFallback`, on the
-  command line as `--svg-fallback`:
+- **OpenDocument Text and Rich Text output.** `MarkdownToWord` grows `toOdt()`,
+  `toRtf()` and a format-taking `to()` beside `toDocx()`, and `convertTo()` for
+  the path-writing side the constructor's `source` already implies. `.docx` stays
+  the default everywhere: `toDocx()` and `convert()` keep their signatures and
+  their behaviour, and `toDocx()` is now the same call as `convert()` rather than
+  a second way of doing it, so the two cannot answer differently. `Format` is the
+  value type that names the three.
 
-  ```markdown
-  ---
-  svgFallback: none
-  ---
-  ```
+- **`toOdt()` and `toRtf()`.** The same conversion in two more
+  formats, with `.docx` the default of all three: a run with nothing else said
+  still writes a `.docx` and still derives that name from the input. The writer
+  gives up `final` and grows a `format()`, so the layering of configuration, the
+  image base path, the overwrite guards and the reports on standard error are
+  written once and cannot drift between the three. The command line that reaches
+  them is [`mdoffice`](https://github.com/markdown-office/mdoffice), which owns it
+  now.
 
-  `none` writes the vector alone. `raster` — the default — writes a raster of it as
-  well, for the readers that cannot take a vector.
+- **A link whose label contains emphasis is a real link in all three formats.**
+  `OdfHyperlinkPass` and `RtfHyperlinkPass` are the ODF and RTF counterparts of
+  `HyperlinkPass`, and they exist because the defect was not Word's alone:
+  `Writer\ODText\Element\Link` and `Writer\RTF\Element\Link` each take a single
+  plain string, so `[**Release** notes](url)` came out of both as the literal
+  text `⁣MDWL⁣0⁣MDWL⁣`. After: a `text:a` with the runs inside it, and a
+  `HYPERLINK` field with them.
 
-  Word 2016 and later draw a picture carrying only the `asvg:svgBlip` extension, with
-  no raster behind it, and so does recent LibreOffice. The raster is there for the
-  rest: **Google Docs does not read the extension** and draws such a picture as
-  nothing at all, which is why this is an option and not the default.
+- **A picture's alternative text reaches an `.odt`.** `OdfImageDescriptionPass`
+  writes the `svg:desc` a `draw:frame` takes, where `Writer\ODText\Element\Image`
+  writes none. Before: the picture was there and its alt text was not. After: both.
 
-  `r:embed` is optional on `a:blip`, so a document with the vector alone is one Word
-  opens. It is smaller, and it puts `ext-imagick` off the path entirely for a build
-  that has no usable rasteriser.
+- **`Writer\Staging`, and the atomic-write contract for every format.** Staging
+  the document in the temporary directory, patching it there and moving it into
+  place in one step was `DocxWriter`'s, because that was the one place a document
+  was written. Nothing about it is particular to a `.docx`, so it moved out. No
+  behaviour of the `.docx` path changed.
 
-  The option is about `.docx`, because only `.docx` keeps the vector. A raster is what
-  an `.odt` or an `.rtf` draws the picture from, so those two want one whatever this
-  is set to.
+- **`Loss` and `MarkdownToWord::pendingLosses()`.** What a writer cannot carry,
+  filtered down to what this document actually used. `Format::drops()` is the
+  list; `Writer\Survey` answers whether the document asked for any of it; and
+  `pendingLosses()` hands a caller one sentence per loss, written for whoever
+  opens the finished document rather than for whoever wrote the code. A `.docx`
+  drops nothing and is what the other two are measured against, so a run into one
+  never prints a line of this kind.
 
-- **Directives parse, under `CommonMarkParser::directives()`.** The
-  [Generic Directives RFC](https://talk.commonmark.org/t/generic-directives-plugins-syntax/444)
-  — `:name[…]`, `::name[…]` and `:::name` … `:::` — through
-  [`markdown-office/commonmark-generic-directives`](https://github.com/markdown-office/commonmark-generic-directives):
+- **`examples/markdown/20-formats.md`**, built into a `.docx`, an `.odt` and an
+  `.rtf` for opening side by side, and `tests/Readme/examples-formats.php`, which
+  asserts every row of the README's capability table against the files.
 
-  ```php
-  new MarkdownToWord(null, $config, CommonMarkParser::directives());
-  ```
+- **Frontmatter configures the conversion.** The YAML block at the top of a
+  document is read as configuration rather than discarded. `options:` and
+  `styles:` mean what they mean in a config file; `template_file` is read as
+  data, because it means nothing to a Word conversion and would otherwise become
+  an option key nothing looks at. `theme:` is read by the theme resolver rather
+  than by the validator.
+  `Document\Frontmatter` reads the block off a parsed document.
 
-  It is a parser rather than a default, because a directive is a word the author
-  chose: `Status :green[go]` is a sentence today and a node the day it is on by
-  default, and nothing should change the syntax of every document converted after
-  it.
+- **`Document\ConfigurationMerger`** resolves four sources — command line,
+  frontmatter, config file, defaults — each outranking the one below it. A source
+  that says nothing is skipped rather than read as "reset everything". The command
+  line is an array it is given, so the program that owns the flags
+  ([`mdoffice`](https://github.com/markdown-office/mdoffice)) reads them and hands
+  them over.
 
-  **What a directive looks like in Word is not decided yet, and what happens today
-  is a loss.** The renderer has no case for either node type. A `:::` container
-  contributes its body and is then gone; `:name[label]{attrs}` contributes the
-  label and drops the name and the attributes; a `::leaf[…]` contributes nothing
-  at all, and a document of nothing but leaves raises `NothingToConvert`. It is
-  asserted in `tests/Unit/directive-grammar.php` and it is what the grammar does
-  before the rendering catches up.
+- **`Configuration::withAll()`** merges a batch over an existing configuration,
+  reading a missing key as "not mentioned" the way `Options::withAll()` already
+  did. Merging preserves what the batch did not mention; a batch naming only
+  `options` leaves the styles alone, and the other way round.
 
-  Names are not checked. The extension can be given a `DirectiveRegistry` that
-  makes it raise `UnknownDirective` for a name it does not hold rather than
-  ignoring it, but `CommonMarkParser` builds its extensions from class names and
-  cannot pass one in, so strict mode is not reachable through the factory yet.
+- **Values are checked, not only keys.** `Configuration\Validator` reports a value
+  that is not what it is used as, with the value itself, what would have worked,
+  and the line it is on. `maxHeadingLevel: deep` is cast to 0, the clamp turns 0
+  into 1, and the document came out with every heading in it rendered as body
+  text; `color: "#8B0000"` reached `w:color` with a `#` in it, which is not a
+  colour there, and Word ignored it; a quoted `false` for a boolean option became
+  `true`.
 
-### Fixed
+- **Every problem in a block says where it is.** `Frontmatter::lineOf()` answers
+  the file line for `options/images` or `styles/heading.1/color`, and every
+  message is prefixed with it. Multi-problem reporting still holds: keys, values
+  and a block that is not a mapping all arrive together.
 
-- **A build that cannot rasterise an SVG no longer says it can.** The capability was
-  read from ImageMagick's format registry, which a build with no SVG delegate still
-  registers: it answered yes, drew the shapes, dropped every `<text>` in the picture,
-  and raised nothing. A reader that does not prefer the vector — an older Word, Google
-  Docs — was handed a picture with its words missing. The question is now settled by
-  drawing a letter and looking at the result, because that is the part such a build
-  loses.
+- **`Exception\InvalidConfiguration`** is the one type to catch, with
+  `Exception\UnknownConfigurationKey` for the key half — what callers have been
+  catching since keys were checked — and `Exception\InvalidConfigurationValue`
+  for the rest.
 
-- **An SVG no longer goes in silently when there is no rasteriser.** It is written on
-  its own rather than refused, and `pendingLosses()` says what that costs:
+- **A `.webp` is embedded rather than dropped.** Word has no support for it and
+  PHPWord has never added any, so it is decoded with GD and written into the
+  document as PNG. `MarkdownToWord::pendingImageConversions()` reports each one,
+  because the file that comes out is several times larger than the one that went in.
 
-  ```
-  the vector was written with no raster beside it, so a reader that does not prefer
-  the vector draws nothing where an SVG was
-  ```
+- **An SVG is embedded as a vector, not flattened into a picture.** Word has held
+  SVG since 2016 and holds it the only way it ever can: a raster beside the vector,
+  with the vector referenced from an extension on the same picture. A picture
+  carrying that extension and no raster renders nothing at all, so an SVG is
+  rasterised with `ext-imagick` and both parts go in. A 2016-or-later reader
+  scales it like a vector; an older one draws the raster, which is why it is
+  there. `ext-imagick` is optional and detected at runtime — without it an SVG
+  raises and says so, rather than going in silently flattened.
 
-- **A vector was attached to the wrong document.** The pairing between a picture and
-  its SVG was by position, and positions were counted across a whole converter rather
-  than per document. A second document written through one converter was handed the
-  first one's vectors, which were then attached to whatever picture happened to be at
-  that index — including a document with no SVG in it at all, which lost a photograph
-  and gained a diagram nobody asked for.
+- **`.svgz` is unpacked** rather than written into the archive still compressed,
+  which would leave a part named `.svg` that no reader could take a vector from.
 
-- **Two refusals that were accidents are refusals now.** A file holding no SVG whatever
-  it is called, and one stating no `width`, `height` or `viewBox`, were both caught by
-  the rasteriser declining them. Nothing checked either, so a build without one wrote a
-  part that was not a vector into the document, and placed a diagram at an assumed
-  288pt.
+- **A file named `.svg` that holds no SVG is reported as an unreadable file**
+  rather than as an unsupported image format. The two send a reader to opposite
+  conclusions: one is a bad file, the other a claim about SVG that Word has not
+  been true of since 2016.
+
+- **`Exception\UnsupportedImageFormat`**, raised for a file that is on disk and
+  in a format neither Word nor this build of GD can take: an SVG, a truncated
+  download. The message names the file, the format and what Word does accept.
+  `images: placeholder` and `images: skip` never attempt an embed, so they never
+  meet one.
+
+- **A document that carries its own configuration gets it from code as well as
+  from a file.** `Document\Frontmatter` reads the block off a parsed document, so
+  a document that names its own styles and options does not need the caller to
+  repeat them.
+
+- **`MarkdownToWord::pendingImageConversions()`** reports each one, and the file
+  that comes out is several times larger than the one that went in.
 
 ### Changed
+
+- **BREAKING: directives are parsed by default.** `new CommonMarkParser()` now takes
+  the `directives` flavour rather than `gfm`, so `:name[…]`, `::name[…]` and
+  `:::name` … `:::` parse in every document without opting in.
+  `CommonMarkParser::commonMarkOnly()` and `extended()` still decline them.
+
+  This is a change of behaviour rather than an addition, and the reason the syntax
+  used to be opt-in still stands: `Status :green[go]` is a sentence, and a parser
+  nobody asked to change should not change the syntax of every document converted
+  after it.
+
+  What answers it is that **a directive this library does not draw is drawn as the
+  author wrote it** — the node round-trips to its source form, so an unclaimed name
+  comes back out as the characters the author typed. Before this, the renderer drew
+  a directive's label and discarded its name and attributes, so
+  `:badge[PRODUCTION]{type=success}` and `:badge[DRAFT]{type=info}` produced
+  identical sentences; a leaf, having no body to fall back on, was dropped entirely
+  along with the paragraph it stood between.
+
+  A container stays transparent — its body is the author's Markdown and the fence is
+  not — so a `::callout` remains ordinary text in the document rather than a line
+  reading `:callout`.
+
+  Only a name with an implementation changes a document. Names live in
+  `src/Render/Directives.php` rather than in the parser.
 
 - **A template is filled with Word's own constructs.** A value is a `MERGEFIELD` —
   the field a person inserts with `Ctrl+F9` — and the place for the content is a
@@ -290,49 +319,6 @@ All notable changes to this project are documented here. The format follows
   `MarkdownToWord::renderIntoContainer()` accepts an already-parsed document, so a
   template reads the block off one parse rather than parsing the same text twice.
 
-### Fixed
-
-- **A code span lost its spaces.** `` `a   b` `` came out as `a b`, and `` `foo(  bar)` ``
-  as `foo( bar)`. CommonMark normalises exactly two things inside a code span — line
-  endings become spaces, and one space comes off each end when both ends have one — and
-  the parser has done both by the time the node reaches the renderer. Collapsing what
-  was left changed what the code said, which makes the two-space version and the
-  one-space version the same line and the difference is usually the bug being looked
-  for. Ordinary text is still collapsed, as a browser does; a code block never went
-  through that path.
-
-- **The tests wrote scratch files into the system temporary directory**, where
-  nothing removes them: 845 empty files and 557 zip-bomb scratch files accumulated,
-  and both grew on every run. `tempnam()` creates a real file, so the two calls that
-  appended `.php` to it were unlinking a path they had never been given. The scratch
-  directories and files now go to `tmp/pest`, which the suite empties after every
-  test, and a child process told to be small is given `-d sys_temp_dir` pointing there
-  — a PHP fatal skips destructors, so a child that dies of the memory limit leaves
-  whatever it had written.
-
-  One SVG test was reading a fixture another test happened to leave in the shared
-  scratch directory; it now writes its own.
-
-- **A soft line break in a wrapped paragraph lost its space.** Markdown is habitually
-  hard-wrapped by hand, and every wrap point joined two words together:
-  `revenue` and `growth` came out as `revenuegrowth`, `in January` as `inJanuary`.
-  The cause was the fix above: the writer that folds out a fragment's indentation also
-  folded `>`, any whitespace, `<`, and a soft break is written as a run holding exactly
-  one space. It now folds only whitespace that has a newline in it, which is the only
-  kind that is ever an indent.
-
-  Every document was affected, not only the ones rendered through a template. Nothing
-  caught it, because every assertion was on the *words* and every word was right —
-  they were merely adjacent to the wrong word.
-
-- **A rendered block written into a template arrived as text.** PHPWord's element
-  writer emits a fragment indented for a human to read, and whitespace between a
-  `w:t` and its text *is* text to Word: every paragraph in the document opened with
-  the literal characters `<w:p>`. No text-level assertion could see it, because the
-  words after it were exactly right.
-
-### Changed
-
 - **Any `.dotx` now works.** The content control is optional. A template with no `body`
   control takes the content at the end of its body instead of being refused, which is
   what makes the library usable against a template it did not write: nobody making a
@@ -347,8 +333,7 @@ All notable changes to this project are documented here. The format follows
 
   This is a behaviour change for anyone relying on `NoContentControl`. `ContentFallback`
   chooses between the two: `Append` (the default) or `Error`, which raises as before
-  and names the controls the template does have. `mdword to-docx` reaches it with
-  `--require-control`.
+  and names the controls the template does have.
 
   `ContentControl::fill()` returns `bool` where it returned `void` — whether it found a
   control to fill. It no longer throws `NoContentControl` itself; deciding what an
@@ -365,60 +350,6 @@ All notable changes to this project are documented here. The format follows
 
   `php examples/build.php --write-template` is now `--write-templates` and rebuilds
   all three.
-
-### Added
-
-- **`*.dotx` templates.** `--template`, `MarkdownTemplate` and `template_file:` all
-  accept a Word template as well as a Word document. Which of the two it is makes no
-  difference to the result: **a filled-in template is always a document.** A `.dotx`
-  is a `.docx` with one line of `[Content_Types].xml` different, and Word opens a
-  package typed as a template by creating a *new* document from it — so leaving that
-  line alone produced a file that double-clicked into `Document1.docx` rather than
-  opening, and that anything dispatching on MIME type read as a template.
-
-  **Fixes a silent loss of content.** The same line says which part holds the body,
-  and it is not always `word/document.xml` — documents from Word Online carry
-  `word/document22.xml`, which is why PHPWord looks the name up. Its lookup matches
-  the *document* content type, so on a template it matched nothing, fell back to
-  `word/document.xml`, and wrote there. The finished file kept
-  `${body}${slot}${/body}` in its real body and carried the rendered Markdown in a
-  part nothing pointed at: the content was gone, with every word of the template's
-  own text in place. `HyperlinkPass` threw `MalformedDocument` on such a template
-  rather than losing the links; the region's own check reported "the template has no
-  `${body}` region" for a template that had one.
-
-  The type is now settled on the way in, where one rewrite answers both. The template
-  on disk is never opened for writing: the copy the renderer works from is ours, and
-  is removed when the renderer goes.
-
-- **`template_file:` in a document's frontmatter** now renders into the template it
-  names. The key was documented in the README and explained in `Frontmatter`'s
-  docblock, and nothing read it: the block was parsed, the key was kept, and a
-  document with no template at all came out. `--template` outranks it, which is the
-  order the precedence table already gives every other setting.
-
-  It is a path a document writes, so it is held to `PathScope` for the reason a
-  `theme:` is: resolved with `realpath()` and landed inside the working directory or
-  the directory the Markdown was read from. The boundary is *where a path lands*, not
-  where it was written from — a document in `docs/` naming a template one directory
-  up is inside the working directory and is a template, not an escape.
-
-### Fixed
-
-- **A `codeFont` given as a style *name* never reached a code block.** A template
-  supplies its typeface as a name — `codeFont: CorpCode` — and PHPWord puts a
-  string style on a run as an `rStyle` reference, which is the only way a name
-  reaches a run at all. An inline code span took the name straight through and
-  worked. A code block merged it with the font half of its own `codeBlock` slot,
-  and merging required an array: casting the name gave `['CorpCode']`, whose key
-  `0` is not a property, so PHPWord wrote an empty `<w:rPr/>` and dropped it.
-
-  Every code block rendered through a template came out in the body typeface,
-  which is the one thing a template is asked to change. Found by rendering
-  `examples/out/21-dotx-report.png` and looking at it — no text-level assertion
-  could have seen it, because the words were exactly where they should be.
-
-### Changed
 
 - **A built-in Look & Feel, written as direct formatting.** Every style slot now
   has a concrete formatting before anybody configures it, and it is written onto
@@ -449,7 +380,7 @@ All notable changes to this project are documented here. The format follows
   is now what its name says — it hands every heading, the quote and the lists to
   Word's own styles and clears the body, list and code block spacing, so the
   pre-Look-&-Feel behaviour is one call away and documented.
-  `Configuration::withoutDecoration()` — and the `--plain` flag that reads it —
+  `Configuration::withoutDecoration()`
   now clears the body and list spacing too, or "no decoration" would have meant
   something narrower than its name.
 
@@ -510,10 +441,6 @@ All notable changes to this project are documented here. The format follows
   `styles.yml`, and `styles.yml` takes the slot names from `Styles::defaults()` and
   nothing else.
 
-  ```sh
-  mdword to-docx --theme corporate notes.md
-  ```
-
   ```yaml
   ---
   theme: report
@@ -535,7 +462,7 @@ All notable changes to this project are documented here. The format follows
   the first rather than layering over it.
 
   A name that does not resolve is an error naming the ones that do, never a silent
-  fallback to `default`. A theme works with `--template`: the template keeps its own
+  fallback to `default`. A theme works with a template: the template keeps its own
   style definitions and the theme is written over them as direct formatting.
 
   `styles.yml` is validated as a `styles:` block is — an unknown slot, an unknown
@@ -543,117 +470,222 @@ All notable changes to this project are documented here. The format follows
   load time. Quote a colour YAML would read as something else: `2E5395` is scientific
   notation, and YAML resolves it to infinity before the theme is read.
 
-### Added
+- **`symfony/yaml` is no longer suggested.** It is required. A partial YAML
+  parser would be a worse answer for configuration that a person or a language
+  model writes.
 
-- **OpenDocument Text and Rich Text output.** `MarkdownToWord` grows `toOdt()`,
-  `toRtf()` and a format-taking `to()` beside `toDocx()`, and `convertTo()` for
-  the path-writing side the constructor's `source` already implies. `.docx` stays
-  the default everywhere: `toDocx()` and `convert()` keep their signatures and
-  their behaviour, and `toDocx()` is now the same call as `convert()` rather than
-  a second way of doing it, so the two cannot answer differently. `Format` is the
-  value type that names the three.
-- **`mdword to-odt` and `mdword to-rtf`.** The same conversion in two more
-  formats, with `.docx` the default of all three: a run with nothing else said
-  still writes a `.docx` and still derives that name from the input. `ToDocx`
-  gives up `final` and grows a `format()`, so the layering of configuration, the
-  image base path, the overwrite guards and the reports on standard error are
-  written once and cannot drift between the three. Before: `mdword to-docx` was
-  the only way out. After: `mdword to-odt`, `mdword to-rtf` and `--to odt` /
-  `--to rtf`, with `to-docx` and `--to docx` unchanged.
-- **`--to` takes `odt` and `rtf`.** The check that a `--to` contradicts the file
-  is by which way the run reads rather than by which command it ends up in,
-  because the three word formats are three answers to one question. An unknown
-  format now says `Use docx, odt, rtf or markdown.`
-- **A link whose label contains emphasis is a real link in all three formats.**
-  `OdfHyperlinkPass` and `RtfHyperlinkPass` are the ODF and RTF counterparts of
-  `HyperlinkPass`, and they exist because the defect was not Word's alone:
-  `Writer\ODText\Element\Link` and `Writer\RTF\Element\Link` each take a single
-  plain string, so `[**Release** notes](url)` came out of both as the literal
-  text `⁣MDWL⁣0⁣MDWL⁣`. After: a `text:a` with the runs inside it, and a
-  `HYPERLINK` field with them.
-- **A picture's alternative text reaches an `.odt`.** `OdfImageDescriptionPass`
-  writes the `svg:desc` a `draw:frame` takes, where `Writer\ODText\Element\Image`
-  writes none. Before: the picture was there and its alt text was not. After: both.
-- **`Writer\Staging`, and the atomic-write contract for every format.** Staging
-  the document in the temporary directory, patching it there and moving it into
-  place in one step was `DocxWriter`'s, because that was the one place a document
-  was written. Nothing about it is particular to a `.docx`, so it moved out. No
-  behaviour of the `.docx` path changed.
-- **`Loss` and `MarkdownToWord::pendingLosses()`.** What a writer cannot carry,
-  filtered down to what this document actually used. `Format::drops()` is the
-  list; `Writer\Survey` answers whether the document asked for any of it; and
-  `pendingLosses()` hands a caller one sentence per loss, written for whoever
-  opens the finished document rather than for whoever wrote the code. A `.docx`
-  drops nothing and is what the other two are measured against, so a run into one
-  never prints a line of this kind.
-- **`Application::reportLosses()`**, which prints them on standard error where the
-  rest of a run's progress goes, so a piped result stays clean.
-- **`examples/markdown/20-formats.md`**, built into a `.docx`, an `.odt` and an
-  `.rtf` for opening side by side, and `tests/Readme/examples-formats.php`, which
-  asserts every row of the README's capability table against the files.
+- **A document can carry its own configuration.** A leading `---` in a document is
+  read as configuration rather than discarded; on the default parser it was a
+  thematic break and the rest of the block arrived as paragraphs of text at the top
+  of the document.
 
-- **Frontmatter configures the conversion.** The YAML block at the top of a
-  document is read as configuration rather than discarded. `options:` and
-  `styles:` mean what they mean in a config file; `template_file` is read as
-  data, because it means nothing to a Word conversion and would otherwise become
-  an option key nothing looks at. `theme:` is read by the theme resolver rather
-  than by the validator.
-  `Document\Frontmatter` reads the block off a parsed document.
-- **`Document\ConfigurationMerger`** resolves four sources — command line,
-  frontmatter, config file, defaults — each outranking the one below it. A source
-  that says nothing is skipped rather than read as "reset everything".
-- **`Configuration::withAll()`** merges a batch over an existing configuration,
-  reading a missing key as "not mentioned" the way `Options::withAll()` already
-  did. Merging preserves what the batch did not mention; a batch naming only
-  `options` leaves the styles alone, and the other way round.
-- **Values are checked, not only keys.** `Configuration\Validator` reports a value
-  that is not what it is used as, with the value itself, what would have worked,
-  and the line it is on. `maxHeadingLevel: deep` is cast to 0, the clamp turns 0
-  into 1, and the document came out with every heading in it rendered as body
-  text; `color: "#8B0000"` reached `w:color` with a `#` in it, which is not a
-  colour there, and Word ignored it; a quoted `false` for a boolean option became
-  `true`.
-- **Every problem in a block says where it is.** `Frontmatter::lineOf()` answers
-  the file line for `options/images` or `styles/heading.1/color`, and every
-  message is prefixed with it. Multi-problem reporting still holds: keys, values
-  and a block that is not a mapping all arrive together.
-- **`Exception\InvalidConfiguration`** is the one type to catch, with
-  `Exception\UnknownConfigurationKey` for the key half — what callers have been
-  catching since keys were checked — and `Exception\InvalidConfigurationValue`
-  for the rest.
-- **A `.webp` is embedded rather than dropped.** Word has no support for it and
-  PHPWord has never added any, so it is decoded with GD and written into the
-  document as PNG. `MarkdownToWord::pendingImageConversions()` reports each one
-  and `mdword` prints a line on standard error, because the file that comes out
-  is several times larger than the one that went in.
-- **An SVG is embedded as a vector, not flattened into a picture.** Word has held
-  SVG since 2016 and holds it the only way it ever can: a raster beside the vector,
-  with the vector referenced from an extension on the same picture. A picture
-  carrying that extension and no raster renders nothing at all, so an SVG is
-  rasterised with `ext-imagick` and both parts go in. A 2016-or-later reader
-  scales it like a vector; an older one draws the raster, which is why it is
-  there. `ext-imagick` is optional and detected at runtime — without it an SVG
-  raises and says so, rather than going in silently flattened.
-- **`.svgz` is unpacked** rather than written into the archive still compressed,
-  which would leave a part named `.svg` that no reader could take a vector from.
-- **A file named `.svg` that holds no SVG is reported as an unreadable file**
-  rather than as an unsupported image format. The two send a reader to opposite
-  conclusions: one is a bad file, the other a claim about SVG that Word has not
-  been true of since 2016.
-- **`Exception\UnsupportedImageFormat`**, raised for a file that is on disk and
-  in a format neither Word nor this build of GD can take: an SVG, a truncated
-  download. The message names the file, the format and what Word does accept.
-  `images: placeholder` and `images: skip` never attempt an embed, so they never
-  meet one.
-- **`Application::parser()`** and the command line read frontmatter, so a
-  document that carries its own configuration gets it from a terminal as well as
-  from code.
-- **`MarkdownToWord::pendingImageConversions()`** and
-  `Application::reportImageConversions()`.
+- **An image that is in hand and unusable raises instead of falling back.** A
+  missing file and a remote URL still fall back to the alt text — nothing is
+  wrong with the document in those cases — but a file that is there and cannot be
+  put into a Word document now stops the conversion.
+
+- **A document-level problem is reported as itself.** `Exception\InvalidInput`
+  and everything under it carries a message meant for whoever wrote the document,
+  without the class name and the line in this repository that a genuine defect gets.
+
+- **`14-round-trip.md` is `18-round-trip.md`** in `examples/out`, so that one
+  number in the examples is not both a source and a result. `15`, `16` and `17`
+  are the image and table examples.
+
+- **A frontmatter block meant different things on different machines.** Given no
+  parser of its own, `FrontMatterExtension` takes libyaml wherever `ext-yaml` is
+  loaded and symfony/yaml only where it is not — and a CI runner carries the
+  first by default where a checkout usually carries neither. The two disagree
+  about values and not only about types: `color: 000000` is the string `000000`
+  under symfony/yaml and the integer `0` under libyaml, so the same document was
+  accepted locally and refused on the runner as a colour that is not one. The
+  parser is now named in `CommonMarkParser` rather than discovered, which is
+  also what lets the class name and `withAllExtensions()` agree.
+
+- **The package could not be installed on the PHP version it claims.**
+  `symfony/yaml` was required at `^8.1`, which needs PHP 8.4.1, while
+  `composer.json` has always said `"php": "^8.2"` and the README has always said
+  the published package installs on 8.2. `composer install --no-dev` therefore
+  failed outright on 8.2 and 8.3, taking the `minimum` job and the phar build
+  with it. The constraint is `^7.4 || ^8.1` and the lock carries 7.4, so the
+  floor holds; the test framework still needs 8.4, which the README already says.
+
+### Removed
+
+- **The command line has moved to [`markdown-office/mdoffice`](https://github.com/markdown-office/mdoffice),
+  and `vendor/bin/mdword` is gone.** The classes under `MarkdownWord\Console`,
+  the `bin/mdword` entry point and the `composer build:phar` script are all
+  removed from this package, which is a library and nothing else.
+
+  A terminal tool is a different thing from a converter: it decides which file is
+  read, where the result is written, what a flag means and what exit status to
+  return, none of which a caller embedding this package wants decided for it. It
+  also wanted to be one program for every office format rather than one per
+  library, which is not a shape a library can have — `mdoffice` converts Markdown
+  to Word and to PowerPoint side by side and calls this package for the first.
+
+  Installing this package still gives the whole library, and a `composer.json`
+  naming `mdword` in `bin` is gone, so nothing is added to `vendor/bin` any more.
+  Ask for `mdoffice` as well for the command.
 
 ### Fixed
 
-- **The `.phar` carried whatever the building machine had in its working copy.** The
+- **`05-links-and-images.docx` shows reference links rather than the words that look
+  like them.** The page says its reference links are "defined at the bottom of the
+  file" and the file defined none of them, so `05` rendered as literal text —
+  `[reference link][one]` and the rest — and a page about links demonstrated the
+  opposite. The four definitions are at the bottom now, and the four resolve.
+
+  `[foo][bar]` under "Escaping" is the other half and is left as it is: it exists to
+  show what a reference that resolves to nothing looks like, and it still does.
+
+- **A `:footnote[…]` in a running head or foot no longer raises.** It is drawn as
+  the directive the author wrote — `:footnote[a note]` — and the conversion
+  completes. It previously ended in `BadMethodCallException: Cannot add Footnote
+  in TextRun`, which is PHPWord's own exception and not an answer a document
+  author can act on.
+
+  A footnote is a mark with a note at the foot of one page, and a running head is
+  read on every page and has no such page, so the mark could only ever have
+  pointed at a note nothing held. The source form is the whole of the answer, and
+  nothing is reported for it: a loss is a property of the *format*, and `.docx`
+  writes a footnote everywhere else. `:footnote[…]` in the body of a document is
+  unaffected and is still a real footnote.
+
+- **An SVG can be written without a raster beside it**, under `svgFallback` in the
+  document's frontmatter:
+
+  ```markdown
+  ---
+  svgFallback: none
+  ---
+  ```
+
+  `none` writes the vector alone. `raster` — the default — writes a raster of it as
+  well, for the readers that cannot take a vector.
+
+  Word 2016 and later draw a picture carrying only the `asvg:svgBlip` extension, with
+  no raster behind it, and so does recent LibreOffice. The raster is there for the
+  rest: **Google Docs does not read the extension** and draws such a picture as
+  nothing at all, which is why this is an option and not the default.
+
+  `r:embed` is optional on `a:blip`, so a document with the vector alone is one Word
+  opens. It is smaller, and it puts `ext-imagick` off the path entirely for a build
+  that has no usable rasteriser.
+
+  The option is about `.docx`, because only `.docx` keeps the vector. A raster is what
+  an `.odt` or an `.rtf` draws the picture from, so those two want one whatever this
+  is set to.
+
+- **Directives parse, under `CommonMarkParser::directives()`.** The
+  [Generic Directives RFC](https://talk.commonmark.org/t/generic-directives-plugins-syntax/444)
+  — `:name[…]`, `::name[…]` and `:::name` … `:::` — through
+  [`markdown-office/commonmark-generic-directives`](https://github.com/markdown-office/commonmark-generic-directives):
+
+  ```php
+  new MarkdownToWord(null, $config, CommonMarkParser::directives());
+  ```
+
+  It is a parser rather than a default, because a directive is a word the author
+  chose: `Status :green[go]` is a sentence today and a node the day it is on by
+  default, and nothing should change the syntax of every document converted after
+  it.
+
+  **What a directive looks like in Word is not decided yet, and what happens today
+  is a loss.** The renderer has no case for either node type. A `:::` container
+  contributes its body and is then gone; `:name[label]{attrs}` contributes the
+  label and drops the name and the attributes; a `::leaf[…]` contributes nothing
+  at all, and a document of nothing but leaves raises `NothingToConvert`. It is
+  asserted in `tests/Unit/directive-grammar.php` and it is what the grammar does
+  before the rendering catches up.
+
+  Names are not checked. The extension can be given a `DirectiveRegistry` that
+  makes it raise `UnknownDirective` for a name it does not hold rather than
+  ignoring it, but `CommonMarkParser` builds its extensions from class names and
+  cannot pass one in, so strict mode is not reachable through the factory yet.
+
+- **A build that cannot rasterise an SVG no longer says it can.** The capability was
+  read from ImageMagick's format registry, which a build with no SVG delegate still
+  registers: it answered yes, drew the shapes, dropped every `<text>` in the picture,
+  and raised nothing. A reader that does not prefer the vector — an older Word, Google
+  Docs — was handed a picture with its words missing. The question is now settled by
+  drawing a letter and looking at the result, because that is the part such a build
+  loses.
+
+- **An SVG no longer goes in silently when there is no rasteriser.** It is written on
+  its own rather than refused, and `pendingLosses()` says what that costs:
+
+  ```
+  the vector was written with no raster beside it, so a reader that does not prefer
+  the vector draws nothing where an SVG was
+  ```
+
+- **A vector was attached to the wrong document.** The pairing between a picture and
+  its SVG was by position, and positions were counted across a whole converter rather
+  than per document. A second document written through one converter was handed the
+  first one's vectors, which were then attached to whatever picture happened to be at
+  that index — including a document with no SVG in it at all, which lost a photograph
+  and gained a diagram nobody asked for.
+
+- **Two refusals that were accidents are refusals now.** A file holding no SVG whatever
+  it is called, and one stating no `width`, `height` or `viewBox`, were both caught by
+  the rasteriser declining them. Nothing checked either, so a build without one wrote a
+  part that was not a vector into the document, and placed a diagram at an assumed
+  288pt.
+
+- **A code span lost its spaces.** `` `a   b` `` came out as `a b`, and `` `foo(  bar)` ``
+  as `foo( bar)`. CommonMark normalises exactly two things inside a code span — line
+  endings become spaces, and one space comes off each end when both ends have one — and
+  the parser has done both by the time the node reaches the renderer. Collapsing what
+  was left changed what the code said, which makes the two-space version and the
+  one-space version the same line and the difference is usually the bug being looked
+  for. Ordinary text is still collapsed, as a browser does; a code block never went
+  through that path.
+
+- **The tests wrote scratch files into the system temporary directory**, where
+  nothing removes them: 845 empty files and 557 zip-bomb scratch files accumulated,
+  and both grew on every run. `tempnam()` creates a real file, so the two calls that
+  appended `.php` to it were unlinking a path they had never been given. The scratch
+  directories and files now go to `tmp/pest`, which the suite empties after every
+  test, and a child process told to be small is given `-d sys_temp_dir` pointing there
+  — a PHP fatal skips destructors, so a child that dies of the memory limit leaves
+  whatever it had written.
+
+  One SVG test was reading a fixture another test happened to leave in the shared
+  scratch directory; it now writes its own.
+
+- **A soft line break in a wrapped paragraph lost its space.** Markdown is habitually
+  hard-wrapped by hand, and every wrap point joined two words together:
+  `revenue` and `growth` came out as `revenuegrowth`, `in January` as `inJanuary`.
+  The cause was the fix above: the writer that folds out a fragment's indentation also
+  folded `>`, any whitespace, `<`, and a soft break is written as a run holding exactly
+  one space. It now folds only whitespace that has a newline in it, which is the only
+  kind that is ever an indent.
+
+  Every document was affected, not only the ones rendered through a template. Nothing
+  caught it, because every assertion was on the *words* and every word was right —
+  they were merely adjacent to the wrong word.
+
+- **A rendered block written into a template arrived as text.** PHPWord's element
+  writer emits a fragment indented for a human to read, and whitespace between a
+  `w:t` and its text *is* text to Word: every paragraph in the document opened with
+  the literal characters `<w:p>`. No text-level assertion could see it, because the
+  words after it were exactly right.
+
+- **A `codeFont` given as a style *name* never reached a code block.** A template
+  supplies its typeface as a name — `codeFont: CorpCode` — and PHPWord puts a
+  string style on a run as an `rStyle` reference, which is the only way a name
+  reaches a run at all. An inline code span took the name straight through and
+  worked. A code block merged it with the font half of its own `codeBlock` slot,
+  and merging required an array: casting the name gave `['CorpCode']`, whose key
+  `0` is not a property, so PHPWord wrote an empty `<w:rPr/>` and dropped it.
+
+  Every code block rendered through a template came out in the body typeface,
+  which is the one thing a template is asked to change. Found by rendering
+  `examples/out/21-dotx-report.png` and looking at it — no text-level assertion
+  could have seen it, because the words were exactly where they should be.
+
+- **The archive carried whatever the building machine had in its working copy.** The
   staging tree is assembled with `cp -R`, so a `.DS_Store` in `src/` went into the
   archive and the artifact stopped being reproducible — Finder rewrites that file
   whenever the directory changes, so two builds of one tree differed. A stray also fed
@@ -697,16 +729,19 @@ All notable changes to this project are documented here. The format follows
   because the style is in the file; a rendered page says otherwise. After: the
   built-in look does not use a named style, so a default document is unaffected,
   and `Format::Odt` reports the loss for the document that does name one.
+
 - **An SVG silently lost its vector outside a `.docx`.** The original is collected
   during the render and only `SvgPass` puts it back, so an `.odt` and an `.rtf`
   were left with the raster and no word about it. Before: flattened, silently.
   After: flattened, and reported.
+
 - **`CommonMarkParser::withAllExtensions()` threw on any document with
   frontmatter.** The method registers `FrontMatterExtension`, which needs a YAML
   parser, but `symfony/yaml` was only a `suggest`. So the one document shape
   anyone would reach for that method to handle raised
   `MissingDependencyException`. `symfony/yaml` is a `require` now, and is
   bundled into the phar.
+
 - **`imageMaxWidth` did nothing.** The width was written as `'8cm'`, and
   `PhpOffice\PhpWord\Style\Frame::setWidth()` puts its argument through
   `setNumericVal()`, which keeps a number and discards anything else — so both
@@ -714,69 +749,40 @@ All notable changes to this project are documented here. The format follows
   the option said it could be. The cap is now a number of points, and it is a
   *maximum*: an image already narrower than it keeps its own size rather than
   being enlarged to reach it.
+
 - **A `.webp` was silently replaced by its alt text.** PHPWord refused the
   format, `ImageResolver` caught the throwable and fell back, and the document
   came out looking finished with the picture simply missing.
+
 - **A frontmatter block that was not a mapping raised a `TypeError`.** `---`
   followed by a scalar reached `array_key_exists()` with a string and died with a
   stack trace in it; a list was ignored without a word.
+
 - **The command line could not set the top of the precedence order.**
-  `ToDocx` folded `--images`, `--image-base` and `--table-width` into the
-  configuration file's own layer, so a `tableWidth:` in a document's block
-  outranked a flag typed beside it. The flags now sit where the documented order
-  says they do, and `--plain` goes with them. The `imageBasePath` the command
-  line infers from where the file sits is a default and still loses to the block.
+  `Document\ConfigurationMerger` folded the flags `--images`, `--image-base` and
+  `--table-width` into the configuration file's own layer, so a `tableWidth:` in a
+  document's block outranked a flag typed beside it. The flags now sit where the
+  documented order says they do. The `imageBasePath` inferred from where the file
+  sits is a default and still loses to the block.
+
 - **`MarkdownToWord`'s `$overrides` argument** pinned every default to the top of
   the order when given a `Configuration`, because `toArray()` names every
-  setting. It takes an array as well, which is sparse; the array is what the
-  command line and `MarkdownTemplate` pass.
+  setting. It takes an array as well, which is sparse; the array is what
+  `MarkdownTemplate` passes.
+
 - **The reason given for an unusable SVG was wrong.** It read "image/svg+xml is
   not a format this library can put into a Word document. Word takes JPEG, PNG,
   GIF, BMP and TIFF", which is false: Word has taken SVG since 2016. The real
   reason was that this build had no rasteriser for the fallback PNG. The message
   named the wrong thing, and a reader sent to check whether SVG is a Word format
   would find it is.
+
 - **A style property was accepted and then dropped.** `Styles::FONT_KEYS` and
   `PARAGRAPH_KEYS` are the property names of a font and a paragraph style, and
   the validator applied them to every slot: `borderColor` on a `table` and
   `tblHeader` on a header row were both rejected, and `shading` on a header row
   was accepted and dropped by PHPWord's `RowStyle`, which has no `setShading()`.
   Each slot is now checked against the class it is handed.
-
-### Changed
-
-- **`symfony/yaml` is no longer suggested.** It is required. A partial YAML
-  parser would be a worse answer for configuration that a person or a language
-  model writes.
-- **`mdword` reads frontmatter.** A leading `---` in a document converted from a
-  terminal is configuration; on the default parser it was a thematic break and
-  the rest of the block arrived as paragraphs of text at the top of the document.
-- **An image that is in hand and unusable raises instead of falling back.** A
-  missing file and a remote URL still fall back to the alt text — nothing is
-  wrong with the document in those cases — but a file that is there and cannot be
-  put into a Word document now stops the conversion.
-- **A document-level problem is reported as itself.** `Exception\InvalidInput`
-  and everything under it is printed by `mdword` as its message, without the
-  class name and the line in this repository that a genuine defect gets.
-- **`14-round-trip.md` is `18-round-trip.md`** in `examples/out`, so that one
-  number in the examples is not both a source and a result. `15`, `16` and `17`
-  are the image and table examples.
-- **A frontmatter block meant different things on different machines.** Given no
-  parser of its own, `FrontMatterExtension` takes libyaml wherever `ext-yaml` is
-  loaded and symfony/yaml only where it is not — and a CI runner carries the
-  first by default where a checkout usually carries neither. The two disagree
-  about values and not only about types: `color: 000000` is the string `000000`
-  under symfony/yaml and the integer `0` under libyaml, so the same document was
-  accepted locally and refused on the runner as a colour that is not one. The
-  parser is now named in `CommonMarkParser` rather than discovered, which is
-  also what lets the class name and `withAllExtensions()` agree.
-- **The package could not be installed on the PHP version it claims.**
-  `symfony/yaml` was required at `^8.1`, which needs PHP 8.4.1, while
-  `composer.json` has always said `"php": "^8.2"` and the README has always said
-  the published package installs on 8.2. `composer install --no-dev` therefore
-  failed outright on 8.2 and 8.3, taking the `minimum` job and the phar build
-  with it. The constraint is `^7.4 || ^8.1` and the lock carries 7.4, so the
-  floor holds; the test framework still needs 8.4, which the README already says.
 
 ## [0.1.1] - 2026-10-08
 
@@ -846,5 +852,6 @@ on it:
 `README.md` has the full list, and `Reverse\Options` is where each one is
 configurable.
 
+[0.2.0]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.0
 [0.1.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.1.1
 [0.1.0]: https://github.com/markdown-office/markdown-word/releases/tag/v0.1.0
