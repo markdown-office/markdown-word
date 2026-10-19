@@ -1,0 +1,67 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+# Read-only by default. The job below widens this to `contents: write`.
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: publish the release
+    runs-on: ubuntu-latest
+    # Creating a release needs `contents: write`, and the workflow-level grant is only
+    # read. The grant belongs here, on the one job that writes.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Packagist reads the tag, not the release, so a tag that disagrees with the
+      # changelog still installs — as a version whose notes are the previous release's.
+      # The changelog is the only place a version is written down, so it is what the
+      # tag is checked against.
+      - name: The tag and the changelog must agree
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          released="$(sed -n 's/^## \[\([^]]*\)\].*/\1/p' CHANGELOG.md | grep -v '^Unreleased$' | head -1)"
+          echo "tag      $tag"
+          echo "changelog $released"
+          if [ "$tag" != "$released" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME but the newest released heading in CHANGELOG.md is [$released]."
+            echo "::error::Move the [Unreleased] section to ## [$tag] with today's date, add the"
+            echo "::error::link reference at the bottom, commit, and tag that commit."
+            exit 1
+          fi
+
+      # Taken from the changelog rather than from the tag's commit message, so the notes
+      # on the release are the same text `composer` and the repository agree on. Stops
+      # at the next heading, and at the link references after the last section, which
+      # are not part of any release.
+      - name: Release notes from the changelog
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          mkdir -p build
+          awk -v want="$tag" '
+            $0 ~ "^## \\[" want "\\]" { body = 1; next }
+            body && /^## \[/ { exit }
+            body && /^\[/ { exit }
+            body { print }
+          ' CHANGELOG.md > build/notes.md
+          # An empty body publishes a release with nothing on it, and Packagist shows
+          # those notes next to the version. Fail here rather than after the tag exists.
+          if [ ! -s build/notes.md ]; then
+            echo "::error::CHANGELOG.md has no body under ## [$tag]."
+            exit 1
+          fi
+          echo "--- build/notes.md ---"
+          cat build/notes.md
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: build/notes.md
+          fail_on_unmatched_files: true
