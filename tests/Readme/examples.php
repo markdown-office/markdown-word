@@ -234,24 +234,24 @@ it('a round trip is two of them', function () {
 
 // Installation
 
-it('installation: the package the page asks for is this package', function () {
-    // The command the page prints cannot be run here: `composer require` needs the
-    // package published. What can be checked is that the name on the page is the
-    // name in `composer.json` — a rename that missed the README is the drift that
-    // matters, and it is invisible until somebody follows the page and gets a 404.
+it('installation: the package the page asks for is one that can be installed', function () {
+    // The command on the page cannot be run here, so what is checked is the name it
+    // gives. The one that matters is the name Packagist answers to, not the one in
+    // `composer.json`: those were the same until the repository moved to this
+    // organisation, and for a while the page named a package never registered there.
+    // Comparing the page with the manifest passed throughout, because the two agreed
+    // with each other and were both wrong.
     $readme = (string) file_get_contents(dirname(__DIR__, 2) . '/README.md');
 
     expect($readme)->toMatch('/composer require ([\w.-]+\/[\w.-]+)/');
 
     preg_match('/composer require ([\w.-]+\/[\w.-]+)/', $readme, $match);
 
-    $composer = json_decode(
-        (string) file_get_contents(dirname(__DIR__, 2) . '/composer.json'),
-        true,
-        flags: JSON_THROW_ON_ERROR,
-    );
+    // Written out rather than read from the manifest: the failure is a page naming a
+    // package that does not exist, and a list nobody maintains could not catch that.
+    $published = 'fabeat/markdown-word';
 
-    expect($match[1])->toBe($composer['name']);
+    expect($match[1])->toBe($published);
 });
 
 // Word to Markdown

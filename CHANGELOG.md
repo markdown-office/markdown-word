@@ -20,9 +20,14 @@ All notable changes to this project are documented here. The format follows
   library, which is not a shape a library can have — `mdoffice` converts Markdown
   to Word and to PowerPoint side by side and calls this package for the first.
 
-  `composer require markdown-office/markdown-word` still installs everything the
-  library is, and a `composer.json` naming `mdword` in `bin` is gone, so nothing
-  is added to `vendor/bin` any more. Ask for `mdoffice` as well for the command.
+  Installing this package still gives the whole library, and a `composer.json`
+  naming `mdword` in `bin` is gone, so nothing is added to `vendor/bin` any more.
+  Ask for `mdoffice` as well for the command.
+
+  The install name is still `fabeat/markdown-word`, because that is the one
+  Packagist knows: this repository moved to the `markdown-office` organisation and
+  no `markdown-office/markdown-word` has been registered, so a requirement naming
+  the new one does not resolve. The requirement changes when it is.
 
 ### Changed
 

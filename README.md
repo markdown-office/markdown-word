@@ -87,12 +87,19 @@ mdoffice word README.docx  # writes README.md
 ## Installation
 
 ```sh
-composer require markdown-office/markdown-word
+composer require fabeat/markdown-word
 ```
+
+The package name is still the old one, and that is not an oversight: it was
+published under `fabeat/` before this repository moved to `markdown-office/`, and
+Packagist has no `markdown-office/markdown-word` to install yet. The two
+distributions are the same repository — the install above fetches the archives
+from the new organisation — and the requirement changes to
+`markdown-office/markdown-word` when the new name is registered.
 
 That is the library and nothing else. There is no `bin` entry, so a Composer
 install of this package puts no command in `vendor/bin`; if you want the one
-above, ask for `mdoffice` as well.
+above, ask for [`mdoffice`][mdoffice] as well.
 
 See [Requirements](#requirements) for what PHP and which extensions it needs.
 Where to get help: [the issue tracker][issues].
@@ -445,19 +452,22 @@ one program for Markdown to Word and to PowerPoint, which requires this package
 and calls it rather than reimplementing any of it:
 
 ```sh
-composer require markdown-office/mdoffice
-
-mdoffice word notes.md                 # → notes.docx
-mdoffice word report.docx              # → report.md
-mdoffice word notes.md --to odt        # → notes.odt
-mdoffice word notes.md --template report.dotx
+git clone https://github.com/markdown-office/mdoffice.git
+cd mdoffice && composer install
+php bin/mdoffice word notes.md         # → notes.docx
+php bin/mdoffice word report.docx      # → report.md
+php bin/mdoffice word notes.md --to odt
+php bin/mdoffice word notes.md --template report.dotx
 ```
 
 It installs as `vendor/bin/mdoffice` and ships as a PHAR and as a self-contained
-executable, and its own page documents the options. Everything below about how a
-conversion behaves — which direction a file goes in, what a template renders
-into, what an `.rtf` cannot carry — is a claim about this library, and is what
-`mdoffice word` calls.
+executable, and its own page documents the options. It is not on Packagist yet,
+which is why this is a clone rather than a `composer require`; its README says
+the same and carries the reason.
+
+Everything below about how a conversion behaves — which direction a file goes in,
+what a template renders into, what an `.rtf` cannot carry — is a claim about this
+library, and is what `mdoffice word` calls.
 
 ## Supported Markdown
 
