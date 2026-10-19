@@ -141,6 +141,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **`05-links-and-images.docx` shows reference links rather than the words that look
+  like them.** The page says its reference links are "defined at the bottom of the
+  file" and the file defined none of them, so `05` rendered as literal text —
+  `[reference link][one]` and the rest — and a page about links demonstrated the
+  opposite. The four definitions are at the bottom now, and the four resolve.
+
+  `[foo][bar]` under "Escaping" is the other half and is left as it is: it exists to
+  show what a reference that resolves to nothing looks like, and it still does.
+
 - **A `:footnote[…]` in a running head or foot no longer raises.** It is drawn as
   the directive the author wrote — `:footnote[a note]` — and the conversion
   completes. It previously ended in `BadMethodCallException: Cannot add Footnote

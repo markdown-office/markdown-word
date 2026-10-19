@@ -294,7 +294,7 @@ final class Validator
         $known = \array_keys(Styles::defaults());
         $problems = [];
 
-        foreach ($styles as $slot => $definition) {
+        foreach (\array_keys($styles) as $slot) {
             $slot = (string) $slot;
 
             if (\in_array($slot, $known, true)) {

@@ -72,7 +72,7 @@ numbers below assume **no new logos** and no expansion within the existing base:
 > If we land one expansion in the quarter, the flat case becomes the floor rather
 > than the expectation, which is the first time that has been true since 2022.
 
-Further detail is in the [operations appendix](#operations-appendix), and the
+Further detail is in the operations appendix, and the
 methodology behind the retention figure is documented in
 [`metrics/README.md`](https://example.invalid/metrics) — the same number has been
 produced three ways now, which is the only reason anyone trusts it.
