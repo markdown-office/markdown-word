@@ -222,6 +222,10 @@ it('does not claim again what the code does not do', function (string $claim) {
     // bytes say nothing about which element became the part — and the attachment
     // the test built still carried the `fallback` key that byte-matching wanted.
     'a vector is attached by matching bytes' => 'The vector is attached by matching bytes in the archive',
+    // A claim on the Command line page that nothing in this repository can check,
+    // because it is about another repository's releases: `mdoffice` has no tag and no
+    // release, so nothing of it ships as a PHAR or as a self-contained executable.
+    'a command line with no release still ships as one' => 'ships as a PHAR and as a self-contained',
 ]);
 
 it('has no decorative dividers in it', function () {

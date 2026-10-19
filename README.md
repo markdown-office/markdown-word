@@ -87,15 +87,8 @@ mdoffice word README.docx  # writes README.md
 ## Installation
 
 ```sh
-composer require fabeat/markdown-word
+composer require markdown-office/markdown-word
 ```
-
-The package name is still the old one, and that is not an oversight: it was
-published under `fabeat/` before this repository moved to `markdown-office/`, and
-Packagist has no `markdown-office/markdown-word` to install yet. The two
-distributions are the same repository — the install above fetches the archives
-from the new organisation — and the requirement changes to
-`markdown-office/markdown-word` when the new name is registered.
 
 That is the library and nothing else. There is no `bin` entry, so a Composer
 install of this package puts no command in `vendor/bin`; if you want the one
@@ -449,21 +442,28 @@ than going in silently flattened.
 
 There is none in this repository. The command line is [`mdoffice`][mdoffice],
 one program for Markdown to Word and to PowerPoint, which requires this package
-and calls it rather than reimplementing any of it:
+and calls it rather than reimplementing any of it. It is not on Packagist, so
+there is nothing to require:
 
 ```sh
 git clone https://github.com/markdown-office/mdoffice.git
+git clone https://github.com/markdown-office/markdown-word.git
+git clone https://github.com/markdown-office/markdown-presentation.git
 cd mdoffice && composer install
+
 php bin/mdoffice word notes.md         # → notes.docx
 php bin/mdoffice word report.docx      # → report.md
 php bin/mdoffice word notes.md --to odt
 php bin/mdoffice word notes.md --template report.dotx
 ```
 
-It installs as `vendor/bin/mdoffice` and ships as a PHAR and as a self-contained
-executable, and its own page documents the options. It is not on Packagist yet,
-which is why this is a clone rather than a `composer require`; its README says
-the same and carries the reason.
+The two sibling checkouts are not optional, and its own page leads with the same
+point: the manifest resolves both libraries through `path` repositories pointing
+at `../markdown-word` and `../markdown-presentation`, so a lone clone gives
+Composer nothing to resolve. That is also why it requires them as `*` rather than
+pinned — neither library is published under its `markdown-office` name. What you
+get is the current source of all three rather than a release: `mdoffice` has no
+tag and no PHAR of its own yet, and its page documents the options.
 
 Everything below about how a conversion behaves — which direction a file goes in,
 what a template renders into, what an `.rtf` cannot carry — is a claim about this

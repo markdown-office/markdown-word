@@ -24,11 +24,6 @@ All notable changes to this project are documented here. The format follows
   naming `mdword` in `bin` is gone, so nothing is added to `vendor/bin` any more.
   Ask for `mdoffice` as well for the command.
 
-  The install name is still `fabeat/markdown-word`, because that is the one
-  Packagist knows: this repository moved to the `markdown-office` organisation and
-  no `markdown-office/markdown-word` has been registered, so a requirement naming
-  the new one does not resolve. The requirement changes when it is.
-
 ### Changed
 
 - **BREAKING: directives are parsed by default.** `new CommonMarkParser()` now takes
