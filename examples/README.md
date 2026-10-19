@@ -57,6 +57,7 @@ past.
 | `24-furniture.docx` | A running head and foot a document describes about itself, under `header:` and `footer:`. The head carries a logo and a wordmark stacked and right-aligned over a rule; the foot a centred `Page 1 of 1` written as Word fields rather than numbers. See [Headers and footers](../README.md#headers-and-footers). |
 | `25-toc.docx` | A `::toc` drawn as a real Word field, so the contents are built by Word on F9 rather than written down here. Three footnotes on the page, for the mark and the note beside each other. |
 | `26-directives.docx` | What a directive becomes in each place: a table of contents and a footnote, and three names this library does not draw — an inline one keeps its braces, a leaf one its whole source form, a container its body without its fence. |
+| `27-frontmatter-template.docx` | A quotation that names its own `template_file:`, so the Markdown beside it is the whole input and nothing has to be supplied from PHP to reproduce it. Contrast with `10` and `22`, which pass the template to the class in code. |
 
 Numbering is one sequence and nothing shares a number. `markdown/14-rejected.md` is
 not in this table because `build.php` does not build it — converting it is the failure
@@ -404,6 +405,28 @@ run, and the flag says so rather than pretending otherwise.
 One trap if you build a template in code rather than in Word: PHPWord's second
 argument to `addText()` is a *character* style. A paragraph style goes in the third,
 or Word will ignore it.
+
+## Where the template is named
+
+Three examples, and the only thing that differs is which side decides:
+
+| | |
+| --- | --- |
+| `10-template.docx` | the template is passed to `MarkdownTemplate` in `build.php`; the Markdown carries `fields:` only |
+| `22-corporate-report.docx` | the same, rendered through two templates on purpose, to show that the type makes no difference |
+| `27-frontmatter-template.docx` | the Markdown names its own `template_file:`, and the build resolves it |
+
+`build.php` reads that key with the same `TemplateFile` the command line uses, scope
+included. A `template_file:` is resolved with `realpath()` and has to land inside the
+document's own directory or the working directory — the same rule a `theme:` is held to,
+because both are paths a document wrote. That is why the name here is written
+`../templates/invoice.dotx`: an absolute path would resolve on the machine that wrote it
+and nowhere else, and the point of this example is that the file travels.
+
+So the containment is real, and it is why this example cannot name a template outside
+the examples directory. On a local run that is largely ceremony — whoever ran the
+command could have read the file anyway. It earns its place in CI, where the Markdown is
+frequently not the operator's.
 
 ## One template, two types
 

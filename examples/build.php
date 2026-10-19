@@ -22,7 +22,9 @@ use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\WordToMarkdown;
+use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Template\ContentControl;
+use MarkdownWord\Template\TemplateFile;
 use MarkdownWord\Xml;
 use MarkdownWord\Template\MarkdownTemplate;
 use PhpOffice\PhpWord\Element\Section;
@@ -388,6 +390,40 @@ $plainPath = $docs . '/23-plain-letterhead' . DOCX_EXTENSION;
     ->save($plainPath);
 
 $built[] = ['23-plain-letterhead', 'The same report into a template that names no place for it: a logo and nothing else.', $plainPath];
+
+// A document that names its own template.
+//
+// `10-template` and `22-corporate-report` both hand the template to the class in PHP,
+// which is the right shape when the caller is a program that already knows the
+// letterhead. This is the other shape: the Markdown names its own, and the caller
+// resolves it — so the file is the whole input and reproduces without anything beside it.
+//
+// The resolution is the same {@see \MarkdownWord\Template\TemplateFile} the command line
+// uses, scope included, which is why the name is written `../templates/…` rather than an
+// absolute path that would only resolve on the machine that wrote it: a document-written
+// path has to land inside the document's own directory or the working directory, and
+// `examples/` is the working directory this build is run from.
+$namedMarkdown = markdownOf($root, '27-frontmatter-template');
+
+$named = Frontmatter::fromDocument(
+    CommonMarkParser::withAllExtensions()->parse($namedMarkdown),
+    $namedMarkdown,
+)->templateFile();
+
+$namedPath = $docs . '/27-frontmatter-template' . DOCX_EXTENSION;
+
+(new MarkdownTemplate(
+    (new TemplateFile($root . '/markdown', roots: [$root, getcwd() ?: '.']))->resolve(
+        $named ?? throw new BadPackage('27-frontmatter-template.md names no template_file:.'),
+    ),
+    houseStyle(),
+))
+    ->insert($namedMarkdown)
+    ->save($namedPath);
+
+assertPackageType($namedPath, DOCUMENT_TYPE);
+
+$built[] = ['27-frontmatter-template', 'A quotation that names its own template.', $namedPath];
 
 // Images
 //
