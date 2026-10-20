@@ -1605,7 +1605,7 @@ MIT — see [LICENSE](LICENSE). PHPWord, which this library builds on, is
 LGPL-3.0.
 
 [commonmark]: https://github.com/thephpleague/commonmark
-[command-line]: https://markdown-office.dev/guides/command-line/
+[command-line]: https://markdown-office.github.io/documentation/guides/command-line/
 [issues]: https://github.com/markdown-office/markdown-word/issues
 [mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word

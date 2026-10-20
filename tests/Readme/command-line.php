@@ -6,7 +6,7 @@ declare(strict_types=1);
  * The command line moved to the documentation site, and this is what keeps it there.
  *
  * The reference — the commands, the options, their defaults — is one page now:
- * https://markdown-office.dev/guides/command-line/. A README that keeps a copy of
+ * https://markdown-office.github.io/documentation/guides/command-line/. A README that keeps a copy of
  * it keeps a copy that drifts: the two are edited apart, and the one nobody
  * remembers is the one a reader follows.
  *
@@ -20,7 +20,7 @@ declare(strict_types=1);
 /**
  * The page that owns the command line.
  */
-const COMMAND_LINE_PAGE = 'https://markdown-office.dev/guides/command-line/';
+const COMMAND_LINE_PAGE = 'https://markdown-office.github.io/documentation/guides/command-line/';
 
 /**
  * The options of the tool, which the documentation site owns.
