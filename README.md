@@ -77,12 +77,8 @@ $back = (new WordToMarkdown($word->convert()))->convert();
 
 Or from a terminal, with no PHP to write. That is [`mdoffice`][mdoffice], the
 command line for this library and for Markdown to PowerPoint, which requires
-this package and drives it:
-
-```sh
-mdoffice word README.md    # writes README.docx
-mdoffice word README.docx  # writes README.md
-```
+this package and drives it. Every command, every option and every default is in
+the [documentation][command-line].
 
 ## Installation
 
@@ -91,8 +87,9 @@ composer require markdown-office/markdown-word
 ```
 
 That is the library and nothing else. There is no `bin` entry, so a Composer
-install of this package puts no command in `vendor/bin`; if you want the one
-above, ask for [`mdoffice`][mdoffice] as well.
+install of this package puts no command in `vendor/bin`. The command line is a
+separate program — [`mdoffice`][mdoffice] — whose commands and options are in
+the [documentation][command-line].
 
 See [Requirements](#requirements) for what PHP and which extensions it needs.
 Where to get help: [the issue tracker][issues].
@@ -442,32 +439,15 @@ than going in silently flattened.
 
 There is none in this repository. The command line is [`mdoffice`][mdoffice],
 one program for Markdown to Word and to PowerPoint, which requires this package
-and calls it rather than reimplementing any of it. It is not on Packagist, so
-there is nothing to require:
+and calls it rather than reimplementing any of it.
 
-```sh
-git clone https://github.com/markdown-office/mdoffice.git
-git clone https://github.com/markdown-office/markdown-word.git
-git clone https://github.com/markdown-office/markdown-presentation.git
-cd mdoffice && composer install
-
-php bin/mdoffice word notes.md         # → notes.docx
-php bin/mdoffice word report.docx      # → report.md
-php bin/mdoffice word notes.md --to odt
-php bin/mdoffice word notes.md --template report.dotx
-```
-
-The two sibling checkouts are not optional, and its own page leads with the same
-point: the manifest resolves both libraries through `path` repositories pointing
-at `../markdown-word` and `../markdown-presentation`, so a lone clone gives
-Composer nothing to resolve. That is also why it requires them as `*` rather than
-pinned — neither library is published under its `markdown-office` name. What you
-get is the current source of all three rather than a release: `mdoffice` has no
-tag and no PHAR of its own yet, and its page documents the options.
+Every command, every option and every default is on one page — the
+[documentation][command-line] — and that page is where they are kept, so there
+is one place to look and one place to correct.
 
 Everything below about how a conversion behaves — which direction a file goes in,
 what a template renders into, what an `.rtf` cannot carry — is a claim about this
-library, and is what `mdoffice word` calls.
+library, and is what `mdoffice` calls.
 
 ## Supported Markdown
 
@@ -1034,7 +1014,7 @@ one directory up is inside the working directory and is a template, not an escap
 
 Reading and resolving the key is all this library does with it; deciding that a
 document naming a template is rendered into one, and what then outranks what, is
-`mdoffice word`'s, and is documented there.
+`mdoffice`'s, and is [documented there][command-line].
 
 Read the block off a parsed document and merge it with whatever else is in play:
 
@@ -1625,6 +1605,7 @@ MIT — see [LICENSE](LICENSE). PHPWord, which this library builds on, is
 LGPL-3.0.
 
 [commonmark]: https://github.com/thephpleague/commonmark
+[command-line]: https://markdown-office.github.io/documentation/guides/command-line/
 [issues]: https://github.com/markdown-office/markdown-word/issues
 [mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word
