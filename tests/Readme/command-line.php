@@ -242,15 +242,51 @@ function commandLineCodeBlocks(string $markdown): array
 }
 
 /**
+ * What a line names of the command line.
+ *
+ * The commands, the options and the parts of the tool, each with what it is, so
+ * that a finding can say what it found and two lines can be compared with one
+ * another.
+ *
+ * @return list<string>
+ */
+function commandLineNamedBy(string $line): array
+{
+    $named = [];
+
+    foreach (COMMAND_LINE_COMMANDS as $command) {
+        if (preg_match('/(?<![\w-])' . preg_quote($command, '/') . '(?![\w-])/i', $line) === 1) {
+            $named[] = 'the command ' . $command;
+        }
+    }
+
+    foreach (COMMAND_LINE_OPTIONS as $option) {
+        if (preg_match('/(?<![\w-])' . preg_quote($option, '/') . '(?![\w-])/i', $line) === 1) {
+            $named[] = 'the option ' . $option;
+        }
+    }
+
+    foreach (COMMAND_LINE_PARTS as $part) {
+        if (preg_match('/\bmdoffice\s+' . preg_quote($part, '/') . '\b/i', $line) === 1) {
+            $named[] = 'the part ' . $part;
+        }
+    }
+
+    return $named;
+}
+
+/**
  * What a document still holds of the command line reference.
  *
  * Each finding says what it found and where, because a guard that says only
  * "something moved" is one nobody can act on.
  *
  * The allowance is a list of the usages a document is allowed to have. A line
- * that holds one of them is not a finding, and a line that holds any other use
- * of the tool still is — so a document that grows a reference is caught even
- * where a few usages are allowed.
+ * that names nothing more than one of them is not a finding; a line that names
+ * anything beyond what the usage names is. The allowance is therefore about
+ * what a line names rather than about the line: `mdoffice word` is on the
+ * examples page, and `mdoffice word --strict` is not, even though the first is
+ * a prefix of the second and both name the tool the same way.
  *
  * @param list<string> $allowed The usages this document may have.
  *
@@ -261,8 +297,14 @@ function commandLineHeldBy(string $markdown, array $allowed = []): array
     $held = [];
 
     $permitted = function (string $line) use ($allowed): bool {
+        $named = commandLineNamedBy($line);
+
+        if ($named === []) {
+            return false;
+        }
+
         foreach ($allowed as $usage) {
-            if (stripos($line, $usage) !== false) {
+            if (array_diff($named, commandLineNamedBy($usage)) === []) {
                 return true;
             }
         }
@@ -275,22 +317,8 @@ function commandLineHeldBy(string $markdown, array $allowed = []): array
             continue;
         }
 
-        foreach (COMMAND_LINE_COMMANDS as $command) {
-            if (preg_match('/(?<![\w-])' . preg_quote($command, '/') . '(?![\w-])/i', $line) === 1) {
-                $held[] = sprintf('line %d names the command %s', $number + 1, $command);
-            }
-        }
-
-        foreach (COMMAND_LINE_OPTIONS as $option) {
-            if (preg_match('/(?<![\w-])' . preg_quote($option, '/') . '(?![\w-])/i', $line) === 1) {
-                $held[] = sprintf('line %d names the option %s', $number + 1, $option);
-            }
-        }
-
-        foreach (COMMAND_LINE_PARTS as $part) {
-            if (preg_match('/\bmdoffice\s+' . preg_quote($part, '/') . '\b/i', $line) === 1) {
-                $held[] = sprintf('line %d names the part %s', $number + 1, $part);
-            }
+        foreach (commandLineNamedBy($line) as $name) {
+            $held[] = sprintf('line %d names %s', $number + 1, $name);
         }
     }
 
@@ -330,6 +358,20 @@ it('keeps the command line reference on the page that owns it', function () {
     expect($section)->not->toBeNull();
     expect(commandLineLinkTargets($section ?? '', commandLineLinkDefinitions($readme)))
         ->toContain(COMMAND_LINE_PAGE);
+});
+
+it('catches a use of the tool that the allowance does not cover', function () {
+    // The allowance is about what a line names rather than about the line, so a
+    // line that names the tool the way the page does and something else as well
+    // is a finding. `mdoffice word` is on the page; `mdoffice word --strict` is
+    // a third invocation, and the page may not grow one.
+    expect(commandLineHeldBy('mdoffice word --theme dark deck.md', COMMAND_LINE_EXAMPLES))->not->toBe([]);
+
+    // The same for a line that names an option the page's own usages do not.
+    expect(commandLineHeldBy('mdoffice word --template x.dotx --output y.docx', COMMAND_LINE_EXAMPLES))->not->toBe([]);
+
+    // And the two the page has are not findings.
+    expect(commandLineHeldBy('mdoffice word to-odt a.md -o b.odt', COMMAND_LINE_EXAMPLES))->toBe([]);
 });
 
 it('keeps the command line reference off the examples page too', function () {
