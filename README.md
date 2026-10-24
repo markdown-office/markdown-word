@@ -441,9 +441,10 @@ There is none in this repository. The command line is [`mdoffice`][mdoffice],
 one program for Markdown to Word and to PowerPoint, which requires this package
 and calls it rather than reimplementing any of it.
 
-Every command, every option and every default is on one page — the
-[documentation][command-line] — and that page is where they are kept, so there
-is one place to look and one place to correct.
+Every command, every option and every default is in the
+[documentation][command-line] — a chapter of its own, with the options of each half on a
+page of their own — and that is where they are kept, so there is one place to look and
+one place to correct.
 
 Everything below about how a conversion behaves — which direction a file goes in,
 what a template renders into, what an `.rtf` cannot carry — is a claim about this
@@ -1605,7 +1606,7 @@ MIT — see [LICENSE](LICENSE). PHPWord, which this library builds on, is
 LGPL-3.0.
 
 [commonmark]: https://github.com/thephpleague/commonmark
-[command-line]: https://markdown-office.github.io/documentation/guides/command-line/
+[command-line]: https://markdown-office.github.io/command-line/basic/
 [issues]: https://github.com/markdown-office/markdown-word/issues
 [mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word
