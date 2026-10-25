@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-10-25
 
 ### Fixed
 
@@ -23,6 +23,16 @@ All notable changes to this project are documented here. The format follows
   the budget is generous enough that it does not — and that the child died of memory
   rather than of something else.
 
+- **The test that says a document is moved into place rather than copied asks a
+  question the filesystem has to be able to answer.** The staged document was in the
+  system temp directory and the destination in the repository, and the two are on
+  different filesystems on a runner whose `/tmp` is a tmpfs of its own. PHP's
+  `rename()` crosses a filesystem by copying the file, so the move succeeded and the
+  inode changed — because the document had been copied, by PHP rather than by this
+  library. The test failed on every such runner and passed on every other. The
+  destination is beside the staged file now, so the question it asks is one the
+  filesystem can answer, and a library that copied instead of renaming still fails it.
+
 ### Changed
 
 - **The guard that keeps the command line reference on one page covers the examples
@@ -36,6 +46,24 @@ All notable changes to this project are documented here. The format follows
 - **The README says the command line is a chapter rather than one page.** There is no
   page that holds every command, every option and every default: the site's own
   summaries split it three ways.
+
+- **The move's documentation says what `rename()` does across a filesystem.** Two
+  files described the move, and both said that a rename cannot cross a filesystem
+  however the permissions stand, and that the copy fallback creates the destination
+  at the umask rather than carrying over the staged file's mode. Both were wrong:
+  PHP's `rename()` crosses one by copying the file, giving the copy the source's
+  owner and mode and unlinking the source, so a document moved onto another device
+  lands with the staged file's permissions — `0600`. The template's copy of the
+  move said a second thing that was not true either, that a link is only followed
+  when its target is there: a link whose target is not there is a link, and it is
+  followed all the same.
+
+- **The quality gate check says what the server said when it could not read the
+  gate.** It reads the answer with `--silent --fail`, so a refusal ended the job with
+  `curl: (22)` and nothing else, and the reason — an organisation that is not allowed
+  the data of a branch that is not the project's main branch — was in a body that was
+  thrown away. The log now carries the answer, the branch the analysis is of and the
+  branch the project calls its main one.
 
 ## [0.2.0] - 2026-10-19
 
@@ -885,6 +913,7 @@ on it:
 `README.md` has the full list, and `Reverse\Options` is where each one is
 configurable.
 
+[0.2.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.1
 [0.2.0]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.0
 [0.1.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.1.1
 [0.1.0]: https://github.com/markdown-office/markdown-word/releases/tag/v0.1.0
