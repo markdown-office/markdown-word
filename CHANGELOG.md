@@ -4,6 +4,39 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The README's link to the command line points at a page that exists.** It named
+  `…/documentation/guides/command-line/`, which is a 404: the site is served from the
+  root of its host and the command line is a chapter of it, at
+  `…/command-line/basic/`. The page that owns the reference is now where the link goes.
+
+- **The test that says a part over the budget is left to the memory limit asserts the
+  library's behaviour rather than PHP's wording.** The security releases of 21 October
+  2026 made `memory_limit` a soft limit and put a hard limit above it, and a process
+  that crosses the hard limit dies with "Hard memory limit of N bytes exhausted" where
+  it used to die with "Allowed memory size of N bytes exhausted". The test quoted the
+  sentence, so it failed on a security release of the language rather than on a change
+  to this library. What it asserts now is that the library did not refuse the part —
+  the budget is generous enough that it does not — and that the child died of memory
+  rather than of something else.
+
+### Changed
+
+- **The guard that keeps the command line reference on one page covers the examples
+  page as well.** The page names the tool in two ways — once to say where the command
+  line lives and once to show how the two documents `build.php` cannot make are made —
+  and what the page is allowed to name is allowed by name rather than by line: a use
+  of the tool that names anything more than the usage it copies is caught, so a third
+  invocation is caught even though it begins the way the first two do. The option list
+  it checks against gained `--media` and `--help`, which it did not have.
+
+- **The README says the command line is a chapter rather than one page.** There is no
+  page that holds every command, every option and every default: the site's own
+  summaries split it three ways.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added

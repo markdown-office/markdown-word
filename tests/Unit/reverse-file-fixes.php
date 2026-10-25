@@ -492,8 +492,20 @@ it('leaves the size of a part to the budget rather than to the memory limit', fu
         '(new MarkdownWord\\WordToMarkdown(' . var_export($document, true) . '))->convert();',
     );
 
+    // What the child says when it dies of the limit is PHP's sentence, not the
+    // library's, and PHP changes it: the release of 21 October 2026 made
+    // `memory_limit` a soft limit and the wording became "Hard memory limit of N
+    // bytes exhausted" where it had been "Allowed memory size of N bytes
+    // exhausted". A test that quotes the sentence is a test that breaks on a
+    // security release of the language rather than on a change to this library.
+    //
+    // So what is asserted is the library's own behaviour — that it did not refuse
+    // the part, because the budget is generous enough — and that the child died of
+    // memory rather than of something else. The wording is matched loosely enough
+    // to survive either sentence and no looser.
     expect($status)->not->toBe(0);
-    expect($output)->toContain('Allowed memory size');
+    expect($output)->not->toContain('larger than');
+    expect($output)->toMatch('/memory (limit|size)/i');
 });
 
 it('refuses an archive with more entries in it than the budget allows', function () {
