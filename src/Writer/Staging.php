@@ -17,6 +17,15 @@ use PhpOffice\PhpWord\PhpWord;
  * every account on the machine. That guarantee is a property of the *move*, not of
  * any one writer, which is why it lives here rather than in the DOCX path alone.
  *
+ * Two things about the destination are worth the trouble. It may be a symlink, and
+ * `rename()` replaces a link with a regular file, so writing through
+ * `report.docx -> published/report.docx` would leave the link gone and the file it
+ * named holding its old contents; the link is followed instead. And it may be on
+ * another filesystem, which the move crosses rather than fails on: PHP's
+ * `rename()` copies the file when the two paths are on different devices, gives
+ * the copy the source's owner and mode and unlinks the source, so the document
+ * lands with the staged file's permissions — `0600` — rather than the umask's.
+ *
  * The format's own passes — {@see HyperlinkPass} and the rest — run on the staged
  * file between the write and the move, so a patch that throws is as harmless as a
  * writer that throws: the destination is never touched.
@@ -125,19 +134,6 @@ final class Staging
     }
 
     /**
-     * Two things about the destination are worth the trouble.
-     *
-     *  - It may be a symlink, and `rename()` replaces a link with a regular file,
-     *    so writing through `report.docx -> published/report.docx` would leave
-     *    the link gone and the file it named holding its old contents. The link
-     *    is followed instead.
-     *  - It may be on another filesystem. PHP's `rename()` crosses one, by copying
-     *    the file and giving the copy the source's owner and mode, so the move
-     *    succeeds and the document lands with the staged file's permissions. The
-     *    copy below is the fallback for a rename that fails for any other
-     *    reason — a destination directory the process may not write to, for one
-     *    — and it creates the destination at the umask instead.
-     *
      * @throws FileNotWritable When the destination cannot be made or written.
      */
     private static function move(string $from, string $to): void
