@@ -52,6 +52,13 @@ use PhpOffice\PhpWord\TemplateProcessor;
  * The staged document is moved into place rather than written there, so the
  * template on disk is never opened for writing: a path that is a hard link to it
  * would otherwise empty it.
+ *
+ * The move is the shape of {@see \MarkdownWord\Writer\Staging::move()}: a
+ * symlink is followed rather than replaced, and a link whose target is not there
+ * yet is followed all the same. A move onto another filesystem is a copy that
+ * succeeds rather than a failure — PHP's `rename()` copies the file across,
+ * gives the copy the source's owner and mode, and unlinks the source — so what
+ * lands is the staged file, permissions and all.
  */
 final class MarkdownTemplate
 {
@@ -387,14 +394,7 @@ final class MarkdownTemplate
 
     /**
      * Deliberately the shape of {@see \MarkdownWord\Writer\Staging::move()}
-     * rather than a second one: a symlink is followed instead of replaced, a
-     * `rename()` that fails because the two paths are on different filesystems
-     * falls back to a copy, and a copy that fails part way does not leave a
-     * half-written document behind.
-     *
-     * The link following is the part that is deliberately not the same:
-     * {@see self::followLink()} needs its target to exist, so a link to a document
-     * not written yet is replaced by a regular file rather than followed.
+     * rather than a second one.
      */
     private static function move(string $from, string $to): void
     {
@@ -409,8 +409,6 @@ final class MarkdownTemplate
             return;
         }
 
-        // Two paths on different filesystems cannot be renamed between, which is
-        // the normal case when the output is on a mounted volume.
         $existed = file_exists($to);
 
         if (@copy($from, $to)) {

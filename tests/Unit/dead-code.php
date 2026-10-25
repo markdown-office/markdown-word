@@ -226,6 +226,16 @@ it('does not claim again what the code does not do', function (string $claim) {
     // because it is about another repository's releases: `mdoffice` has no tag and no
     // release, so nothing of it ships as a PHAR or as a self-contained executable.
     'a command line with no release still ships as one' => 'ships as a PHAR and as a self-contained',
+    // PHP's `rename()` crosses a filesystem: it copies the file, gives the copy the
+    // source's owner and mode, and unlinks the source. A move onto another device
+    // therefore succeeds and leaves a document with the staged file's permissions,
+    // which is what a runner whose `/tmp` is a tmpfs does to every conversion.
+    'a rename cannot cross a filesystem' => '`rename()` cannot cross',
+    'a rename that fails across filesystems' => 'a `rename()` that fails because the two paths are on different filesystems',
+    'two paths on two filesystems cannot be renamed between' => 'Two paths on different filesystems cannot be renamed between',
+    // A link is followed whether its target is there or not: `is_link()` is true for
+    // a dangling one, and `readlink()` names the target all the same.
+    'a link is only followed when its target is there' => 'needs its target to exist',
 ]);
 
 it('has no decorative dividers in it', function () {

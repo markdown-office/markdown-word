@@ -154,16 +154,27 @@ it('puts the archive in place when it cannot be renamed into it', function () {
 
 it('moves the archive into place rather than copying it', function () {
     $staged = writerFixesCall(Staging::class, 'stage', convertTo('# Moved'), 'Word2007', null);
-    $destination = Scratch::path('moved');
+
+    // The destination sits beside the staged file rather than in the scratch
+    // directory. PHP's `rename()` crosses a filesystem by copying the file, so
+    // a destination on another device is copied and the inode changes for that
+    // reason rather than because the document was copied — and the system temp
+    // directory is another device from the scratch directory on a runner whose
+    // `/tmp` is a tmpfs.
+    $destination = dirname($staged) . '/moved-' . bin2hex(random_bytes(6)) . '.docx';
 
     $inode = fileinode($staged);
 
-    writerFixesCall(Staging::class, 'move', $staged, $destination);
+    try {
+        writerFixesCall(Staging::class, 'move', $staged, $destination);
 
-    clearstatcache();
+        clearstatcache();
 
-    expect(file_exists($staged))->toBeFalse();
-    expect(fileinode($destination))->toBe($inode);
+        expect(file_exists($staged))->toBeFalse();
+        expect(fileinode($destination))->toBe($inode);
+    } finally {
+        @unlink($destination);
+    }
 });
 
 it('writes through a symlink rather than replacing it', function () {
