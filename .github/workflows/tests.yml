@@ -358,8 +358,11 @@ jobs:
           analysed_branch=$(jq -r '.task.branch' <<< "$task")
 
           echo "== the gate of analysis ${analysis_id} =="
-          curl -s --user "${SONAR_TOKEN}:" -w "\nHTTP %{http_code}\n" \
-            "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysis_id}"
+          code=$(curl -s --user "${SONAR_TOKEN}:" -o gate.json -w '%{http_code}' \
+            "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysis_id}" || echo 000)
+          cat gate.json
+          echo
+          echo "HTTP ${code}"
 
           echo
           echo "== the branches of ${project_key} =="
@@ -369,10 +372,16 @@ jobs:
 
           echo
           echo "::error::The analysis is of '${analysed_branch}'; the project's main branch is '${main_branch}'."
-          echo "::error::The gate of a main branch analysis is served, and the gate of a pull request is;"
-          echo "::error::the gate of any other branch is not, on a plan that does not carry branch data."
-          echo "::error::Set the main branch of ${project_key} to '${DEFAULT_BRANCH}' — the repository's"
-          echo "::error::default branch — in SonarQube Cloud: the project's Administration page, under Branches."
+
+          # The advice below is right for the one answer that is about the branch.
+          # A gate that says ERROR is a finding, and telling a reader to rename a
+          # branch would send them away from it.
+          if [ "${code}" = "403" ]; then
+            echo "::error::The gate of a main branch analysis is served, and the gate of a pull request is;"
+            echo "::error::the gate of any other branch is not, on a plan that does not carry branch data."
+            echo "::error::Set the main branch of ${project_key} to '${DEFAULT_BRANCH}' — the repository's"
+            echo "::error::default branch — in SonarQube Cloud: the project's Administration page, under Branches."
+          fi
 
   # Everything above installs what the lock file pins, so a build is repeatable.
   # The cost of that is hearing nothing when a dependency publishes something
