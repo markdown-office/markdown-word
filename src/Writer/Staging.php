@@ -131,11 +131,12 @@ final class Staging
      *    so writing through `report.docx -> published/report.docx` would leave
      *    the link gone and the file it named holding its old contents. The link
      *    is followed instead.
-     *  - It may be on another filesystem, which `rename()` cannot cross however
-     *    the permissions stand — what a container with the output on a mounted
-     *    volume gives, a destination that is perfectly writable and refused all
-     *    the same. Copying is the fallback, and it creates the destination at
-     *    the umask rather than carrying over the staged file's mode.
+     *  - It may be on another filesystem. PHP's `rename()` crosses one, by copying
+     *    the file and giving the copy the source's owner and mode, so the move
+     *    succeeds and the document lands with the staged file's permissions. The
+     *    copy below is the fallback for a rename that fails for any other
+     *    reason — a destination directory the process may not write to, for one
+     *    — and it creates the destination at the umask instead.
      *
      * @throws FileNotWritable When the destination cannot be made or written.
      */
