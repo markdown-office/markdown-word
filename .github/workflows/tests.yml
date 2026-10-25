@@ -331,6 +331,49 @@ jobs:
       - name: Quality gate
         uses: SonarSource/sonarqube-quality-gate-action@7a5fffe8e523c40e0c740b6bc2712ab503e52efa # v1
 
+      # What the server said, when the gate check could not read it.
+      #
+      # The action above dies on `curl: (22)` and says nothing else: it reads
+      # the answer with `--silent --fail`, and the body — which is where the
+      # reason is — is gone. This asks the same server the same question and
+      # prints the answer, so the log says what is wrong rather than what the
+      # symptom is.
+      #
+      # It only runs when the gate check has already failed, and it decides
+      # nothing: the gate is still the action above. What it adds is the two
+      # facts the answer is read against — the branch the analysis is of, and
+      # the branch the project calls its main one. The gate of an analysis is
+      # served for the main branch, so an analysis of any other branch is
+      # refused by an organisation whose plan does not carry branch data, and
+      # that refusal is a fact about the project rather than about this build.
+      - name: What the server said
+        if: failure()
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          task_id=$(sed -n 's/^ceTaskId=//p' .scannerwork/report-task.txt)
+          project_key=$(sed -n 's/^projectKey=//p' .scannerwork/report-task.txt)
+          task=$(curl -s --user "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/ce/task?id=${task_id}")
+          analysis_id=$(jq -r '.task.analysisId' <<< "$task")
+          analysed_branch=$(jq -r '.task.branch' <<< "$task")
+
+          echo "== the gate of analysis ${analysis_id} =="
+          curl -s --user "${SONAR_TOKEN}:" -w "\nHTTP %{http_code}\n" \
+            "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysis_id}"
+
+          echo
+          echo "== the branches of ${project_key} =="
+          branches=$(curl -s --user "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/project_branches/list?project=${project_key}")
+          echo "$branches"
+          main_branch=$(jq -r '.branches[] | select(.isMain) | .name' <<< "$branches")
+
+          echo
+          echo "::error::The analysis is of '${analysed_branch}'; the project's main branch is '${main_branch}'."
+          echo "::error::The gate of a main branch analysis is served, and the gate of a pull request is;"
+          echo "::error::the gate of any other branch is not, on a plan that does not carry branch data."
+          echo "::error::Set the main branch of ${project_key} to '${DEFAULT_BRANCH}' — the repository's"
+          echo "::error::default branch — in SonarQube Cloud: the project's Administration page, under Branches."
+
   # Everything above installs what the lock file pins, so a build is repeatable.
   # The cost of that is hearing nothing when a dependency publishes something
   # that breaks us, so this resolves afresh and runs the suite against the result.
