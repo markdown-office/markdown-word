@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "1b4c8551c5f07723da32ab46a426248d",
+    "content-hash": "fab2692dc0051d7de26e79611416a476",
     "packages": [
         {
             "name": "dflydev/dot-access-data",
@@ -272,16 +272,16 @@
         },
         {
             "name": "markdown-office/commonmark-generic-directives",
-            "version": "v0.2.0",
+            "version": "v0.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/markdown-office/commonmark-generic-directives.git",
-                "reference": "3fa56b2f0ec03fab8830a9c5e46bad5c354874c4"
+                "reference": "7e4c56b1e9e78d57b4684dc99f13e8899d919ec8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/markdown-office/commonmark-generic-directives/zipball/3fa56b2f0ec03fab8830a9c5e46bad5c354874c4",
-                "reference": "3fa56b2f0ec03fab8830a9c5e46bad5c354874c4",
+                "url": "https://api.github.com/repos/markdown-office/commonmark-generic-directives/zipball/7e4c56b1e9e78d57b4684dc99f13e8899d919ec8",
+                "reference": "7e4c56b1e9e78d57b4684dc99f13e8899d919ec8",
                 "shasum": ""
             },
             "require": {
@@ -320,9 +320,9 @@
             ],
             "support": {
                 "issues": "https://github.com/markdown-office/commonmark-generic-directives/issues",
-                "source": "https://github.com/markdown-office/commonmark-generic-directives/tree/v0.2.0"
+                "source": "https://github.com/markdown-office/commonmark-generic-directives/tree/v0.3.0"
             },
-            "time": "2026-10-13T10:16:28+00:00"
+            "time": "2026-10-26T11:30:11+00:00"
         },
         {
             "name": "nette/schema",
