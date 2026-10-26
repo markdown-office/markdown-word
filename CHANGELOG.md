@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.2] - 2026-10-26
 
 ### Changed
 
@@ -927,6 +927,7 @@ on it:
 `README.md` has the full list, and `Reverse\Options` is where each one is
 configurable.
 
+[0.2.2]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.2
 [0.2.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.1
 [0.2.0]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.0
 [0.1.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.1.1
