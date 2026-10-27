@@ -156,6 +156,58 @@ it('honours a label holding a bare asterisk or an underscore', function () {
         ->and(styleRuns("A :brand[2 * 3] here.\n", $config)[1]['font']['color'] ?? null)->toBe('0B5CAB');
 });
 
+it('honours a label holding a construct CommonMark does not call emphasis', function () {
+    // A delimiter run that opens an emphasis may not be followed by whitespace, and one
+    // that closes it may not be preceded by whitespace: `__ Bakery__` and `** text**`
+    // are text, and a label holding one is drawn as it was written.
+    $config = styledConfig(['brand' => ['color' => '0B5CAB']]);
+
+    expect(renderText("A :brand[__ Bakery__] here.\n", $config))->toBe('A __ Bakery__ here.')
+        ->and(renderText("A :brand[** text**] here.\n", $config))->toBe('A ** text** here.')
+        ->and(renderText("A :brand[**Bakery **] here.\n", $config))->toBe('A **Bakery ** here.')
+        ->and(styleRuns("A :brand[** text**] here.\n", $config)[1]['font']['color'] ?? null)->toBe('0B5CAB');
+});
+
+it('holds a label that is Markdown and draws one that is not', function () {
+    // The corpus is the list of labels a text style may be given and what CommonMark
+    // makes of each one. A label the directive grammar cannot carry — one with a
+    // bracket in it — is left out: the grammar says a label holds no brackets at all.
+    $config = styledConfig(['brand' => ['color' => '0B5CAB']]);
+    $labels = file(dirname(__DIR__) . '/fixtures/labels.txt', FILE_IGNORE_NEW_LINES) ?: [];
+    $held = 0;
+    $drawn = 0;
+
+    foreach ($labels as $line) {
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+
+        [$marker, $label] = array_pad(explode(' ', $line, 2), 2, '');
+
+        if (str_contains($label, '[') || str_contains($label, ']')) {
+            continue;
+        }
+
+        $text = renderText(sprintf("A :brand[%s] here.\n", $label), $config);
+
+        // A label the halves hold is drawn as its own source text; one they do not is
+        // drawn as the word. The corpus says what CommonMark makes of the label, and
+        // the two markers that differ from it say which way the halves went.
+        if ($marker === 'text' || $marker === 'markdown-only') {
+            expect($text)->toBe(sprintf('A %s here.', $label));
+            $drawn++;
+
+            continue;
+        }
+
+        expect($text)->toBe(sprintf('A :brand[%s] here.', $label));
+        $held++;
+    }
+
+    expect($held)->toBeGreaterThan(0)
+        ->and($drawn)->toBeGreaterThan(0);
+});
+
 it('renders a theme with no text styles, and draws a named style against it as source text', function () {
     [$root, $themes] = styleThemes();
     writeStyleTheme($themes, 'plain', "heading.1:\n  color: 112233\n");

@@ -579,7 +579,10 @@ offers no way for a parser to say "the rest of this run is mine". So
 construct in a label is not honoured either: `**text**`, `__text__`, `*text*`,
 `_text_`, `` `code` `` and `[text](url)` all leave the label alone. A bare `*` or
 `_` is not Markdown: `2 * 3` and `snake_case` are ordinary text, and the word is
-written in the style as it stands.
+written in the style as it stands. So is a construct CommonMark does not call
+emphasis: `__ Bakery__` and `** text**` are text, because a delimiter that opens an
+emphasis may not be followed by a space and one that closes it may not be preceded
+by one.
 
 **What this library cannot draw is drawn as its own source text.** That is the
 policy of this half, and the inline styles keep it:

@@ -61,6 +61,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A label holds no Markdown that CommonMark does not call emphasis.** The rule refused
+  `** text**` and `**Bakery **`, which are not emphasis: a delimiter run that opens an
+  emphasis may not be followed by whitespace, and one that closes it may not be preceded
+  by whitespace. A label holding one is drawn as the word it holds.
+
+  The rules are CommonMark's own now, and they are the same rules the slides half keeps
+  them in: `tools/compare-label-patterns.php` reads both halves' lists out of their own
+  sources and runs one corpus of labels through them, and the two halves agree on every
+  label in it.
+
 - **A document's theme is found beside the document.** The `theme:` a document names was
   resolved against the *process's* working directory, so a document that said
   `theme: corporate` found it only when the run happened to start in the document's own

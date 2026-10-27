@@ -31,12 +31,19 @@ use PhpOffice\PhpWord\Element\AbstractContainer;
  *
  * A bare `*` or `_` is not Markdown. `2 * 3` and `snake_case` are ordinary text,
  * and a rule that refused every label holding one of them would refuse correct
- * documents all day; what is refused is a construct that is complete.
+ * documents all day; what is refused is a construct that is complete, and complete
+ * is CommonMark's own question — `__ Bakery__` and `** text**` are not emphasis,
+ * so a label holding one is drawn as the word it holds.
  */
 final class TextStyle
 {
     /**
      * The complete Markdown constructs a label may not hold.
+     *
+     * What makes a construct complete is CommonMark's own rule: a delimiter run that
+     * opens an emphasis may not be followed by whitespace, and one that closes it may
+     * not be preceded by whitespace. So `__ Bakery__` and `** text**` are text rather
+     * than emphasis, and a label holding one is drawn as it was written.
      *
      * The `_` is the only one with a rule of its own: CommonMark does not open
      * emphasis inside a word, so `snake_case_name` is not emphasis and a label
@@ -47,7 +54,7 @@ final class TextStyle
      * names.
      */
     private const MARKDOWN = [
-        '/\*\*.+\*\*/s',
+        '/\*\*[^*\s](?:[^*]*[^*\s])?\*\*/',
         '/(?<![\w])__[^_\s](?:[^_]*[^_\s])?__(?![\w])/',
         '/\*[^*\s](?:[^*]*[^*\s])?\*/',
         '/(?<![\w])_[^_\s](?:[^_]*[^_\s])?_(?![\w])/',
