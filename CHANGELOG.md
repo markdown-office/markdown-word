@@ -8,6 +8,43 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A word can be written in a style, in the middle of a sentence.** `:brand[Bakery]`
+  is the word "Bakery" in the style the theme calls `brand`, and the theme's
+  `styles.yml` gains a `textStyles` key for it:
+
+  ```yaml
+  textStyles:
+    brand:
+      color: "0B5CAB"
+      bold: true
+  ```
+
+  Three forms, one grammar: a name a theme defines, that name with attributes over
+  it property by property (`:brand[Bakery]{color=FF0000}`), and the reserved name
+  `style` with attributes and no theme style behind it (`:style[teal]{color=00B4D8}`).
+  The attributes are eight — `color`, `size`, `font`, `bold`, `italic`, `underline`,
+  `strike` and `highlight` — and they are the same in a theme's style and in the
+  directive itself. A size is in points, as it is everywhere else.
+
+  A theme that brings no named styles changes nothing: every named form written
+  against it is drawn as its own source text, the way a name nothing claims has
+  always been drawn. So is everything else this library cannot draw — an attribute
+  that does not exist, a value that is not what the attribute takes, and a label
+  holding a complete Markdown construct, which a label cannot have honoured in any
+  case. The presentation half refuses all of them and names the alternative; this
+  half draws them, because a sentence and a parser nobody asked to change should not
+  change the syntax of every document converted after it.
+
+  The names this library draws are asked of `Render\Directives::names()` rather than
+  read out of the source of `MarkdownToWord`, so a check against them cannot quietly
+  find nothing.
+
+- **`CommonMarkParser::withFrontMatter()`.** The default flavour carries the
+  directives and not the front matter, and `withAllExtensions()` carries the front
+  matter and not the directives, so a document that names a theme in its own `---`
+  block and writes a word in one of the theme's styles had no parser that read
+  both. The command line reads with that parser already.
+
 - **A theme can be named as its `theme.yml`.** A `theme:` that names a file loads that
   file as the theme's manifest, and the theme's other files — `styles.yml` — are read
   from the directory that holds it. A path is a path: it is written from the document's

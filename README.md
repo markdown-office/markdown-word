@@ -238,8 +238,13 @@ Markdown --> Word --> Markdown --> Word
 
 #### What the round trip does not preserve
 
-Word does not record these, so there is nothing for the reader to find. All five
-are what the round trip actually produces:
+Word does not record these, so there is nothing for the reader to find. All of
+them are what the round trip actually produces:
+
+- **A word in a text style comes back as the word.** `:brand[Bakery]` is written as
+  direct formatting — a colour, a weight, a size — and the reader reads bold, italic
+  and strike and no colour. The word is there; the style is not, and neither is the
+  name it was written under.
 
 - **A table's header row comes back bold.** A run is bold in the document, and
   the document does not say whether the renderer or the author made it so:
@@ -469,6 +474,7 @@ library, and is what `mdoffice` calls.
 | Footnotes, description lists | with `CommonMarkParser::extended()` |
 | A table of contents | `::toc`; see [A table of contents](#a-table-of-contents) |
 | Directives — `:name[…]`, `::name[…]`, `:::name` … `:::` | on by default; a name nothing draws comes back as the characters it was written as, see [Directives](#directives) |
+| Inline styles — `:name[text]`, `:name[text]{attrs}` | a word in a style, in the middle of a sentence, see [Inline styles](#inline-styles) |
 
 A link whose label contains formatting, such as `[**bold** link](url)`, becomes a
 genuine Word hyperlink *with* the bold applied. PHPWord cannot express that
@@ -530,6 +536,65 @@ Names are not otherwise checked. `GenericDirectiveExtension` takes a
 `UnknownDirective` rather than being rendered as text — but `CommonMarkParser`
 builds its extensions from class names and cannot pass one in, so strict mode is
 not reachable through the factory.
+
+#### Inline styles
+
+A word in a style, in the middle of a sentence:
+
+```markdown
+Resilience :brand[Bakery] is open.
+```
+
+Three forms, one grammar:
+
+| Written | In the document |
+| --- | --- |
+| `:accent[brand]` | the word "brand", in the style the theme calls `accent` |
+| `:accent[brand]{color=FF0000}` | the same word in red: the attribute wins over the style |
+| `:style[brand]{color=00B4D8}` | the word "brand" in teal, with no theme style involved |
+
+The named styles come from the [theme](#themes), and the eight attributes are the
+same wherever a style is written:
+
+| Attribute | Carries |
+| --- | --- |
+| `color` | the ink: six hexadecimal digits, as `8B0000` |
+| `size` | the size, in points |
+| `font` | the family |
+| `bold` | the weight |
+| `italic` | the slant |
+| `underline` | the underline |
+| `strike` | the strike |
+| `highlight` | a colour behind the word |
+
+**An attribute overrides the named style, property by property.** An attribute the
+style does not set and that does not name itself is not set either: the run
+inherits whatever the paragraph around it gave it, and nothing is reset to a
+default.
+
+**A label is plain text.** The directives package stores a label as a string
+rather than parsing it as inline Markdown, because CommonMark's inline engine
+offers no way for a parser to say "the rest of this run is mine". So
+`:brand[**Bakery**]` cannot have its emphasis honoured — and a *complete* Markdown
+construct in a label is not honoured either: `**text**`, `__text__`, `*text*`,
+`_text_`, `` `code` `` and `[text](url)` all leave the label alone. A bare `*` or
+`_` is not Markdown: `2 * 3` and `snake_case` are ordinary text, and the word is
+written in the style as it stands.
+
+**What this library cannot draw is drawn as its own source text.** That is the
+policy of this half, and the inline styles keep it:
+
+| Written | In the document |
+| --- | --- |
+| `:brand[Bakery]` where the theme has no `brand` | `:brand[Bakery]` |
+| `:style[Bakery]` with no attributes | `:style[Bakery]` |
+| `:brand[Bakery]{weight=900}` | `:brand[Bakery]{weight="900"}` |
+| `:brand[**Bakery**]` | `:brand[**Bakery**]` |
+
+The presentation half refuses all four and names the alternative. This half draws
+them, because *a sentence and a parser nobody asked to change should not change
+the syntax of every document converted after it* — and the author gets back the
+characters they typed.
 
 ### A table of contents
 
@@ -1064,6 +1129,13 @@ block is printed at the top of the document. Ask for
 `CommonMarkParser::withAllExtensions()`, which carries `FrontMatterExtension`, when
 a document is to configure itself.
 
+**A document that configures itself and writes a directive needs both.** The two
+parsers are apart by design — `withAllExtensions()` carries the front matter and not
+the directives, and the default flavour the other way round — so a document that
+names a theme in its own block and writes a word in one of the theme's styles wants
+`CommonMarkParser::withFrontMatter()`, which has both. The command line reads with
+that parser already.
+
 `Frontmatter` also reads the block for its own sake, if a caller wants it rather
 than the configuration: `getString()`, `getInt()`, `getBool()`, `getArray()`,
 `has()` and `toArray()`. A key of the wrong type returns the caller's default
@@ -1237,6 +1309,28 @@ slot.
 and also scientific notation, and YAML resolves it to infinity before the theme is read.
 Quoted, it is a colour; unquoted, it is a load-time error rather than a document drawn in
 the wrong ink.
+
+**A theme may bring named text styles.** `styles.yml` takes one key beside the slots, and
+the key is not a slot — it is the styles a document may write a word in, under
+[Inline styles](#inline-styles):
+
+```yaml
+textStyles:
+  brand:
+    color: "0B5CAB"
+    bold: true
+  muted:
+    color: "6B7280"
+    size: 10
+```
+
+The properties are the same eight the inline attributes have, and a size is in points as it
+is everywhere else. Three things are refused when the theme is read, because each of them
+is a mistake that would otherwise reach the document looking as though the line had never
+been written: a style that names an attribute that does not exist, a style that carries no
+property at all, and a style called `style` — that word is reserved for the raw form, and
+a theme may not take it. A theme without the key has no named styles, and every named form
+written against it is drawn as its own source text.
 
 A theme applies to a document rendered into a template too. The template keeps its own
 style definitions, and the theme is written onto the text as direct formatting over them
