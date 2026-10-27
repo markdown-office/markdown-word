@@ -106,27 +106,38 @@ final class TextStyle
      */
     public function draw(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): bool
     {
-        $label = $node->getLabel() ?? '';
-
-        if ($label === '' || self::holdsMarkdown($label)) {
-            return false;
-        }
-
-        $attributes = $this->attributesFor($node);
-
-        if ($attributes === null) {
-            return false;
-        }
-
-        $font = TextStyles::fontFor($attributes);
+        $font = $this->drawableFont($node);
 
         if ($font === null) {
             return false;
         }
 
-        $target->addText($label, $this->resolver->fontFor($style->withForcedFont($font)));
+        $target->addText($node->getLabel() ?? '', $this->resolver->fontFor($style->withForcedFont($font)));
 
         return true;
+    }
+
+    /**
+     * The font a directive's label and attributes amount to, or null when the
+     * directive cannot be drawn.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function drawableFont(DirectiveInline $node): ?array
+    {
+        $label = $node->getLabel() ?? '';
+
+        if ($label === '' || self::holdsMarkdown($label)) {
+            return null;
+        }
+
+        $attributes = $this->attributesFor($node);
+
+        if ($attributes === null) {
+            return null;
+        }
+
+        return TextStyles::fontFor($attributes);
     }
 
     /**

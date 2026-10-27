@@ -7,7 +7,6 @@ namespace MarkdownWord\Render\Directive;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Format;
-use MarkdownWord\Render\RenderContext;
 use MarkdownWord\Render\StyleResolver;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\Metadata\Protection;
@@ -86,7 +85,7 @@ final class DocxOnly
      * is given the colour of one, and a box with nothing round it is a
      * paragraph.
      */
-    public function drawTextBox(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
+    public function drawTextBox(DirectiveBlock $node, AbstractContainer $target): void
     {
         $this->usage->add(Format::TEXT_BOX);
 
@@ -134,7 +133,7 @@ final class DocxOnly
      * the shape is drawn in, six hexadecimal digits without a `#`, the spelling
      * Word uses.
      */
-    public function drawShape(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
+    public function drawShape(DirectiveBlock $node, AbstractContainer $target): void
     {
         $this->usage->add(Format::SHAPE);
 
@@ -189,7 +188,7 @@ final class DocxOnly
      * forms — so a dropdown turns that protection on, and a document with one
      * is a form.
      */
-    public function drawField(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
+    public function drawField(DirectiveBlock $node, AbstractContainer $target): void
     {
         $this->usage->add(Format::FORM_FIELD);
 

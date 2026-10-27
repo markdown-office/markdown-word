@@ -6,7 +6,6 @@ namespace MarkdownWord\Render\Directive;
 
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownWord\Render\ImageResolver;
-use MarkdownWord\Render\RenderContext;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 
 /**
@@ -33,7 +32,7 @@ final class Image
     {
     }
 
-    public function __invoke(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
+    public function __invoke(DirectiveBlock $node, AbstractContainer $target): void
     {
         $attributes = $node->getAttributes();
         $source = $attributes->getString('src') ?? '';

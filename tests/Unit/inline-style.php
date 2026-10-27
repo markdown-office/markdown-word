@@ -20,6 +20,7 @@ use MarkdownWord\Render\Directive\SectionBreak;
 use MarkdownWord\Render\Directive\TextStyle;
 use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\Directives;
+use MarkdownWord\Render\Handlers;
 use MarkdownWord\Render\ImageDescriptionCollector;
 use MarkdownWord\Render\ImageResolver;
 use MarkdownWord\Render\StyleResolver;
@@ -268,7 +269,7 @@ it('publishes the names the theme spelled', function () {
     $registry = Directives::standard(
         new Toc(new Options(), $styles),
         new Footnote($styles),
-        new TextStyle(new TextStyles(['Brand' => ['color' => '0B5CAB']]), $styles),
+        new Handlers(textStyle: new TextStyle(new TextStyles(['Brand' => ['color' => '0B5CAB']]), $styles)),
     );
 
     expect($registry->draws())->toContain('Brand');
@@ -394,12 +395,14 @@ it('draws the names it says it draws', function () {
     $registry = Directives::standard(
         new Toc(new Options(), $styles),
         new Footnote($styles),
-        new TextStyle(new TextStyles(), $styles),
-        new Image(new ImageResolver(new Options(), new ImageDescriptionCollector())),
-        new Caption($styles),
-        new PageBreak(),
-        new SectionBreak(),
-        new DocxOnly($styles),
+        new Handlers(
+            textStyle: new TextStyle(new TextStyles(), $styles),
+            image: new Image(new ImageResolver(new Options(), new ImageDescriptionCollector())),
+            caption: new Caption($styles),
+            pageBreak: new PageBreak(),
+            section: new SectionBreak(),
+            docxOnly: new DocxOnly($styles),
+        ),
     );
 
     expect($registry->draws())->toBe(Directives::names());

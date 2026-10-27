@@ -6,7 +6,6 @@ namespace MarkdownWord\Render\Directive;
 
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownWord\Configuration\Styles;
-use MarkdownWord\Render\RenderContext;
 use MarkdownWord\Render\StyleResolver;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 
@@ -29,7 +28,7 @@ final class Caption
     {
     }
 
-    public function __invoke(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
+    public function __invoke(DirectiveBlock $node, AbstractContainer $target): void
     {
         $text = $node->getLabel() ?? '';
 

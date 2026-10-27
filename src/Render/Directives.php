@@ -38,6 +38,11 @@ use PhpOffice\PhpWord\Element\AbstractContainer;
  * maps rather than written into them. The handler that draws them is asked
  * whether a name is its own before anything else happens, which is what lets a
  * name that is not a style be drawn as the source form it was written as.
+ *
+ * A handler declares the parameters it uses. Every block handler is called with
+ * the node, the target and the context, and one that does not need the context
+ * does not declare it: PHP passes on every argument it is given, and a function
+ * that asks for fewer ignores the rest.
  */
 final class Directives
 {
@@ -101,27 +106,24 @@ final class Directives
     public static function standard(
         Toc $toc,
         Footnote $footnote,
-        ?TextStyle $textStyle = null,
-        ?Image $image = null,
-        ?Caption $caption = null,
-        ?PageBreak $pageBreak = null,
-        ?SectionBreak $section = null,
-        ?DocxOnly $docxOnly = null,
+        ?Handlers $handlers = null,
     ): self {
-        $registry = (new self(textStyle: $textStyle))
+        $registry = (new self(textStyle: $handlers?->textStyle))
             ->withBlock(self::TOC, $toc)
             ->withInline(self::FOOTNOTE, $footnote);
 
         foreach ([
-            self::IMAGE => $image,
-            self::CAPTION => $caption,
-            self::PAGE_BREAK => $pageBreak,
-            self::SECTION => $section,
+            self::IMAGE => $handlers?->image,
+            self::CAPTION => $handlers?->caption,
+            self::PAGE_BREAK => $handlers?->pageBreak,
+            self::SECTION => $handlers?->section,
         ] as $name => $handler) {
             if ($handler !== null) {
                 $registry = $registry->withBlock($name, $handler);
             }
         }
+
+        $docxOnly = $handlers?->docxOnly;
 
         if ($docxOnly !== null) {
             $registry = $registry

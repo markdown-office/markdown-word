@@ -327,18 +327,21 @@ final class TextStyles
             return null;
         }
 
-        if ($property === 'color' || $property === 'bgColor') {
-            return [$property => (string) $value];
-        }
+        return match ($property) {
+            'color', 'bgColor' => [$property => (string) $value],
+            'size' => [$property => (float) $value],
+            'name' => [$property => $value],
+            default => self::flagFor($property, $value),
+        };
+    }
 
-        if ($property === 'size') {
-            return [$property => (float) $value];
-        }
-
-        if ($property === 'name') {
-            return [$property => $value];
-        }
-
+    /**
+     * The font property a boolean attribute and its value amount to.
+     *
+     * @return array<string, mixed>|null Null when the value is not a boolean.
+     */
+    private static function flagFor(string $property, mixed $value): ?array
+    {
         $flag = self::boolean($value);
 
         if ($flag === null) {
@@ -347,7 +350,9 @@ final class TextStyles
 
         // `w:u` takes one of Word's underline names, and `single` is the one a
         // boolean means.
-        return [$property => $property === 'underline' ? ($flag ? 'single' : false) : $flag];
+        $underline = $flag ? 'single' : false;
+
+        return [$property => $property === 'underline' ? $underline : $flag];
     }
 
     /**

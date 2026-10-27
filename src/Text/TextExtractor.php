@@ -143,14 +143,7 @@ final class TextExtractor
      * The text a run carries, or the content it holds instead of any.
      *
      * A `Text` may have no text of its own, and the classes that extend it keep what
-     * they hold in different places. A form field keeps it in its default and a
-     * content control in its value — in both cases the text the author wrote for it,
-     * which is what a reader of the extracted text finds. A field with nothing in it
-     * contributes nothing.
-     *
-     * A checkbox contributes nothing either: it is a box, and the name it answers to
-     * is the form's identifier rather than the document's wording. A run with no text
-     * of its own and nothing else to say says nothing.
+     * they hold in different places.
      */
     private static function textOf(Text $text): string
     {
@@ -160,6 +153,22 @@ final class TextExtractor
             return $own;
         }
 
+        return self::heldText($text);
+    }
+
+    /**
+     * The text a run holds instead of any of its own.
+     *
+     * A form field keeps it in its default and a content control in its value —
+     * in both cases the text the author wrote for it, which is what a reader of
+     * the extracted text finds. A field with nothing in it contributes nothing.
+     *
+     * A checkbox contributes nothing either: it is a box, and the name it answers to
+     * is the form's identifier rather than the document's wording. A run with no text
+     * of its own and nothing else to say says nothing.
+     */
+    private static function heldText(Text $text): string
+    {
         if ($text instanceof FormField) {
             $default = $text->getDefault();
 

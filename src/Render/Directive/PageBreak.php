@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace MarkdownWord\Render\Directive;
 
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
-use MarkdownWord\Render\RenderContext;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\Element\Section;
 
@@ -22,7 +21,7 @@ use PhpOffice\PhpWord\Element\Section;
  */
 final class PageBreak
 {
-    public function __invoke(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
+    public function __invoke(DirectiveBlock $node, AbstractContainer $target): void
     {
         if (!$target instanceof Section) {
             $target->addTextRun()->addText((string) $node);

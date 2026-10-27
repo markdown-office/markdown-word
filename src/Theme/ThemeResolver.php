@@ -47,6 +47,15 @@ use MarkdownWord\Filesystem\PathScope;
  */
 final class ThemeResolver
 {
+    /**
+     * The directory a theme is looked for in, under the one it was named beside.
+     *
+     * Steps 2, 3 and 5 of the order above each look in a directory of themes:
+     * the document's own, the working directory's, and the one that ships with
+     * this package.
+     */
+    private const THEMES_DIRECTORY = '/themes';
+
     private readonly string $builtinDirectory;
 
     private readonly PathScope $files;
@@ -77,7 +86,7 @@ final class ThemeResolver
 
         // The themes beside `src/`, so a package installed anywhere resolves its own
         // themes without being told where they are.
-        $this->builtinDirectory = $builtinDirectory ?? dirname(__DIR__, 2) . '/themes';
+        $this->builtinDirectory = $builtinDirectory ?? dirname(__DIR__, 2) . self::THEMES_DIRECTORY;
         $this->files = new PathScope([
             ...($this->documentDirectory === null ? [] : [$this->documentDirectory]),
             $this->workingDirectory,
@@ -141,8 +150,8 @@ final class ThemeResolver
     private function themeDirectories(): array
     {
         return [
-            ...($this->documentDirectory === null ? [] : [$this->documentDirectory . '/themes']),
-            $this->workingDirectory . '/themes',
+            ...($this->documentDirectory === null ? [] : [$this->documentDirectory . self::THEMES_DIRECTORY]),
+            $this->workingDirectory . self::THEMES_DIRECTORY,
             ...$this->roots,
             $this->builtinDirectory,
         ];

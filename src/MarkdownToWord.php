@@ -22,6 +22,7 @@ use MarkdownWord\Render\Directive\Usage;
 use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
 use MarkdownWord\Render\FurnitureWriter;
+use MarkdownWord\Render\Handlers;
 use MarkdownWord\Render\HtmlFragmentRenderer;
 use MarkdownWord\Render\ImageConversionCollector;
 use MarkdownWord\Render\SvgAttachmentCollector;
@@ -568,12 +569,14 @@ final class MarkdownToWord implements Converter
         $directives = Directives::standard(
             $this->toc,
             $this->footnotes,
-            new TextStyle($config->getTextStyles(), $styles),
-            new Image($imageResolver),
-            new Caption($styles),
-            new PageBreak(),
-            $this->sections,
-            new DocxOnly($styles, $this->format, $this->usage),
+            new Handlers(
+                textStyle: new TextStyle($config->getTextStyles(), $styles),
+                image: new Image($imageResolver),
+                caption: new Caption($styles),
+                pageBreak: new PageBreak(),
+                section: $this->sections,
+                docxOnly: new DocxOnly($styles, $this->format, $this->usage),
+            ),
         );
 
         $inlines = new InlineRenderer(
