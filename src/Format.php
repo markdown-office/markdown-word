@@ -106,6 +106,7 @@ enum Format: string
                 'svg-vector',
                 'table-of-contents',
                 'footnotes',
+                'columns',
             ],
         };
     }
@@ -172,5 +173,6 @@ enum Format: string
         'header' => 'the running head at the top of every page is left out',
         'footer' => 'the running foot at the bottom of every page is left out',
         'footnotes' => 'a footnote is left as the text :footnote[...] rather than as a note at the foot of the page',
+        'columns' => 'the columns of a ::section are lost',
     ];
 }

@@ -7,7 +7,11 @@ namespace MarkdownWord\Render;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration\TextStyles;
+use MarkdownWord\Render\Directive\Caption;
 use MarkdownWord\Render\Directive\Footnote;
+use MarkdownWord\Render\Directive\Image;
+use MarkdownWord\Render\Directive\PageBreak;
+use MarkdownWord\Render\Directive\SectionBreak;
 use MarkdownWord\Render\Directive\TextStyle;
 use MarkdownWord\Render\Directive\Toc;
 use PhpOffice\PhpWord\Element\AbstractContainer;
@@ -42,6 +46,18 @@ final class Directives
     /** The inline directive this library draws. */
     public const FOOTNOTE = 'footnote';
 
+    /** A picture of a stated size. */
+    public const IMAGE = 'image';
+
+    /** A caption under a picture. */
+    public const CAPTION = 'caption';
+
+    /** A page break. */
+    public const PAGE_BREAK = 'pagebreak';
+
+    /** A section break, and the columns of the section it starts. */
+    public const SECTION = 'section';
+
     /** @var array<string, callable(DirectiveBlock, AbstractContainer, RenderContext): void> */
     private readonly array $block;
 
@@ -67,12 +83,36 @@ final class Directives
      *
      * The handlers are the caller's: a table of contents and a footnote need the
      * document's styles and the format it is written in, and neither is known here.
+     *
+     * The handlers that are not given are not drawn, and the registry then draws
+     * fewer names than {@see self::names()} says: a caller that has no images to
+     * place has no use for a handler that places them.
      */
-    public static function standard(Toc $toc, Footnote $footnote, ?TextStyle $textStyle = null): self
-    {
-        return (new self(textStyle: $textStyle))
+    public static function standard(
+        Toc $toc,
+        Footnote $footnote,
+        ?TextStyle $textStyle = null,
+        ?Image $image = null,
+        ?Caption $caption = null,
+        ?PageBreak $pageBreak = null,
+        ?SectionBreak $section = null,
+    ): self {
+        $registry = (new self(textStyle: $textStyle))
             ->withBlock(self::TOC, $toc)
             ->withInline(self::FOOTNOTE, $footnote);
+
+        foreach ([
+            self::IMAGE => $image,
+            self::CAPTION => $caption,
+            self::PAGE_BREAK => $pageBreak,
+            self::SECTION => $section,
+        ] as $name => $handler) {
+            if ($handler !== null) {
+                $registry = $registry->withBlock($name, $handler);
+            }
+        }
+
+        return $registry;
     }
 
     /**
@@ -85,7 +125,15 @@ final class Directives
      */
     public static function names(): array
     {
-        return [self::TOC, self::FOOTNOTE, TextStyles::RESERVED];
+        return [
+            self::TOC,
+            self::IMAGE,
+            self::CAPTION,
+            self::PAGE_BREAK,
+            self::SECTION,
+            self::FOOTNOTE,
+            TextStyles::RESERVED,
+        ];
     }
 
     /**

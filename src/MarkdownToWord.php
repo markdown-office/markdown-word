@@ -10,9 +10,14 @@ use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
+use MarkdownWord\Render\Directive\Caption;
 use MarkdownWord\Render\Directive\Footnote;
+use MarkdownWord\Render\Directive\Image;
+use MarkdownWord\Render\Directive\PageBreak;
+use MarkdownWord\Render\Directive\SectionBreak;
 use MarkdownWord\Render\Directive\TextStyle;
 use MarkdownWord\Render\Directive\Toc;
+use MarkdownWord\Render\Directive\Usage;
 use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
 use MarkdownWord\Render\FurnitureWriter;
@@ -54,6 +59,18 @@ final class MarkdownToWord implements Converter
     private ?Toc $toc = null;
 
     private ?Footnote $footnotes = null;
+
+    /**
+     * The section handler of the last render, which the renderer asks about as
+     * well: a `::section` starts a section, and the rest of the document is
+     * drawn in it.
+     */
+    private ?SectionBreak $sections = null;
+
+    /**
+     * What the last render asked of a writer that may not be able to carry it.
+     */
+    private ?Usage $usage = null;
 
     /**
      * The format the last write went through, and what that document asked of the
@@ -411,7 +428,14 @@ final class MarkdownToWord implements Converter
     private function write(Format $format, PhpWord $phpWord, ?string $target): string
     {
         $this->format = $format;
-        $this->survey = Survey::of($phpWord, $this->images, $this->vectors, $this->toc, $this->footnotes);
+        $this->survey = Survey::of(
+            $phpWord,
+            $this->images,
+            $this->vectors,
+            $this->toc,
+            $this->footnotes,
+            $this->usage,
+        );
 
         return match ($format) {
             Format::Docx => $target === null
@@ -515,6 +539,24 @@ final class MarkdownToWord implements Converter
         $this->toc = new Toc($config->getOptions(), $styles, $this->format, carries: !$this->detached);
         $this->footnotes = new Footnote($styles, $this->format, carries: !$this->detached);
 
+        // What the document asked of a writer that may not be able to carry it. The
+        // directives record themselves here as they are drawn, because the thing
+        // that is lost is not in the element tree for a survey to find.
+        $this->usage = new Usage();
+
+        $imageResolver = new ImageResolver(
+            $config->getOptions(),
+            $this->images,
+            $this->conversions,
+            $this->vectors,
+            $this->format,
+        );
+
+        // The section handler is the one the renderer asks about as well: a
+        // `::section` starts a section, and the rest of the document is drawn in
+        // it.
+        $this->sections = new SectionBreak(carries: !$this->detached, usage: $this->usage);
+
         // One registry for both renderers: an inline directive is handled by the
         // inline renderer and a block one by the document renderer, and a name means
         // the same thing whichever of the two meets it.
@@ -526,11 +568,15 @@ final class MarkdownToWord implements Converter
             $this->toc,
             $this->footnotes,
             new TextStyle($config->getTextStyles(), $styles),
+            new Image($imageResolver),
+            new Caption($styles),
+            new PageBreak(),
+            $this->sections,
         );
 
         $inlines = new InlineRenderer(
             $styles,
-            new ImageResolver($config->getOptions(), $this->images, $this->conversions, $this->vectors, $this->format),
+            $imageResolver,
             $this->links,
             $html,
             $config->getOptions()->deferredHyperlinks,
@@ -547,6 +593,7 @@ final class MarkdownToWord implements Converter
             new NumberingRegistry($config, $phpWord),
             $html,
             $directives,
+            $this->sections,
         );
 
         $renderer->render($document, $container);

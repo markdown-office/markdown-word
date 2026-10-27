@@ -491,7 +491,7 @@ Three shapes, told apart by their colons and by nothing else:
 ```markdown
 Ship it :badge[PRODUCTION]{type=success} today.
 
-::image[caption]{src="chart.png"}
+::chart[caption]{src="chart.png"}
 
 :::callout{type=info}
 Inside the container.
@@ -511,7 +511,7 @@ sentence you wrote, and `:green[go   fast]` reads as `:green[go fast]`.
 | --- | --- |
 | `:::callout{type=info}` … `:::` | the body, as ordinary Markdown; the fence is gone |
 | `:badge[PRODUCTION]{type=success}` | `:badge[PRODUCTION]{type="success"}` — the same characters back |
-| `::image[caption]{src="chart.png"}` | `::image[caption]{src="chart.png"}` |
+| `::chart[caption]{src="chart.png"}` | `::chart[caption]{src="chart.png"}` |
 
 A container is transparent because its body is the author's own Markdown and the
 fence is not; drawing the fence would put `:callout` in the document as a line of

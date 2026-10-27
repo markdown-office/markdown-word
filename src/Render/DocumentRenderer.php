@@ -28,6 +28,7 @@ use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\LookAndFeel;
 use MarkdownWord\Configuration\Options;
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Render\Directive\SectionBreak;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\Element\ListItemRun;
 use PhpOffice\PhpWord\Element\TextRun;
@@ -64,6 +65,7 @@ final class DocumentRenderer
         private readonly NumberingRegistry $numbering,
         private readonly HtmlFragmentRenderer $html,
         private readonly Directives $directives = new Directives(),
+        private readonly ?SectionBreak $sections = null,
     ) {
     }
 
@@ -79,6 +81,11 @@ final class DocumentRenderer
     {
         foreach ($nodes as $node) {
             $this->renderNode($node, $target, $context);
+
+            // A `::section` starts a new section, and what follows belongs to it.
+            // The directive draws the section; this is where the document is told
+            // to go on in it.
+            $target = $this->sections?->take($target) ?? $target;
         }
     }
 

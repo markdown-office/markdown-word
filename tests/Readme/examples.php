@@ -589,7 +589,7 @@ it('the directives table on the page, run', function () {
 
     // A leaf has no body to descend into, so it is drawn rather than dropped —
     // dropping it would take the paragraph it stood between with it.
-    expect($render("::image[caption]{src=\"chart.png\"}\n"))->toBe('::image[caption]{src="chart.png"}');
+    expect($render("::chart[caption]{src=\"chart.png\"}\n"))->toBe('::chart[caption]{src="chart.png"}');
 });
 
 it('the default parser: what needs extended() and what does not', function () {

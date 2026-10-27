@@ -75,8 +75,11 @@ it('draws a leaf nobody claims as a paragraph of its own', function () {
     // A leaf has no body, so there is nothing left to descend into and the old
     // fallthrough dropped it entirely — label included — leaving a hole where
     // the paragraph had been.
-    expect(renderText('Before.' . "\n\n" . '::image[caption]{src="chart.png"}' . "\n\n" . 'After.'))
-        ->toBe("Before.\n::image[caption]{src=\"chart.png\"}\nAfter.");
+    //
+    // The name is one nothing claims: `::image` is drawn now, so a leaf that is
+    // left alone has to be a leaf whose name this library has no handler for.
+    expect(renderText('Before.' . "\n\n" . '::chart[caption]{src="chart.png"}' . "\n\n" . 'After.'))
+        ->toBe("Before.\n::chart[caption]{src=\"chart.png\"}\nAfter.");
 });
 
 it('leaves a container nobody claims transparent', function () {

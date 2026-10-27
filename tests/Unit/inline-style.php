@@ -11,10 +11,16 @@ use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\UnknownConfigurationKey;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Render\Directive\Caption;
 use MarkdownWord\Render\Directive\Footnote;
+use MarkdownWord\Render\Directive\Image;
+use MarkdownWord\Render\Directive\PageBreak;
+use MarkdownWord\Render\Directive\SectionBreak;
 use MarkdownWord\Render\Directive\TextStyle;
 use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\Directives;
+use MarkdownWord\Render\ImageDescriptionCollector;
+use MarkdownWord\Render\ImageResolver;
 use MarkdownWord\Render\StyleResolver;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Text\TextExtractor;
@@ -376,7 +382,10 @@ it('brings the named styles of a theme that ships with the library', function ()
 });
 
 it('names the directives it draws', function () {
-    expect(Directives::names())->toBe(['toc', 'footnote', 'style']);
+    expect(Directives::names())->toBe([
+        'toc', 'image', 'caption', 'pagebreak', 'section',
+        'footnote', 'style',
+    ]);
 });
 
 it('draws the names it says it draws', function () {
@@ -385,6 +394,10 @@ it('draws the names it says it draws', function () {
         new Toc(new Options(), $styles),
         new Footnote($styles),
         new TextStyle(new TextStyles(), $styles),
+        new Image(new ImageResolver(new Options(), new ImageDescriptionCollector())),
+        new Caption($styles),
+        new PageBreak(),
+        new SectionBreak(),
     );
 
     expect($registry->draws())->toBe(Directives::names());
