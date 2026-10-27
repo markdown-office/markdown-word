@@ -9,6 +9,8 @@ use MarkdownWord\Render\Directives;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use MarkdownWord\Text\TextExtractor;
+use PhpOffice\PhpWord\PhpWord;
 
 /*
  * The directives that place things in a document: a picture, a caption, a page
@@ -230,11 +232,39 @@ it('reports no loss for the columns of a section in a .docx', function () {
         ->and(array_column($losses, 'feature'))->not->toContain('columns');
 });
 
+it('draws a page break as its own source text where there is no page to break', function () {
+    // A page break belongs to a section, and a table cell has none. The answer
+    // is the characters the author wrote, the same answer an unclaimed
+    // directive gets.
+    $phpWord = new PhpWord();
+    $cell = $phpWord->addSection()->addTable()->addRow()->addCell();
+
+    (new MarkdownToWord())->renderIntoContainer("::pagebreak\n", $cell);
+
+    expect(TextExtractor::fromContainer($cell))->toContain('::pagebreak');
+});
+
 it('draws a name nothing claims as its own source text', function () {
     // A name one letter away from a name this library draws is still a name
     // nothing claims, and the registry is not allowed to claim it by accident.
-    expect(TemplateFactory::textOf(wordObjectDocument('::captions[Figure 1]{}')))
+    expect(TemplateFactory::textOf(objectDocument('::captions[Figure 1]{}')))
         ->toBe('::captions[Figure 1]')
         // While the name it does draw is drawn, and not as its own source text.
-        ->and(TemplateFactory::textOf(wordObjectDocument('::caption[Figure 1]{}')))->toBe('Figure 1');
+        ->and(TemplateFactory::textOf(objectDocument('::caption[Figure 1]{}')))->toBe('Figure 1');
 });
+
+it('draws a directive it cannot place as the characters the author wrote', function (string $markdown, string $expected) {
+    // Each of these is a directive in a place it cannot be drawn: a picture with
+    // no file, a caption with no text, a page break in a table cell, a section
+    // break inside a quote. The answer is the same in all four — the characters
+    // the author wrote — and it is the answer an unclaimed directive gets.
+    expect(TemplateFactory::textOf(objectDocument($markdown)))->toContain($expected);
+})->with([
+    'a picture with no file' => ['::image[Logo]{}', '::image[Logo]'],
+    'a caption with no text' => ['::caption{}', '::caption'],
+    'a page break in a table cell' => [
+        "| a | b |\n| --- | --- |\n| ::pagebreak | two |",
+        '::pagebreak',
+    ],
+    'a section break inside a quote' => ['> ::section{columns=2}', '::section{columns="2"}'],
+]);

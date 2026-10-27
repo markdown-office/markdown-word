@@ -30,14 +30,6 @@ final class Usage
     }
 
     /**
-     * Whether a document used a feature.
-     */
-    public function uses(string $feature): bool
-    {
-        return isset($this->used[$feature]);
-    }
-
-    /**
      * Every feature a document used.
      *
      * @return list<string>

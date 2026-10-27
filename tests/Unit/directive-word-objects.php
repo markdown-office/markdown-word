@@ -183,3 +183,30 @@ it('draws a text box in a .docx rather than the characters the author wrote', fu
     expect(TemplateFactory::xmlOf($document))->not->toContain('::textbox')
         ->and(TemplateFactory::xmlOf($document))->toContain('<v:textbox>');
 });
+
+it('draws the outline of a shape in the colour it is given', function () {
+    $document = wordObjectDocument('::shape{type=rect width=6 height=3 line=000000}');
+
+    expect(TemplateFactory::xmlOf($document))->toContain('<v:stroke')
+        ->and(TemplateFactory::xmlOf($document))->toContain('color="#000000"');
+});
+
+it('draws a checkbox that is ticked, and a field with a value in it', function () {
+    $checkbox = wordObjectDocument('::field{name="Agreed" type=checkbox checked=true}');
+    $text = wordObjectDocument('::field{name="Customer" value="Vienna"}');
+
+    expect(TemplateFactory::xmlOf($checkbox))->toContain('FORMCHECKBOX')
+        ->and(TemplateFactory::xmlOf($checkbox))->toContain('<w:checked w:val="1"/>')
+        ->and(TemplateFactory::xmlOf($text))->toContain('<w:default w:val="Vienna"/>');
+});
+
+it('draws a directive it cannot place as the characters the author wrote', function (string $markdown, string $expected) {
+    // A box with no size is not a box, a shape of a type Word cannot draw is not
+    // a shape, and a field of a kind Word does not have is not a field. The
+    // answer is the same in all three — the characters the author wrote.
+    expect(TemplateFactory::textOf(wordObjectDocument($markdown)))->toContain($expected);
+})->with([
+    'a text box with no size' => ['::textbox[Hello]{}', '::textbox[Hello]'],
+    'a shape of a type Word cannot draw' => ['::shape{type=blob}', '::shape{type="blob"}'],
+    'a field of a kind Word does not have' => ['::field{type=slider}', '::field{type="slider"}'],
+]);
