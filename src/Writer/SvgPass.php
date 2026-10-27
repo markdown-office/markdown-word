@@ -384,7 +384,10 @@ final class SvgPass
             'cm' => 72 / 2.54,
             'mm' => 7.2 / 2.54,
             'pc' => 12.0,
-            // `pt` is what PHPWord writes, and CSS treats a bare number the same way.
+            // A picture is measured in pixels, and a pixel is a 96th of an inch.
+            'px' => 72 / 96,
+            // `pt` is what PHPWord writes for a shape, and CSS treats a bare number the
+            // same way.
             default => 1.0,
         };
 

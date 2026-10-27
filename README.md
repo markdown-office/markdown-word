@@ -1361,6 +1361,20 @@ An image is resolved against `imageBasePath`, embedded, and scaled to
 `imageMaxWidth` when it is wider than that — the option is a maximum, so a small
 picture is not enlarged to reach it. `0` disables the scaling.
 
+**A picture is measured in pixels, and the file says so.** PHPWord measures an image
+in pixels and its RTF and ODF writers read the number back as pixels; only its Word
+writer labels the number `pt`, which is how a picture of 96 pixels came to be laid
+out 96 points wide — a third too large, since a point is a 72nd of an inch and a
+pixel a 96th. The unit is therefore stated on the picture rather than left to
+PHPWord's default:
+
+```
+<v:shape type="#_x0000_t75" stroked="f" style="width:96px; height:48px; …">
+```
+
+The same picture is 72 points wide in the `.rtf` and 2.54 cm wide in the `.odt`,
+which is the same size in each format's own unit.
+
 **A format Word cannot embed is converted, and never quietly.** Word has no support
 for WebP and PHPWord has never added any, so a `.webp` is decoded with GD and written
 into the document as PNG. Failing on a format every browser has supported for years
@@ -1447,8 +1461,9 @@ markup untouched. And the picture is found by its position among the document's
 images, the same way its alt text is, rather than by the bytes of the raster beside it:
 PHPWord names media parts as it writes them, so a part name says nothing about which
 picture became it. The size comes from the SVG's own dimensions rather than the
-raster's, because PHPWord reads an image's pixels as points and the raster is the SVG at
-96dpi: a 480-unit diagram would otherwise be laid out a third too large.
+raster's, because the raster is the SVG at 96dpi and its pixel count is a third larger
+than the width the drawing asked for: a 480-unit diagram is 360 points, which is 480
+pixels, and measured from the file it would be laid out 480 pixels wide.
 
 **A file that is there and cannot be used at all is refused.** A truncated download, a
 format this build has no decoder for: `Exception\UnsupportedImageFormat`, naming the
