@@ -676,11 +676,15 @@ element for any of them. A writer that cannot carry one is given the characters
 the author wrote — the same answer an unclaimed directive gets — and the loss is
 reported: *a ::textbox is left out of the document*.
 
+The three of them take these:
+
 | Attribute | |
 | --- | --- |
 | `type` | for `::field`: `textinput` (the default), `checkbox`, `dropdown` |
 | `name` | the name of the form field |
 | `entries` | the choices a dropdown offers, separated by commas |
+| `value` | what a text field starts with |
+| `checked` | for `::field`: `true` leaves a checkbox ticked |
 | `width`, `height` | the size of a box or a shape, in centimetres |
 | `left`, `top` | where a text box floats: from the left margin, and from the top of the paragraph it stands in |
 | `border` | the colour of the line round a text box |
