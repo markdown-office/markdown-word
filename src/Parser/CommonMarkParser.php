@@ -170,6 +170,24 @@ final class CommonMarkParser implements MarkdownParserInterface
         ]);
     }
 
+    /**
+     * The default flavour and the front matter, for a document that configures
+     * itself.
+     *
+     * The two are apart by design: {@see self::withAllExtensions()} carries the front
+     * matter and not the directives, and the default flavour carries the directives and
+     * not the front matter. A document that names a theme in its own `---` block and
+     * writes a word in one of the theme's styles needs both, and there was no parser
+     * that had both.
+     */
+    public static function withFrontMatter(): self
+    {
+        return new self([
+            ...self::FLAVOURS[self::DEFAULT_FLAVOUR],
+            FrontMatterExtension::class,
+        ]);
+    }
+
     public function parse(string $markdown): Document
     {
         $environment = new Environment($this->config);
