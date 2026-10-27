@@ -7,6 +7,7 @@ use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use MarkdownWord\Text\TextExtractor;
 
 /*
  * The three things only a Word document can carry: a text box, a shape, a form
@@ -210,3 +211,28 @@ it('draws a directive it cannot place as the characters the author wrote', funct
     'a shape of a type Word cannot draw' => ['::shape{type=blob}', '::shape{type="blob"}'],
     'a field of a kind Word does not have' => ['::field{type=slider}', '::field{type="slider"}'],
 ]);
+
+it('reads a document with a form field back, and the text the field holds with it', function () {
+    $markdown = '::field{name="Customer" value="Vienna"}';
+
+    $converter = new MarkdownToWord($markdown);
+    $text = TextExtractor::fromPhpWord($converter->toPhpWord($markdown));
+
+    // The text of a form field is the text it holds: the default the author gave
+    // it. The name is the form's identifier — the thing a script fills the field
+    // in by — and it is not the document's wording.
+    expect($text)->toBe('Vienna')
+        ->and($text)->not->toContain('Customer');
+});
+
+it('reads a form field with nothing in it, and a checkbox, as nothing at all', function () {
+    $empty = '::field{name="Customer"}';
+    $tick = '::field{name="Agreed" type=checkbox checked=true}';
+
+    $converter = new MarkdownToWord($empty);
+
+    // A field with no default holds no text, and a checkbox is a box: a reader of
+    // the extracted text finds neither the box nor the name it answers to.
+    expect(TextExtractor::fromPhpWord($converter->toPhpWord($empty)))->toBe('')
+        ->and(TextExtractor::fromPhpWord($converter->toPhpWord($tick)))->toBe('');
+});
