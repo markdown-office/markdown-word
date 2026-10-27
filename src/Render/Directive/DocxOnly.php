@@ -52,6 +52,18 @@ final class DocxOnly
     /** A centimetre in points, which is the unit a box and a shape are measured in. */
     private const POINTS_PER_CENTIMETRE = 72 / 2.54;
 
+    /** The colour of the line round a text box, which has one unless it is told not to. */
+    private const BORDER = '000000';
+
+    /**
+     * The weight of that line, in points.
+     *
+     * A whole number, because PHPWord's own setter takes an integer and a
+     * fraction is quietly rounded to nothing — a box with a border of no weight
+     * is a box with no border.
+     */
+    private const BORDER_SIZE = 1;
+
     /**
      * @param StyleResolver $styles The document's styles, for the source form.
      * @param Format|null $format The format the document is written in, or null for
@@ -70,10 +82,16 @@ final class DocxOnly
      * `::textbox{width=… height=…}` — a floating box with text in it.
      *
      * The label is the text the box holds. The size is in centimetres, as every
-     * size this library names is, and the box is drawn where it stands rather
-     * than floating over the text: a floating box is positioned against the
-     * page, and a position in points is not a thing a document can say in
-     * centimetres without inventing a second unit for it.
+     * size this library names is.
+     *
+     * **The box floats**, and the text flows around it: a box that sat in the
+     * flow would be a paragraph with a border round it, and a paragraph is what
+     * a document can already say. `left` and `top` place it — from the left
+     * margin and from the top of the paragraph it stands in — and both are
+     * centimetres, like every other size here.
+     *
+     * The box has a border, because a box nobody can see is not one. PHPWord
+     * draws a text box without a border unless it is given the colour of one.
      */
     public function drawTextBox(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
     {
@@ -95,9 +113,21 @@ final class DocxOnly
             return;
         }
 
+        $border = $attributes->getString('border') ?? self::BORDER;
+
         $box = $target->addTextBox([
             'width' => self::POINTS_PER_CENTIMETRE * $width,
             'height' => self::POINTS_PER_CENTIMETRE * $height,
+            'left' => self::POINTS_PER_CENTIMETRE * ($attributes->getFloat('left') ?? 0.0),
+            'top' => self::POINTS_PER_CENTIMETRE * ($attributes->getFloat('top') ?? 0.0),
+            'positioning' => 'absolute',
+            'hPos' => 'left',
+            'vPos' => 'top',
+            'hPosRelTo' => 'margin',
+            'vPosRelTo' => 'text',
+            'wrap' => 'square',
+            'borderSize' => self::BORDER_SIZE,
+            'borderColor' => self::colour($border),
         ]);
 
         $box->addText($node->getLabel() ?? '');
@@ -145,13 +175,13 @@ final class DocxOnly
         $fill = $attributes->getString('fill');
 
         if ($fill !== null && $fill !== '') {
-            $style['fill'] = ['color' => $fill];
+            $style['fill'] = ['color' => self::colour($fill)];
         }
 
         $line = $attributes->getString('line');
 
         if ($line !== null && $line !== '') {
-            $style['outline'] = ['color' => $line];
+            $style['outline'] = ['color' => self::colour($line)];
         }
 
         $target->addShape($type, $style);
@@ -218,6 +248,22 @@ final class DocxOnly
     private function carries(): bool
     {
         return ($this->format ?? Format::Docx) === Format::Docx;
+    }
+
+    /**
+     * A colour as VML writes it.
+     *
+     * VML wants a leading `#` — `fillcolor="#ff0000"` — and six hexadecimal digits
+     * without one are not a colour at all: the shape comes out with no fill and
+     * nobody is told. The rest of this library writes colours as six hexadecimal
+     * digits, because that is the spelling `w:color` takes, so the `#` is added
+     * here rather than asked of the author.
+     *
+     * A name is left alone, because a name is a colour in VML too.
+     */
+    private static function colour(string $value): string
+    {
+        return preg_match('/^[0-9A-Fa-f]{6}$/', $value) === 1 ? '#' . $value : $value;
     }
 
     /**

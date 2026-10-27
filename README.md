@@ -682,7 +682,14 @@ reported: *a ::textbox is left out of the document*.
 | `name` | the name of the form field |
 | `entries` | the choices a dropdown offers, separated by commas |
 | `width`, `height` | the size of a box or a shape, in centimetres |
+| `left`, `top` | where a text box floats: from the left margin, and from the top of the paragraph it stands in |
+| `border` | the colour of the line round a text box |
 | `fill`, `line` | the colours a shape is drawn in, six hexadecimal digits without a `#` |
+
+**A text box floats, and the text flows around it.** A box that sat in the flow
+would be a paragraph with a border round it, and a paragraph is what a document
+can already say. `left` and `top` place it, in centimetres like every other
+size here.
 
 **A dropdown turns the document into a form.** Word only lets a reader choose
 from one while the document is protected for forms, so a document with a dropdown

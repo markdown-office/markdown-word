@@ -229,3 +229,12 @@ it('reports no loss for the columns of a section in a .docx', function () {
     expect(TemplateFactory::xmlOf(objectDocument($markdown)))->toContain('<w:cols w:num="2"')
         ->and(array_column($losses, 'feature'))->not->toContain('columns');
 });
+
+it('draws a name nothing claims as its own source text', function () {
+    // A name one letter away from a name this library draws is still a name
+    // nothing claims, and the registry is not allowed to claim it by accident.
+    expect(TemplateFactory::textOf(wordObjectDocument('::captions[Figure 1]{}')))
+        ->toBe('::captions[Figure 1]')
+        // While the name it does draw is drawn, and not as its own source text.
+        ->and(TemplateFactory::textOf(wordObjectDocument('::caption[Figure 1]{}')))->toBe('Figure 1');
+});
