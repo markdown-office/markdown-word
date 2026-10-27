@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace MarkdownWord;
 
 use League\CommonMark\Node\Block\Document;
-use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Render\Directive\Footnote;
+use MarkdownWord\Render\Directive\TextStyle;
 use MarkdownWord\Render\Directive\Toc;
 use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
@@ -26,6 +26,7 @@ use MarkdownWord\Render\LinkPayloadCollector;
 use MarkdownWord\Render\NumberingRegistry;
 use MarkdownWord\Render\StyleRegistrar;
 use MarkdownWord\Render\StyleResolver;
+use MarkdownWord\Theme\LoadedTheme;
 use MarkdownWord\Theme\ThemeResolver;
 use MarkdownWord\Writer\DocxWriter;
 use MarkdownWord\Writer\OdtWriter;
@@ -195,7 +196,9 @@ final class MarkdownToWord implements Converter
         return ConfigurationMerger::resolve(
             commandLine: is_array($this->overrides) ? $this->overrides : $this->overrides?->toArray(),
             frontmatter: $frontmatter,
-            defaults: $theme === null ? $this->config : $this->config->withTheme($theme),
+            defaults: $theme === null
+                ? $this->config
+                : $this->config->withTheme($theme->styles(), $theme->textStyles()),
         );
     }
 
@@ -213,11 +216,11 @@ final class MarkdownToWord implements Converter
      * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
      * @throws Exception\Exception when one of the theme's files cannot be read or parsed
      */
-    private function themeFor(Frontmatter $frontmatter): ?Styles
+    private function themeFor(Frontmatter $frontmatter): ?LoadedTheme
     {
         $name = $this->theme ?? $frontmatter->themeName();
 
-        return $name === null ? null : $this->themes()->resolve($name)->styles();
+        return $name === null ? null : $this->themes()->resolve($name);
     }
 
     private function themes(): ThemeResolver
@@ -505,11 +508,6 @@ final class MarkdownToWord implements Converter
         $this->conversions ??= new ImageConversionCollector();
         $this->vectors ??= new SvgAttachmentCollector();
 
-        // One registry for both renderers: an inline directive is handled by the
-        // inline renderer and a block one by the document renderer, and a name
-        // means the same thing whichever of the two meets it.
-        $directives = new Directives();
-
         // Rebuilt per render rather than cached on the converter, because each reads
         // `$this->format` when it is drawn and a cached one keeps the format of the
         // *first* render. One converter writing a `.docx` and then an `.odt` would hand
@@ -517,9 +515,18 @@ final class MarkdownToWord implements Converter
         $this->toc = new Toc($config->getOptions(), $styles, $this->format, carries: !$this->detached);
         $this->footnotes = new Footnote($styles, $this->format, carries: !$this->detached);
 
-        $directives = $directives
-            ->withBlock('toc', $this->toc)
-            ->withInline('footnote', $this->footnotes);
+        // One registry for both renderers: an inline directive is handled by the
+        // inline renderer and a block one by the document renderer, and a name means
+        // the same thing whichever of the two meets it.
+        //
+        // The theme's named styles are the names this library draws that are not fixed:
+        // they are the ones the theme brings, so the registry is handed them rather than
+        // holding them.
+        $directives = Directives::standard(
+            $this->toc,
+            $this->footnotes,
+            new TextStyle($config->getTextStyles(), $styles),
+        );
 
         $inlines = new InlineRenderer(
             $styles,

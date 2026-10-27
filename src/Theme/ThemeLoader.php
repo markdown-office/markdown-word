@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord\Theme;
 
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Configuration\TextStyles;
 use MarkdownWord\Configuration\Validator;
 use MarkdownWord\Exception\Exception;
 use MarkdownWord\Exception\MalformedTheme;
@@ -29,6 +30,11 @@ use Symfony\Component\Yaml\Yaml;
  * {@see \MarkdownWord\Configuration\Validator} checks a `styles:` block against — so a
  * typo in a theme fails here rather than reaching a document that comes out looking as
  * though the line had never been written.
+ *
+ * The `textStyles` key beside them is not a slot but a set of named styles, and it is
+ * checked by {@see \MarkdownWord\Configuration\TextStyles}: a style that styles
+ * nothing, a style whose properties name an attribute that does not exist and a style
+ * called `style` are all refused here.
  *
  * Each of the two files is resolved and held to the caller's
  * {@see \MarkdownWord\Filesystem\PathScope} before it is read. Checking the directory is
@@ -63,10 +69,13 @@ final class ThemeLoader
             throw ThemeNotFound::noManifest($written);
         }
 
+        $read = $this->styles($directory, $files, $written);
+
         return new LoadedTheme(
             $directory,
             Theme::fromArray($this->mapping($manifest, 'a theme'), $manifest),
-            new Styles($this->styles($directory, $files, $written)),
+            new Styles($read['slots']),
+            new TextStyles($read['text']),
         );
     }
 
@@ -108,10 +117,13 @@ final class ThemeLoader
         // the `styles.yml` that belongs to it is.
         $directory = dirname($manifest);
 
+        $read = $this->styles($directory, $files, $written);
+
         return new LoadedTheme(
             $directory,
             Theme::fromArray($this->mapping($manifest, 'a theme'), $manifest),
-            new Styles($this->styles($directory, $files, $written)),
+            new Styles($read['slots']),
+            new TextStyles($read['text']),
         );
     }
 
@@ -143,7 +155,7 @@ final class ThemeLoader
     }
 
     /**
-     * The slots, every one checked against the slots this library really has.
+     * The slots and the text styles a theme's `styles.yml` carries.
      *
      * Checked twice, on purpose. The slot *names* are checked here so an unknown one can
      * be reported as {@see UnknownStyleSlot} next to the file that has it — the type a
@@ -153,7 +165,13 @@ final class ThemeLoader
      * block gets. Without it a theme is the one place a typo can reach PHPWord as if it
      * were a value, and it arrives in a document with nothing to say it was never read.
      *
-     * @return array<string, mixed>
+     * The text styles are a key of their own rather than a slot: `textStyles` is not a
+     * style of the document but the named styles a document may write a word in, and
+     * the loader would otherwise refuse it as a slot that does not exist. They are
+     * checked by {@see \MarkdownWord\Configuration\TextStyles}, which knows the eight
+     * attributes they may carry.
+     *
+     * @return array{slots: array<string, mixed>, text: array<string, array<string, mixed>>}
      *
      * @throws UnknownStyleSlot
      * @throws MalformedTheme
@@ -164,27 +182,42 @@ final class ThemeLoader
         $file = $this->contained($files, $directory . '/' . self::STYLES_FILE, $name);
 
         if (!is_file($file)) {
-            return [];
+            return ['slots' => [], 'text' => []];
         }
 
         $known = array_keys(Styles::defaults());
-        $styles = [];
+        $slots = [];
+        $text = [];
 
         foreach ($this->mapping($file, 'a mapping of style slots to styles') as $slot => $style) {
             $slot = (string) $slot;
+
+            if ($slot === TextStyles::KEY) {
+                $text = self::normalise($style);
+
+                if (!is_array($text)) {
+                    throw MalformedTheme::notAMapping(
+                        $file,
+                        'a mapping of style names to styles',
+                        self::describe($text),
+                    );
+                }
+
+                continue;
+            }
 
             if (!in_array($slot, $known, true)) {
                 throw UnknownStyleSlot::named($file, $slot, $known);
             }
 
-            $styles[$slot] = self::normalise($style);
+            $slots[$slot] = self::normalise($style);
         }
 
         // After `normalise()`, so a colour read as an integer is checked as the string it
         // is about to become rather than refused for being the wrong type.
-        Validator::assertValid(['styles' => $styles]);
+        Validator::assertValid(['styles' => $slots]);
 
-        return $styles;
+        return ['slots' => $slots, 'text' => $text];
     }
 
     /**
