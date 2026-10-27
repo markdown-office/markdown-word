@@ -6,6 +6,7 @@ namespace MarkdownWord\Configuration;
 
 use MarkdownWord\Exception\InvalidConfiguration;
 use MarkdownWord\Exception\InvalidConfigurationValue;
+use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\UnknownConfigurationKey;
 
 /**
@@ -18,12 +19,15 @@ use MarkdownWord\Exception\UnknownConfigurationKey;
  * points as every other size in this library is.
  *
  * The names are folded, because a directive name is matched without regard to case
- * and `:Brand[…]` is the same word to a reader as `:brand[…]`.
+ * and `:Brand[…]` is the same word to a reader as `:brand[…]`. The theme's own
+ * spelling is kept beside the folded one, because that is the spelling the author
+ * has to change.
  *
- * A style that styles nothing, a style whose properties name an attribute that does
- * not exist and a style called `style` are refused here rather than in the renderer:
- * a theme is read once, and a mistake in it is worth saying so about before a byte
- * of the document is built.
+ * A style that is not a set of properties, a style that styles nothing, a style
+ * whose properties name an attribute that does not exist, a value that is not one,
+ * a style called `style` and two names for one style are refused here rather than
+ * in the renderer: a theme is read once, and a mistake in it is worth saying so
+ * about before a byte of the document is built.
  */
 final class TextStyles
 {
@@ -55,17 +59,42 @@ final class TextStyles
     /** The key a theme's `styles.yml` carries them under. */
     public const KEY = 'textStyles';
 
-    /** @var array<string, array<string, mixed>> */
-    private array $styles;
+    /**
+     * The styles, keyed by the name they are found under.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $styles = [];
 
     /**
-     * @param array<string, array<string, mixed>> $styles
+     * The name the theme wrote each style under, by the name it is found under.
      *
-     * @throws InvalidConfiguration when a style is not one that can be drawn
+     * @var array<string, string>
+     */
+    private array $written = [];
+
+    /**
+     * @param array<string, array<string, mixed>> $styles The styles, keyed by the name
+     *        they are written under.
+     *
+     * @throws InvalidConfiguration
      */
     public function __construct(array $styles = [])
     {
-        $this->styles = self::validated($styles);
+        [$this->styles, $this->written] = self::validated($styles);
+    }
+
+    /**
+     * A style's name as the suite folds it.
+     *
+     * Without regard to case and without the space around it: a style's name is a word
+     * to a reader, and `:Brand[Bakery]` and `:brand[Bakery]` are the same word written
+     * twice. The slides half folds its names the same way, and the directives package
+     * folds the names of the directives themselves.
+     */
+    public static function fold(string $name): string
+    {
+        return strtolower(trim($name));
     }
 
     /**
@@ -73,7 +102,7 @@ final class TextStyles
      */
     public function has(string $name): bool
     {
-        return isset($this->styles[strtolower($name)]);
+        return isset($this->styles[self::fold($name)]);
     }
 
     /**
@@ -83,33 +112,65 @@ final class TextStyles
      */
     public function get(string $name): ?array
     {
-        return $this->styles[strtolower($name)] ?? null;
+        return $this->styles[self::fold($name)] ?? null;
     }
 
     /**
+     * The names this theme has, in the order its file listed them and as it spelled
+     * them.
+     *
      * @return list<string>
      */
     public function names(): array
     {
-        return array_keys($this->styles);
+        return array_values($this->written);
     }
 
     /**
+     * The styles, keyed by the name they are written under.
+     *
      * @return array<string, array<string, mixed>>
      */
     public function toArray(): array
     {
-        return $this->styles;
+        $styles = [];
+
+        foreach ($this->styles as $folded => $properties) {
+            $styles[$this->written[$folded]] = $properties;
+        }
+
+        return $styles;
     }
 
     /**
      * Styles merged over the ones already here, a style's properties among them.
      *
+     * The names are folded, so a style of the same name in another case is the same
+     * style and its properties are merged into the one already here — under the name
+     * it was written under first, because that is the spelling the author has to
+     * change.
+     *
      * @param array<string, array<string, mixed>> $styles
      */
     public function withAll(array $styles): self
     {
-        return new self(array_replace_recursive($this->styles, $styles));
+        $incoming = new self($styles);
+
+        $merged = $this->toArray();
+        $written = $this->written;
+
+        foreach ($incoming->styles as $folded => $properties) {
+            if (isset($written[$folded])) {
+                $merged[$written[$folded]] = array_replace_recursive($merged[$written[$folded]], $properties);
+
+                continue;
+            }
+
+            $merged[$incoming->written[$folded]] = $properties;
+            $written[$folded] = $incoming->written[$folded];
+        }
+
+        return new self($merged);
     }
 
     /**
@@ -150,20 +211,28 @@ final class TextStyles
     }
 
     /**
-     * @param array<string, mixed> $styles
+     * The styles that can be drawn, and the name each of them was written under.
      *
-     * @return array<string, array<string, mixed>>
+     * @param array<string, array<string, mixed>> $styles
+     *
+     * @return array{0: array<string, array<string, mixed>>, 1: array<string, string>}
      *
      * @throws InvalidConfiguration
      */
     private static function validated(array $styles): array
     {
         $validated = [];
+        $written = [];
 
         foreach ($styles as $name => $properties) {
             $name = (string) $name;
+            $folded = self::fold($name);
 
-            if (strtolower($name) === self::RESERVED) {
+            if (isset($written[$folded])) {
+                throw MalformedTheme::duplicateStyle($name, $written[$folded]);
+            }
+
+            if ($folded === self::RESERVED) {
                 throw new InvalidConfiguration(sprintf(
                     'The style "%s" cannot be defined: "%s" is the name the raw form takes.',
                     $name,
@@ -190,10 +259,11 @@ final class TextStyles
                 self::assertUsable((string) $attribute, $value, $name);
             }
 
-            $validated[strtolower($name)] = $properties;
+            $validated[$folded] = $properties;
+            $written[$folded] = $name;
         }
 
-        return $validated;
+        return [$validated, $written];
     }
 
     /**

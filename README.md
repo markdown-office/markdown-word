@@ -1328,12 +1328,20 @@ textStyles:
 ```
 
 The properties are the same eight the inline attributes have, and a size is in points as it
-is everywhere else. Three things are refused when the theme is read, because each of them
+is everywhere else. Six things are refused when the theme is read, because each of them
 is a mistake that would otherwise reach the document looking as though the line had never
-been written: a style that names an attribute that does not exist, a style that carries no
-property at all, and a style called `style` — that word is reserved for the raw form, and
-a theme may not take it. A theme without the key has no named styles, and every named form
+been written: a style that is not a set of properties at all, a style that carries no
+property, a style whose properties name an attribute that does not exist, a value that is
+not one — a colour, a size, a weight or a face, refused the same way — a style called
+`style`, that word being reserved for the raw form, and a theme that names one style
+twice, in two spellings. A theme without the key has no named styles, and every named form
 written against it is drawn as its own source text.
+
+**A style's name is a word, and a word does not care about case.** A theme that spells a
+style `Brand` has it under `:brand[…]` and `:Brand[…]` alike, the way the directives
+package folds the names of the directives themselves. The names this library publishes
+spell the styles the way the theme wrote them, because that is the spelling the author
+has to change.
 
 A theme applies to a document rendered into a template too. The template keeps its own
 style definitions, and the theme is written onto the text as direct formatting over them

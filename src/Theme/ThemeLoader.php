@@ -32,9 +32,10 @@ use Symfony\Component\Yaml\Yaml;
  * though the line had never been written.
  *
  * The `textStyles` key beside them is not a slot but a set of named styles, and it is
- * checked by {@see \MarkdownWord\Configuration\TextStyles}: a style that styles
- * nothing, a style whose properties name an attribute that does not exist and a style
- * called `style` are all refused here.
+ * checked by {@see \MarkdownWord\Configuration\TextStyles}: a style that is not a set
+ * of properties, one that styles nothing, one that names an attribute that does not
+ * exist, one whose value is not what the attribute takes, one called `style` and two
+ * names for one style are all refused here.
  *
  * Each of the two files is resolved and held to the caller's
  * {@see \MarkdownWord\Filesystem\PathScope} before it is read. Checking the directory is

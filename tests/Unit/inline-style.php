@@ -7,6 +7,7 @@ use MarkdownWord\Configuration\Options;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Configuration\TextStyles;
 use MarkdownWord\Exception\InvalidConfiguration;
+use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\UnknownConfigurationKey;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
@@ -206,6 +207,85 @@ it('holds a label that is Markdown and draws one that is not', function () {
 
     expect($held)->toBeGreaterThan(0)
         ->and($drawn)->toBeGreaterThan(0);
+});
+
+it('finds a style under the name it is folded to', function () {
+    // A style's name is a word to a reader, and `:Brand[Bakery]` and `:brand[Bakery]`
+    // are the same word written twice. The folding is one answer to one question: the
+    // names are folded, the lookup is folded, and the space around a name is part of
+    // it rather than a second question.
+    $styles = new TextStyles(['Brand' => ['color' => '0B5CAB']]);
+
+    expect($styles->has('brand'))->toBeTrue()
+        ->and($styles->has('BRAND'))->toBeTrue()
+        ->and($styles->has(' Brand '))->toBeTrue()
+        ->and($styles->get('brand'))->toBe(['color' => '0B5CAB'])
+        ->and(TextStyles::fold(' Brand '))->toBe('brand');
+});
+
+it('merges a style of the same name over the one already there', function () {
+    // The names are folded, so `brand` and `Brand` are one style and the properties
+    // are merged into the one already there — under the name it was written under
+    // first, because that is the spelling the author has to change.
+    $styles = (new TextStyles(['Brand' => ['color' => '0B5CAB', 'bold' => true]]))
+        ->withAll(['brand' => ['size' => 12]]);
+
+    expect($styles->names())->toBe(['Brand'])
+        ->and($styles->get('Brand'))->toBe(['color' => '0B5CAB', 'bold' => true, 'size' => 12]);
+});
+
+it('draws a style the theme spells with a capital letter, whichever case the document writes it in', function () {
+    [$root, $themes] = styleThemes();
+    writeStyleTheme($themes, 'house', "textStyles:\n  Brand:\n    color: \"0B5CAB\"\n");
+
+    $converter = (new MarkdownToWord('# T', directory: $root))->withTheme('house');
+    $markdown = "A :brand[Bakery] and a :Brand[Bakery] here.\n";
+
+    expect(styleText($converter, $markdown))->toBe('A Bakery and a Bakery here.');
+});
+
+it('names a style the way the theme spelled it', function () {
+    // The author's change is in the theme, so the spelling the theme wrote is the one
+    // to name.
+    [$root, $themes] = styleThemes();
+    writeStyleTheme($themes, 'house', "textStyles:\n  Brand:\n    color: \"0B5CAB\"\n");
+
+    $converter = (new MarkdownToWord('# T', directory: $root))->withTheme('house');
+    $config = $converter->configurationFor($converter->parse('# T'));
+
+    expect($config->getTextStyles()->names())->toBe(['Brand']);
+});
+
+it('publishes the names the theme spelled', function () {
+    $styles = new StyleResolver(Configuration::create());
+    $registry = Directives::standard(
+        new Toc(new Options(), $styles),
+        new Footnote($styles),
+        new TextStyle(new TextStyles(['Brand' => ['color' => '0B5CAB']]), $styles),
+    );
+
+    expect($registry->draws())->toContain('Brand');
+});
+
+it('refuses a theme that names one text style twice, in two spellings', function () {
+    // The names are folded, so `Brand` and `brand` are one name: a theme carrying both
+    // has two styles a document cannot tell apart, and the one a document reaches is
+    // the one written last.
+    [$root, $themes] = styleThemes();
+    writeStyleTheme($themes, 'bad', "textStyles:\n  Brand:\n    color: \"0B5CAB\"\n  brand:\n    color: \"0B5CAB\"\n");
+
+    expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
+        ->toThrow(MalformedTheme::class, 'is the same style as');
+});
+
+it('refuses a text style named with the reserved word in another case', function () {
+    // The reserved word is folded with the rest of the names, because `Style` is the
+    // same word as `style`.
+    [$root, $themes] = styleThemes();
+    writeStyleTheme($themes, 'bad', "textStyles:\n  Style:\n    color: \"0B5CAB\"\n");
+
+    expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
+        ->toThrow(InvalidConfiguration::class, '"style" is the name the raw form takes.');
 });
 
 it('renders a theme with no text styles, and draws a named style against it as source text', function () {

@@ -8,10 +8,11 @@ namespace MarkdownWord\Exception;
  * A theme's own file does not describe a theme.
  *
  * The writer of a `theme.yml` is usually a person or a model, and both can act on what
- * is said here, so every failure names the file it came from and what would have worked
- * instead. It is an {@see InvalidConfiguration} rather than a parse error because the
- * YAML is usually *valid* — it is the description of the theme that is wrong, and the
- * file that says so is the configuration.
+ * is said here, so every failure names what would have worked instead, and the file it
+ * came from where there is one — a document's own configuration brings named styles too,
+ * and there is no file to name then. It is an {@see InvalidConfiguration} rather than a
+ * parse error because the YAML is usually *valid* — it is the description of the theme
+ * that is wrong, and the file that says so is the configuration.
  */
 final class MalformedTheme extends InvalidConfiguration
 {
@@ -42,6 +43,22 @@ final class MalformedTheme extends InvalidConfiguration
             $key,
             $file,
             implode(', ', $known),
+        ));
+    }
+
+    /**
+     * Two text styles whose names are the same word.
+     *
+     * The names are folded, so `Brand` and `brand` are one name: a theme that carries
+     * both has two styles a document cannot tell apart, and the one a document reaches
+     * is the one that happens to be written last.
+     */
+    public static function duplicateStyle(string $style, string $other): self
+    {
+        return new self(sprintf(
+            'The style "%s" is the same style as "%s": a style\'s name is a word, and a theme names one style once.',
+            $style,
+            $other,
         ));
     }
 }

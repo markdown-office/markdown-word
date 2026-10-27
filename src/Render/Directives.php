@@ -214,9 +214,12 @@ final class Directives
     /**
      * `trim()` as well as lowercasing, because the RFC allows `:: toc` with a
      * space and a reader would not think those were two different directives.
+     *
+     * The folding a theme's style names are folded by as well, so a name is matched
+     * one way in this half whichever kind of name it is.
      */
     private static function foldName(string $name): string
     {
-        return strtolower(trim($name));
+        return TextStyles::fold($name);
     }
 }

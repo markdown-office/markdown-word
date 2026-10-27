@@ -82,7 +82,7 @@ final class TextStyle
      */
     public function claims(DirectiveInline $node): bool
     {
-        $name = self::fold($node->getName());
+        $name = TextStyles::fold($node->getName());
 
         return $name === TextStyles::RESERVED || $this->styles->has($name);
     }
@@ -141,7 +141,7 @@ final class TextStyle
     private function attributesFor(DirectiveInline $node): ?array
     {
         $attributes = $node->getAttributes()->toArray();
-        $name = self::fold($node->getName());
+        $name = TextStyles::fold($node->getName());
 
         if ($name === TextStyles::RESERVED) {
             return $attributes === [] ? null : $attributes;
@@ -168,14 +168,5 @@ final class TextStyle
         }
 
         return false;
-    }
-
-    /**
-     * Directive names are matched without regard to case, and the theme's styles are
-     * folded the same way.
-     */
-    private static function fold(string $name): string
-    {
-        return strtolower(trim($name));
     }
 }

@@ -71,6 +71,18 @@ All notable changes to this project are documented here. The format follows
   sources and runs one corpus of labels through them, and the two halves agree on every
   label in it.
 
+- **A style's name is a word, and a word does not care about case.** A theme that spelled
+  a style `Brand` had it under `:Brand[…]` alone, so a document writing `:brand[Bakery]`
+  found nothing, and the names this library published were the folded ones rather than
+  the spelling the theme wrote — which is the spelling the author has to change. The
+  names are folded now, the way the directives package folds the names of the directives
+  themselves, and the names this library publishes spell the styles the way the theme
+  wrote them.
+
+  A theme that names one style twice, in two spellings, is refused rather than letting
+  one of the two be reached at random. The reserved word is folded with the rest of the
+  names, so a theme naming a style `Style` is refused as one naming `style`.
+
 - **A document's theme is found beside the document.** The `theme:` a document names was
   resolved against the *process's* working directory, so a document that said
   `theme: corporate` found it only when the run happened to start in the document's own
