@@ -12,6 +12,7 @@ use MarkdownWord\Exception\UnknownConfigurationKey;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Render\Directive\Caption;
+use MarkdownWord\Render\Directive\DocxOnly;
 use MarkdownWord\Render\Directive\Footnote;
 use MarkdownWord\Render\Directive\Image;
 use MarkdownWord\Render\Directive\PageBreak;
@@ -383,7 +384,7 @@ it('brings the named styles of a theme that ships with the library', function ()
 
 it('names the directives it draws', function () {
     expect(Directives::names())->toBe([
-        'toc', 'image', 'caption', 'pagebreak', 'section',
+        'toc', 'image', 'caption', 'pagebreak', 'section', 'textbox', 'shape', 'field',
         'footnote', 'style',
     ]);
 });
@@ -398,6 +399,7 @@ it('draws the names it says it draws', function () {
         new Caption($styles),
         new PageBreak(),
         new SectionBreak(),
+        new DocxOnly($styles),
     );
 
     expect($registry->draws())->toBe(Directives::names());

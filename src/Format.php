@@ -87,6 +87,9 @@ enum Format: string
                 'header',
                 'footer',
                 'footnotes',
+                'text-box',
+                'shape',
+                'form-field',
             ],
             // `Writer\RTF\Element\AbstractElement::writeOpening()` wants a
             // `Style\Paragraph` and this library's named styles are `Style\Font`;
@@ -106,6 +109,9 @@ enum Format: string
                 'svg-vector',
                 'table-of-contents',
                 'footnotes',
+                'text-box',
+                'shape',
+                'form-field',
                 'columns',
             ],
         };
@@ -173,6 +179,9 @@ enum Format: string
         'header' => 'the running head at the top of every page is left out',
         'footer' => 'the running foot at the bottom of every page is left out',
         'footnotes' => 'a footnote is left as the text :footnote[...] rather than as a note at the foot of the page',
+        'text-box' => 'a ::textbox is left out of the document',
+        'shape' => 'a ::shape is left out of the document',
+        'form-field' => 'a ::field is left out of the document',
         'columns' => 'the columns of a ::section are lost',
     ];
 }

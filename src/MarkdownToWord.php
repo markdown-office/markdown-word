@@ -11,6 +11,7 @@ use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Render\Directive\Caption;
+use MarkdownWord\Render\Directive\DocxOnly;
 use MarkdownWord\Render\Directive\Footnote;
 use MarkdownWord\Render\Directive\Image;
 use MarkdownWord\Render\Directive\PageBreak;
@@ -572,6 +573,7 @@ final class MarkdownToWord implements Converter
             new Caption($styles),
             new PageBreak(),
             $this->sections,
+            new DocxOnly($styles, $this->format, $this->usage),
         );
 
         $inlines = new InlineRenderer(

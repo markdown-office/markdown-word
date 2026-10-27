@@ -74,7 +74,10 @@ it('names every directive it draws', function () {
     expect(Directives::names())->toContain('image')
         ->and(Directives::names())->toContain('caption')
         ->and(Directives::names())->toContain('pagebreak')
-        ->and(Directives::names())->toContain('section');
+        ->and(Directives::names())->toContain('section')
+        ->and(Directives::names())->toContain('textbox')
+        ->and(Directives::names())->toContain('shape')
+        ->and(Directives::names())->toContain('field');
 });
 
 it('draws a picture at the size the directive asks for', function () {

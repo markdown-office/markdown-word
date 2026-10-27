@@ -8,6 +8,7 @@ use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration\TextStyles;
 use MarkdownWord\Render\Directive\Caption;
+use MarkdownWord\Render\Directive\DocxOnly;
 use MarkdownWord\Render\Directive\Footnote;
 use MarkdownWord\Render\Directive\Image;
 use MarkdownWord\Render\Directive\PageBreak;
@@ -58,6 +59,15 @@ final class Directives
     /** A section break, and the columns of the section it starts. */
     public const SECTION = 'section';
 
+    /** A floating box with text in it. */
+    public const TEXT_BOX = 'textbox';
+
+    /** A shape. */
+    public const SHAPE = 'shape';
+
+    /** A form field. */
+    public const FIELD = 'field';
+
     /** @var array<string, callable(DirectiveBlock, AbstractContainer, RenderContext): void> */
     private readonly array $block;
 
@@ -96,6 +106,7 @@ final class Directives
         ?Caption $caption = null,
         ?PageBreak $pageBreak = null,
         ?SectionBreak $section = null,
+        ?DocxOnly $docxOnly = null,
     ): self {
         $registry = (new self(textStyle: $textStyle))
             ->withBlock(self::TOC, $toc)
@@ -110,6 +121,13 @@ final class Directives
             if ($handler !== null) {
                 $registry = $registry->withBlock($name, $handler);
             }
+        }
+
+        if ($docxOnly !== null) {
+            $registry = $registry
+                ->withBlock(self::TEXT_BOX, $docxOnly->drawTextBox(...))
+                ->withBlock(self::SHAPE, $docxOnly->drawShape(...))
+                ->withBlock(self::FIELD, $docxOnly->drawField(...));
         }
 
         return $registry;
@@ -131,6 +149,9 @@ final class Directives
             self::CAPTION,
             self::PAGE_BREAK,
             self::SECTION,
+            self::TEXT_BOX,
+            self::SHAPE,
+            self::FIELD,
             self::FOOTNOTE,
             TextStyles::RESERVED,
         ];
