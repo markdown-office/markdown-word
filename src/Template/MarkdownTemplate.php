@@ -96,6 +96,9 @@ final class MarkdownTemplate
      *        Markdown being inserted. An array is the form to prefer here: a
      *        `Configuration` names every setting there is and would put all of them,
      *        defaults included, on top.
+     * @param string|null $directory The directory the document being inserted was read
+     *        from, which is where a theme beside it is found. Null for a document handed
+     *        in as a string, which has no directory of its own.
      * @throws TemplateNotFound when the template is not a file.
      */
     public function __construct(
@@ -105,6 +108,7 @@ final class MarkdownTemplate
         private readonly ?MarkdownParserInterface $parser = null,
         Configuration|array|null $overrides = null,
         ?string $theme = null,
+        ?string $directory = null,
     ) {
         if (!is_file($template)) {
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));
@@ -125,6 +129,7 @@ final class MarkdownTemplate
             $parser,
             $overrides,
             detached: true,
+            directory: $directory,
         );
 
         // Applied here rather than by the caller, because this converter is built with a

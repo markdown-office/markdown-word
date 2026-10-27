@@ -1190,12 +1190,25 @@ styles:
 ---
 ```
 
-A name is resolved in `./themes/<name>` beside the working directory first, then among
-the themes that ship with the package, and anything with a `/` in it is read as a path
-instead. A name that does not resolve is an error naming the ones that do — never a
-silent fallback to `default`, which would be a document in the wrong colours with nothing
-in the output to say so. A path is resolved with `realpath()` and held to the working
-directory and the built-in themes, because `theme:` is a path a document writes.
+A name is resolved in `./themes/<name>` beside the document first, then in
+`./themes/<name>` beside the working directory, then among the themes that ship with
+the package, and anything with a `/` in it is read as a path instead — written from
+beside the document, the way a relative image path is. A name that does not resolve is
+an error naming the ones that do — never a silent fallback to `default`, which would be
+a document in the wrong colours with nothing in the output to say so. A path is resolved
+with `realpath()` and held to the document's own directory, the working directory and
+the built-in themes, because `theme:` is a path a document writes.
+
+**A theme is found beside the document.** The library is told where the document is,
+because a document handed over as a string has no directory of its own:
+
+```php
+(new MarkdownToWord($markdown, directory: '/srv/project'))->save('report.docx');
+```
+
+A theme beside the document is the one that travels with it, so it is looked for
+before the working directory's own `themes/`. Without the directory, the working
+directory is what a name is looked for in.
 
 `styles.yml` takes the slot names from `Styles::defaults()` and nothing else, and is
 checked the way a `styles:` block is: an unknown slot, an unknown property inside one, a

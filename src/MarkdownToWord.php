@@ -100,6 +100,12 @@ final class MarkdownToWord implements Converter
      *        what they are instead, because emitting them here leaves a document carrying
      *        a footnote reference to a note the package does not contain, and a run of
      *        invisible separators where a table of contents should be.
+     * @param string|null $directory The directory the document was read from, which is
+     *        where a theme beside it is found: a document names a theme, and the theme
+     *        that travels with it is the one next to it rather than the one next to
+     *        wherever the program happens to be. Null for a document handed in as a
+     *        string, which has no directory of its own; the working directory is what a
+     *        name resolves against then.
      */
     public function __construct(
         private readonly ?string $source = null,
@@ -107,6 +113,7 @@ final class MarkdownToWord implements Converter
         private readonly ?MarkdownParserInterface $parser = null,
         private readonly Configuration|array|null $overrides = null,
         private readonly bool $detached = false,
+        private readonly ?string $directory = null,
     ) {
     }
 
@@ -215,7 +222,10 @@ final class MarkdownToWord implements Converter
 
     private function themes(): ThemeResolver
     {
-        return new ThemeResolver(workingDirectory: getcwd() ?: '.');
+        return new ThemeResolver(
+            workingDirectory: getcwd() ?: '.',
+            documentDirectory: $this->directory,
+        );
     }
 
     public function parse(string $markdown): Document

@@ -236,6 +236,15 @@ it('does not claim again what the code does not do', function (string $claim) {
     // A link is followed whether its target is there or not: `is_link()` is true for
     // a dangling one, and `readlink()` names the target all the same.
     'a link is only followed when its target is there' => 'needs its target to exist',
+    // Two claims about where a theme is looked for, both of which this change made
+    // false. A theme's name is resolved beside the document now, so a bare name lands
+    // on the document's own directory rather than on the working directory's, and a
+    // relative path is written from beside the document as well — which is what a
+    // `template_file:` and a relative image path have always done here. The template's
+    // own docblock said the theme differed from it in exactly that, and it no longer
+    // does.
+    'a bare name lands on the working directory itself' => 'lands on the working directory itself',
+    'the theme differs from the template in where a relative name is written from' => 'The difference from a theme is where a relative name is written from',
 ]);
 
 it('has no decorative dividers in it', function () {

@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A document's theme is found beside the document.** The `theme:` a document names was
+  resolved against the *process's* working directory, so a document that said
+  `theme: corporate` found it only when the run happened to start in the document's own
+  directory — and a build script that converts a document from somewhere else got an
+  error naming a theme the author had written beside the document. A document travels,
+  and the theme beside it travels with it, so a bare name is looked for in
+  `./themes/<name>` beside the document first and in the working directory's own
+  `./themes/<name>` second. The document's own directory is a root of the scope a
+  document-written path is held to, and a relative theme path is written from it — the
+  rule a `template_file:` and a relative image path already follow.
+
+  The library has to be told where the document is, because a document handed over as a
+  string has no directory of its own:
+
+  ```php
+  (new MarkdownToWord($markdown, directory: '/srv/project'))->save('report.docx');
+  ```
+
+### Changed
+
+- **`ThemeResolver` looks in the roots it is given.** They were read into the scope a
+  document-written path is held to and never looked in, so a shared library of themes
+  beside the project had to be named by its full path. A name is now looked for in each
+  of them directly, the way it is in the themes that ship with this package, and they
+  are named in the list of the themes that resolve — so a failure names them too.
+
 ## [0.2.2] - 2026-10-26
 
 ### Changed
