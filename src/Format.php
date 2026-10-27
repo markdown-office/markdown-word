@@ -69,6 +69,16 @@ enum Format: string
             // and neither `Writer\ODText\Element\Table` nor
             // `Writer\ODText\Style\Paragraph` writes a border or a background.
             //
+            // A cell's alignment and a header row's weight go for the same reason,
+            // and it is the walk rather than the writer:
+            // `Writer\ODText\Part\Content::getContainerStyle()` reads a table as a
+            // table and never descends into its cells, so the paragraph style of the
+            // runs inside a cell never becomes an automatic style. The cell is
+            // written as `text:style-name="Normal"`, and everything that style
+            // carried goes with it. A paragraph outside a table keeps its
+            // alignment — `Style\Paragraph` writes `fo:text-align` — so the loss is
+            // the cell's and not the writer's.
+            //
             // What is caught is a slot pointed at a style of the caller's own, which
             // is what {@see \MarkdownWord\Writer\Survey} asks about — it records
             // the loss for a paragraph whose whole style is that name, and for
@@ -91,6 +101,7 @@ enum Format: string
                 'named-styles',
                 'numbered-lists',
                 'table-borders',
+                'cell-alignment',
                 'cell-emphasis',
                 'shading',
                 'paragraph-border',

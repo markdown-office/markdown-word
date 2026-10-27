@@ -49,7 +49,7 @@ past.
 | `18-round-trip.md` | `01-kitchen-sink.docx` read back into Markdown, for comparing the two side by side. |
 | `19-vector.docx` | An SVG embedded as a **vector** beside its raster, which is the only way Word holds one. Not built where `ext-imagick` is absent; the build says so rather than failing. |
 | `20-formats.docx` | One page holding every construct the three output formats are asked about, as the `.docx` the other two are measured against. |
-| `20-formats.odt` | The same page as an OpenDocument Text. The headings, the quote and the spacing are the same as in the `.docx`; the table has no borders, its header row is not bold, and the ordered list comes out bulleted. |
+| `20-formats.odt` | The same page as an OpenDocument Text. The headings, the quote and the spacing are the same as in the `.docx`; the table has no borders, its header row is not bold, its columns are no longer aligned, and the ordered list comes out bulleted. |
 | `20-formats.rtf` | The same page as Rich Text. There is no list in it at all, the code block has no background and no colour, and there is no rule under the `---`. |
 | `22-corporate-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the templates](#the-templates). |
 | `22-corporate-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |

@@ -455,6 +455,37 @@ it('writes no table borders in an .odt, and says so', function () {
         ->and(array_column($converter->pendingLosses(), 'feature'))->toContain('table-borders');
 });
 
+it('reports a table column\'s alignment as lost in the .odt and as carried in the other two', function () {
+    $markdown = "| Left | Right |\n|:-----|------:|\n| a | b |\n";
+
+    foreach (Format::cases() as $format) {
+        $converter = formatDocument($markdown);
+        $path = Scratch::path('probe', $format->extension());
+
+        $converter->convertTo($format, $path);
+
+        $body = $format === Format::Rtf
+            ? (string) file_get_contents($path)
+            : partOfFormat($path, $format === Format::Odt ? 'content.xml' : 'word/document.xml');
+
+        $losses = array_column($converter->pendingLosses(), 'feature');
+
+        // The `.odt` is the one that loses it: `Writer\ODText\Part\Content` reads a
+        // table as a table and never descends into its cells, so the alignment of a
+        // column never becomes a style the cell could point at. The report says so,
+        // which is the whole of what was wrong with it.
+        if ($format === Format::Odt) {
+            expect($body)->not->toContain('fo:text-align')
+                ->and($losses)->toContain('cell-alignment');
+
+            continue;
+        }
+
+        expect($body)->toContain($format === Format::Docx ? '<w:jc w:val="right"/>' : '\qr')
+            ->and($losses)->not->toContain('cell-alignment');
+    }
+});
+
 it('writes no paragraph background in either format, and says so', function () {
     foreach ([Format::Odt, Format::Rtf] as $format) {
         $converter = formatDocument();
