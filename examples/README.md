@@ -58,6 +58,10 @@ past.
 | `25-toc.docx` | A `::toc` drawn as a real Word field, so the contents are built by Word on F9 rather than written down here. Three footnotes on the page, for the mark and the note beside each other. |
 | `26-directives.docx` | What a directive becomes in each place: a table of contents and a footnote, and three names this library does not draw — an inline one keeps its braces, a leaf one its whole source form, a container its body without its fence. |
 | `27-frontmatter-template.docx` | A quotation that names its own `template_file:`, so the Markdown beside it is the whole input and nothing has to be supplied from PHP to reproduce it. Contrast with `10` and `22`, which pass the template to the class in code. |
+| `28-inline-styles.docx` | A word in one of a theme's named styles, and the four other forms of the same grammar: the raw one, an attribute over a named style, a name nothing draws, and a label holding Markdown. |
+| `29-objects.docx` | The seven names that place the furniture of a document in it: a picture, a caption, a page break, a section with columns, a floating box, a shape and a form field. |
+| `29-objects.odt` | The same page as an OpenDocument Text. The picture, the caption, the page break and the columns are carried; the text box, the shape and the form field are written as the author's own characters. |
+| `29-objects.rtf` | The same page as Rich Text. The picture, the caption and the page break are carried; the columns of the section are not, and the text box, the shape and the form field are written as the author's own characters. |
 
 Numbering is one sequence and nothing shares a number. `markdown/14-rejected.md` is
 not in this table because `build.php` does not build it — converting it is the failure
@@ -364,6 +368,58 @@ preserves because the runs are written with `xml:space="preserve"`.
 **Raw HTML.** In `01`, a `<div>` containing a paragraph contributes the words
 inside it and not the markup, which is what the same Markdown looks like in a
 browser.
+
+**A word in a style.** `28` is a specimen sheet, and the theme it names —
+`corporate`, which ships with the library — brings the two named styles it
+writes with. Four words are worth opening the file for:
+
+- `:brand[Orrery]` is blue `0B5CAB` and bold;
+- `:muted[…]` is grey `6B7280` at 10pt, where the body is 11pt;
+- `:style[Orrery]{color=8B0000}` is dark red `8B0000` and **not** bold, because
+  there is no named style behind it to inherit a weight from;
+- `:brand[Orrery]{color=8B0000}` is dark red `8B0000` **and still bold** — the
+  attribute overrides the colour and leaves the weight standing.
+
+The two forms the library cannot draw are in the document as the characters the
+author typed: `:ember[Orrery]` and `:brand[**Orrery**]` stand in the middle of
+the sentences that hold them, and the sentences around them are untouched.
+
+**The seven objects, in three formats.** `29` is one page written three times,
+and the three are meant to be opened together. What each name does:
+
+| Name | `.docx` | `.odt` | `.rtf` |
+| --- | --- | --- | --- |
+| `::image` | the picture, 240 × 144 pixels | the picture, 6.35 × 3.81 cm | the picture, 180 × 108 points, and no alt text |
+| `::caption` | the caption, in italics | the caption, in italics | the caption, in italics |
+| `::pagebreak` | the break | the break | the break |
+| `::section{columns=2}` | the break and the columns | the break and the count of them | the break, not the columns |
+| `::textbox` | the box | the author's characters | the author's characters |
+| `::shape` | the shape | the author's characters | the author's characters |
+| `::field` | the field | the author's characters | the author's characters |
+
+The picture is one picture in three units: 240 × 144 pixels in the `.docx`,
+6.35 × 3.81 centimetres in the `.odt` and 180 × 108 points in the `.rtf`. It is
+in the file as `style="width:240px; height:144px"`, because a picture is
+measured in pixels and the file says so.
+
+Open the second page of the `.docx` and of the `.odt`: the terms run in two
+columns. The second page of the `.rtf` is the same terms across the whole
+width, because RTF has no columns at all — and the loss is reported, with the
+name of the directive in the sentence: *the columns of a ::section are lost*.
+
+The three Word-only names are given the characters the author wrote where the
+writer cannot carry them, and the loss is reported the same way: *a ::textbox
+is left out of the document*, *a ::shape is left out of the document*, *a ::field
+is left out of the document*. The build prints all of them, under the format
+they belong to.
+
+Two things in the `.docx` are worth looking at in the file rather than on the
+page: the box is a VML shape with `position:absolute` and a one-point black
+stroke, so its words sit six centimetres from the left margin at the foot of
+the first page — the preview draws the words without the frame round them —
+and the dropdown is a `FORMDROPDOWN` with three `w:listEntry` in it, which is
+what turns the document into a form: `word/settings.xml` carries
+`w:documentProtection w:enforcement="1" w:edit="forms"`.
 
 ## The templates
 
