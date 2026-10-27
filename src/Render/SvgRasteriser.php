@@ -22,10 +22,10 @@ use Throwable;
  * a document that no longer matches its source and nothing afterwards says that it
  * did.
  *
- * The raster is produced at the SVG's own size in points, because that is the unit
- * PHPWord sizes a picture in and the one `imageMaxWidth` is compared against. A wider
- * raster would make the document lay out at the wrong scale — a picture drawn twice as
- * big as it was written.
+ * The size is the drawing's own, in points, because that is what the file says
+ * and what a reader compares it against. A raster of a different size would make
+ * the document lay out at the wrong scale — a picture drawn twice as big as it
+ * was written.
  */
 final class SvgRasteriser
 {

@@ -288,6 +288,17 @@ them are what the round trip actually produces:
   first thing a `diff` shows. `lineEnding` set to `crlf` does add one, because
   that is the one case where the writer appends its own.
 
+- **A text box comes back without its text.** The text of a box is in a
+  `w:txbxContent` inside the run that holds it, and the reader reads the
+  paragraphs of the body and not the boxes inside them. A shape has no text and
+  so comes back as nothing at all.
+
+- **A form field comes back as the blank field Word draws.** A `FORMTEXT` is a
+  field with a run of thirty spaces in it, and that is what the reader finds.
+
+- **A page break and the columns of a section come back as nothing.** Both are
+  in the file — `w:br` and `w:cols` — and the reader reads neither.
+
 The round-trip suite runs all 1300 specification examples through both
 directions and checks that the second Word document says the same thing as the
 first. It is the check the forward direction alone cannot make: a defect in the
@@ -369,6 +380,9 @@ look](#the-built-in-look) for the other half of that sentence.
 | `:footnote[…]` | carried as a Word footnote | source form back | source form back |
 | A header and a footer | carried | not carried | carried |
 | `::toc` | carried as a field | source form back | source form back |
+| `::image`, `::caption`, `::pagebreak` | carried | carried | carried |
+| `::section{columns=2}` | carried, the columns and all | carried, the count of them | the break, not the columns |
+| `::textbox`, `::shape`, `::field` | carried | source form back | source form back |
 | Rendering into a template | carried | not available | not available |
 
 Five of those are worth naming in full, because they are the ones a reader is
@@ -403,8 +417,11 @@ text. `pendingLosses()` reports it, and only for a document that did it.
 
 `Format::drops()` is the list of features a writer cannot express, whatever the
 document. Whether this document used any of them is a separate question, answered
-over the same element tree every writer is handed, and a feature nobody used is
-not reported: a document with no tables says nothing about table borders.
+over the same element tree every writer is handed and over the directives that
+recorded what they were asked for — a directive a writer cannot carry is drawn
+as its own source text, so there is nothing of it in the tree to find. A feature
+nobody used is not reported: a document with no tables says nothing about table
+borders.
 
 ```php
 foreach ($converter->pendingLosses() as $loss) {
@@ -475,6 +492,7 @@ library, and is what `mdoffice` calls.
 | A table of contents | `::toc`; see [A table of contents](#a-table-of-contents) |
 | Directives — `:name[…]`, `::name[…]`, `:::name` … `:::` | on by default; a name nothing draws comes back as the characters it was written as, see [Directives](#directives) |
 | Inline styles — `:name[text]`, `:name[text]{attrs}` | a word in a style, in the middle of a sentence, see [Inline styles](#inline-styles) |
+| Objects — `::image`, `::caption`, `::pagebreak`, `::section`, `::textbox`, `::shape`, `::field` | a picture, a caption, a page break, a section, a box, a shape, a form field; see [Objects in a document](#objects-in-a-document) |
 
 A link whose label contains formatting, such as `[**bold** link](url)`, becomes a
 genuine Word hyperlink *with* the bold applied. PHPWord cannot express that
@@ -598,6 +616,78 @@ The presentation half refuses all four and names the alternative. This half draw
 them, because *a sentence and a parser nobody asked to change should not change
 the syntax of every document converted after it* — and the author gets back the
 characters they typed.
+
+### Objects in a document
+
+A document is more than paragraphs, and these are the names that place the rest of
+it:
+
+| Directive | Carries | Carried by |
+| --- | --- | --- |
+| `::image{src=… width=… height=… align=…}` | a picture | `.docx`, `.odt`, `.rtf` |
+| `::caption[Figure 1]{}` | a caption | `.docx`, `.odt`, `.rtf` |
+| `::pagebreak` | a page break | `.docx`, `.odt`, `.rtf` |
+| `::section{columns=2}` | a section break, and its columns | `.docx`, `.odt` |
+| `::textbox[…]{width=… height=…}` | a box with text in it | `.docx` only |
+| `::shape{type=rect …}` | a shape | `.docx` only |
+| `::field{name=…}` | a form field | `.docx` only |
+
+```markdown
+::image[Revenue by quarter]{src="chart.png" width=12 height=8 align=center}
+
+::caption[Figure 1: Revenue by quarter]{}
+
+::pagebreak
+
+::section{columns=2}
+```
+
+**A picture is measured in centimetres**, the unit `imageMaxWidth` is in, so a
+document that names a size and a document that leaves it to the option are in the
+same unit. A size that is asked for is the size the picture gets: the cap is what
+happens to a picture that says nothing about its own size, and shrinking a
+picture to a limit the author did not know about is the kind of quiet change this
+library does not make.
+
+| Attribute | |
+| --- | --- |
+| `src` | the file, resolved against `imageBasePath` the way a Markdown image's URL is |
+| `width`, `height` | the size in centimetres; one of them leaves the other to the picture's own proportions |
+| `align` | `left`, `center`, `right` |
+
+The label is the alternative text, and a file that is not there falls back to it —
+the same answer a Markdown image gives.
+
+**A caption is not numbered.** PHPWord has no `SEQ` field, which is the field Word
+numbers a figure with, so a caption that numbered itself would be a number
+written out at conversion time — wrong the moment a figure is inserted above it.
+The number is in the caption, where a reader can see it and an author can change
+it.
+
+**The columns of a section are carried by `.docx` and `.odt`, and not by `.rtf`.**
+RTF has no columns at all, so the section break survives and the columns do not.
+That is reported the way every other loss is, and the sentence names the
+directive: *the columns of a ::section are lost*.
+
+**A text box, a shape and a form field are carried by `.docx` alone.** PHPWord
+writes them as VML and as Word's own `FORMTEXT`, `FORMCHECKBOX` and
+`FORMDROPDOWN` fields, and neither the ODF writer nor the RTF writer has an
+element for any of them. A writer that cannot carry one is given the characters
+the author wrote — the same answer an unclaimed directive gets — and the loss is
+reported: *a ::textbox is left out of the document*.
+
+| Attribute | |
+| --- | --- |
+| `type` | for `::field`: `textinput` (the default), `checkbox`, `dropdown` |
+| `name` | the name of the form field |
+| `entries` | the choices a dropdown offers, separated by commas |
+| `width`, `height` | the size of a box or a shape, in centimetres |
+| `fill`, `line` | the colours a shape is drawn in, six hexadecimal digits without a `#` |
+
+**A dropdown turns the document into a form.** Word only lets a reader choose
+from one while the document is protected for forms, so a document with a dropdown
+in it is protected for forms. A field that cannot be answered is a field that is
+not there.
 
 ### A table of contents
 
@@ -750,11 +840,12 @@ the time the document is printed; the field is not. The `date`, `chapter`,
 
 Three things that are easy to get wrong, and are therefore worth stating:
 
-**Size a header logo with `options: imageMaxWidth`,** because there is no
-per-image width. The default is 15 cm, which is a body picture's width and fills
-a third of the page as a logo. It is a global cap, so it applies to the body as
-well — the alternative, a per-image attribute, is a syntax this library would
-have to invent.
+**Size a header logo with `options: imageMaxWidth`, or with a `::image` of its
+own.** A header's body is Markdown, so the directive is available there too —
+`::image[Logo]{src="assets/logo.png" width=2}` is two centimetres wide, whatever
+the global cap says. The default cap is 15 cm, which is a body picture's width
+and fills a third of the page as a logo, so a header that says nothing about its
+logo gets a very large one.
 
 **`firstPage: true` applies to the whole section, not just the header.** Word's
 `<w:titlePg/>` has no finer setting, so page 1 then looks for a *first-page
@@ -1359,7 +1450,8 @@ bullet, `o`, and a small filled square, repeated by nesting depth.
 
 An image is resolved against `imageBasePath`, embedded, and scaled to
 `imageMaxWidth` when it is wider than that — the option is a maximum, so a small
-picture is not enlarged to reach it. `0` disables the scaling.
+picture is not enlarged to reach it. `0` disables the scaling. A picture that
+names a size of its own — [`::image`](#objects-in-a-document) — keeps it.
 
 **A picture is measured in pixels, and the file says so.** PHPWord measures an image
 in pixels and its RTF and ODF writers read the number back as pixels; only its Word
@@ -1536,7 +1628,7 @@ below the first with the first, since there is no other heading style to give.
 | `html` | `strip` | how raw HTML is handled: `strip` rebuilds it as Word, `preserve` shows it as monospaced text, `drop` discards it |
 | `images` | `embed` | `embed`, `placeholder`, `skip` |
 | `imageBasePath` | `null` | directory relative image paths resolve against |
-| `imageMaxWidth` | `15.0` | centimetres, as a maximum; `0` disables scaling |
+| `imageMaxWidth` | `15.0` | centimetres, the width a picture that names no size of its own is scaled to; `0` disables scaling |
 | `maxHeadingLevel` | `6` | deeper headings become paragraphs |
 | `orderedListFormat` | `decimal` | any OOXML `w:numFmt`, e.g. `lowerRoman` |
 | `orderedListSuffix` | `tab` | `tab`, `space`, `nothing` |

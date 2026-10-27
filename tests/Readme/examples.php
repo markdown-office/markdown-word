@@ -8,6 +8,7 @@ use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Converter;
 use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
+use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Render\LinkPlaceholder;
@@ -838,6 +839,50 @@ it('the footnotes section, run', function () {
     expect($notes)->toContain('n=12')
         ->and(preg_match('/w:footnoteReference w:id="(\d+)"/', $body, $mark) === 1)
         ->and($notes)->toContain('<w:footnote w:id="' . $mark[1] . '"');
+});
+
+it('the objects section, run', function () {
+    // The claims the section makes: a picture of the size it names, in centimetres,
+    // and centred where it says to be; a caption; a page break; and the columns of a
+    // section.
+    $directory = Scratch::path('readme-objects', '');
+    mkdir($directory, 0o777, true);
+
+    $image = imagecreatetruecolor(96, 48);
+    imagefilledrectangle($image, 0, 0, 96, 48, imagecolorallocate($image, 0x8B, 0x1A, 0x1A));
+    imagepng($image, $directory . '/chart.png');
+
+    $markdown = "::image[Revenue by quarter]{src=\"chart.png\" width=12 height=8 align=center}\n\n"
+        . "::caption[Figure 1: Revenue by quarter]{}\n\n"
+        . "::pagebreak\n\n"
+        . "::section{columns=2}\n";
+
+    $path = Scratch::path('readme-objects', '.docx');
+    (new MarkdownToWord($markdown, Configuration::create()->withOptions([
+        'images' => 'embed',
+        'imageBasePath' => $directory,
+    ])))->save($path);
+
+    $body = TemplateFactory::xmlOf($path);
+
+    // 12cm is 453.54 pixels and 8cm is 302.36.
+    expect($body)->toContain('width:453.54330708661px; height:302.36220472441px')
+        ->and($body)->toContain('<w:jc w:val="center"/>')
+        ->and(TemplateFactory::textOf($path))->toContain('Figure 1: Revenue by quarter')
+        ->and($body)->toContain('<w:br w:type="page"/>')
+        ->and($body)->toContain('<w:cols w:num="2"');
+});
+
+it('the objects section names the losses it reports', function () {
+    // The sentences the section quotes are the sentences a reader of the finished
+    // document is given, so they are checked as they are written.
+    $converter = new MarkdownToWord("::section{columns=2}\n\n::textbox[Hello]{width=6 height=3}\n");
+    $converter->convertTo(Format::Rtf, Scratch::path('readme-objects', '.rtf'));
+
+    $messages = implode(' ', array_column($converter->pendingLosses(), 'message'));
+
+    expect($messages)->toContain('the columns of a ::section are lost')
+        ->and($messages)->toContain('a ::textbox is left out of the document');
 });
 
 it('leaves the note body out of the sentence', function () {

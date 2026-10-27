@@ -256,6 +256,18 @@ it('does not claim again what the code does not do', function (string $claim) {
     'a theme is a directory and nothing else, in the loader' => 'Reads a theme out of a directory.',
     'a theme is a directory and nothing else, in the theme' => 'A theme as a directory holds it',
     'a theme is a directory and nothing else, in the failure' => 'A theme directory does not describe a theme',
+    // PHPWord measures an image in pixels, and its RTF and ODF writers read the
+    // number back as pixels. Only its Word writer labels the number `pt`, so a
+    // picture of 96 pixels came to be laid out 96 points wide — a third too large.
+    // Four places said the library's own convention was points, and each of them
+    // was read as the reason a picture was the size it was.
+    'the library measures a picture\'s pixels as points' => 'PHPWord measures an image\'s pixels as points',
+    'the library reads a picture\'s pixels as points' => 'PHPWord reads an image\'s pixels as points',
+    'the library sizes a picture in points' => 'PHPWord sizes a picture in points',
+    'the library sizes pictures in points' => 'PHPWord sizes pictures in points',
+    // The photograph in the image example was 1600 pixels wide and the page said
+    // 1600 points, which is what made the cap look like it was not being applied.
+    'the photograph is 1600pt wide' => '1600pt wide',
 ]);
 
 it('has no decorative dividers in it', function () {

@@ -305,8 +305,8 @@ it('leaves a size it cannot find to one value, rather than inventing an aspect r
 });
 
 it('reports the intrinsic size in points, which is the unit the document is laid out in', function () {
-    // 240 CSS pixels at 96dpi is 180 points. PHPWord sizes pictures in points and
-    // compares `imageMaxWidth` against them, so getting this wrong rescales the page.
+    // 240 CSS pixels at 96dpi is 180 points. The cap is compared against this
+    // figure, so getting it wrong rescales the page.
     $directory = scratchDirectory('units');
     file_put_contents($directory . '/inches.svg', svgSource('2in', '1in'));
     file_put_contents($directory . '/cm.svg', svgSource('5.08cm', '2.54cm'));
