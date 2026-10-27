@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord\Render\Directive;
 
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
+use MarkdownWord\Format;
 use MarkdownWord\Render\RenderContext;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\Element\Section;
@@ -30,9 +31,6 @@ use PhpOffice\PhpWord\Style\Section as SectionStyle;
  */
 final class SectionBreak
 {
-    /** The feature key of a section's columns. */
-    public const COLUMNS = 'columns';
-
     /** The section the document continues in, until one is started. */
     private ?Section $pending = null;
 
@@ -70,7 +68,7 @@ final class SectionBreak
         $this->pending = $section;
 
         if ($columns > 1) {
-            $this->usage->add(self::COLUMNS);
+            $this->usage->add(Format::COLUMNS);
         }
     }
 

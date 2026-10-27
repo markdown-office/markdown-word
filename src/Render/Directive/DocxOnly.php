@@ -10,6 +10,7 @@ use MarkdownWord\Format;
 use MarkdownWord\Render\RenderContext;
 use MarkdownWord\Render\StyleResolver;
 use PhpOffice\PhpWord\Element\AbstractContainer;
+use PhpOffice\PhpWord\Metadata\Protection;
 
 /**
  * The directives only a `.docx` can carry: a text box, a shape, a form field.
@@ -27,15 +28,6 @@ use PhpOffice\PhpWord\Element\AbstractContainer;
  */
 final class DocxOnly
 {
-    /** The feature key of a text box. */
-    public const TEXT_BOX = 'text-box';
-
-    /** The feature key of a shape. */
-    public const SHAPE = 'shape';
-
-    /** The feature key of a form field. */
-    public const FORM_FIELD = 'form-field';
-
     /**
      * The shapes PHPWord's Word writer can draw.
      *
@@ -52,7 +44,7 @@ final class DocxOnly
     /** A centimetre in points, which is the unit a box and a shape are measured in. */
     private const POINTS_PER_CENTIMETRE = 72 / 2.54;
 
-    /** The colour of the line round a text box, which has one unless it is told not to. */
+    /** The colour of the line round a text box. */
     private const BORDER = '000000';
 
     /**
@@ -90,12 +82,13 @@ final class DocxOnly
      * margin and from the top of the paragraph it stands in — and both are
      * centimetres, like every other size here.
      *
-     * The box has a border, because a box nobody can see is not one. PHPWord
-     * draws a text box without a border unless it is given the colour of one.
+     * The box is given a border: PHPWord draws a text box without one unless it
+     * is given the colour of one, and a box with nothing round it is a
+     * paragraph.
      */
     public function drawTextBox(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
     {
-        $this->usage->add(self::TEXT_BOX);
+        $this->usage->add(Format::TEXT_BOX);
 
         if (!$this->carries()) {
             $this->sourceForm($node, $target);
@@ -143,7 +136,7 @@ final class DocxOnly
      */
     public function drawShape(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
     {
-        $this->usage->add(self::SHAPE);
+        $this->usage->add(Format::SHAPE);
 
         if (!$this->carries()) {
             $this->sourceForm($node, $target);
@@ -198,7 +191,7 @@ final class DocxOnly
      */
     public function drawField(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
     {
-        $this->usage->add(self::FORM_FIELD);
+        $this->usage->add(Format::FORM_FIELD);
 
         if (!$this->carries()) {
             $this->sourceForm($node, $target);
@@ -227,7 +220,7 @@ final class DocxOnly
             // one while the document is protected for forms, and a field that
             // cannot be answered is a field that is not there.
             $target->getPhpWord()?->getSettings()->setDocumentProtection(
-                new \PhpOffice\PhpWord\Metadata\Protection('forms'),
+                new Protection('forms'),
             );
         }
 

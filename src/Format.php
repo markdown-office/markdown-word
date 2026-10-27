@@ -20,6 +20,18 @@ enum Format: string
     case Odt = 'odt';
     case Rtf = 'rtf';
 
+    /** The feature key of a text box, which only a `.docx` can carry. */
+    public const TEXT_BOX = 'text-box';
+
+    /** The feature key of a shape, which only a `.docx` can carry. */
+    public const SHAPE = 'shape';
+
+    /** The feature key of a form field, which only a `.docx` can carry. */
+    public const FORM_FIELD = 'form-field';
+
+    /** The feature key of the columns of a section, which RTF has no room for. */
+    public const COLUMNS = 'columns';
+
     /**
      * What a format's writer is called in PHPWord's `IOFactory`. The names are the
      * library's, not ours, and this is the only place the two halves of the question
@@ -87,9 +99,9 @@ enum Format: string
                 'header',
                 'footer',
                 'footnotes',
-                'text-box',
-                'shape',
-                'form-field',
+                self::TEXT_BOX,
+                self::SHAPE,
+                self::FORM_FIELD,
             ],
             // `Writer\RTF\Element\AbstractElement::writeOpening()` wants a
             // `Style\Paragraph` and this library's named styles are `Style\Font`;
@@ -109,10 +121,10 @@ enum Format: string
                 'svg-vector',
                 'table-of-contents',
                 'footnotes',
-                'text-box',
-                'shape',
-                'form-field',
-                'columns',
+                self::TEXT_BOX,
+                self::SHAPE,
+                self::FORM_FIELD,
+                self::COLUMNS,
             ],
         };
     }
@@ -179,9 +191,9 @@ enum Format: string
         'header' => 'the running head at the top of every page is left out',
         'footer' => 'the running foot at the bottom of every page is left out',
         'footnotes' => 'a footnote is left as the text :footnote[...] rather than as a note at the foot of the page',
-        'text-box' => 'a ::textbox is left out of the document',
-        'shape' => 'a ::shape is left out of the document',
-        'form-field' => 'a ::field is left out of the document',
-        'columns' => 'the columns of a ::section are lost',
+        self::TEXT_BOX => 'a ::textbox is left out of the document',
+        self::SHAPE => 'a ::shape is left out of the document',
+        self::FORM_FIELD => 'a ::field is left out of the document',
+        self::COLUMNS => 'the columns of a ::section are lost',
     ];
 }
