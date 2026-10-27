@@ -50,8 +50,7 @@ final class MalformedTheme extends InvalidConfiguration
      * Two text styles whose names are the same word.
      *
      * The names are folded, so `Brand` and `brand` are one name: a theme that carries
-     * both has two styles a document cannot tell apart, and the one a document reaches
-     * is the one that happens to be written last.
+     * both has two styles a document cannot tell apart.
      */
     public static function duplicateStyle(string $style, string $other): self
     {

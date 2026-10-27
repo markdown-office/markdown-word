@@ -269,8 +269,7 @@ it('publishes the names the theme spelled', function () {
 
 it('refuses a theme that names one text style twice, in two spellings', function () {
     // The names are folded, so `Brand` and `brand` are one name: a theme carrying both
-    // has two styles a document cannot tell apart, and the one a document reaches is
-    // the one written last.
+    // has two styles a document cannot tell apart.
     [$root, $themes] = styleThemes();
     writeStyleTheme($themes, 'bad', "textStyles:\n  Brand:\n    color: \"0B5CAB\"\n  brand:\n    color: \"0B5CAB\"\n");
 
