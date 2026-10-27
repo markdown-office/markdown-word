@@ -11,7 +11,8 @@ use MarkdownWord\Filesystem\PathScope;
  * Turns the `theme:` a document names into a theme, in the order one is looked for:
  *
  * 1. an explicit path — anything with a `/` in it, written from the document's own
- *    directory unless it names an absolute one;
+ *    directory — or the working directory, where the document has none — unless it
+ *    names an absolute one;
  * 2. `./themes/<name>` beside the document;
  * 3. `./themes/<name>` beside the working directory;
  * 4. a theme in a root the calling program allowed;
@@ -28,10 +29,16 @@ use MarkdownWord\Filesystem\PathScope;
  * theme of the machine — and found nothing at all unless it happened to start in the
  * document's own directory.
  *
+ * A path is looked for on its own: one that does not resolve is a failure rather than a
+ * name that is looked for elsewhere, so a document writing `theme: ./nowhere` is told
+ * about the path and not about the themes that do exist. What the path names decides
+ * only what is read from it — the `theme.yml` of a directory, or the file itself as the
+ * manifest of the theme around it — and not where it is looked for.
+ *
  * Every step resolves the path with `realpath()` and holds it to {@see PathScope}. A
- * `theme:` is a path a document writes, and a document is not trusted to mean the
- * directory it names: `../` walks out of the directory the path was written from and an
- * absolute path is read from wherever it points.
+ * `theme:` is a path a document writes, and a document is not trusted to mean the path
+ * it names: `../` walks out of the directory the path was written from and an absolute
+ * path is read from wherever it points.
  *
  * The name is worth saying once more, because the resolution is not obvious from it: a
  * bare name is looked for under `./themes/`, so `theme: ..` lands on the directory above
@@ -91,10 +98,13 @@ final class ThemeResolver
         if (str_contains($name, '/')) {
             // A `theme:` is a path a document writes, so where it is written from says
             // nothing about it; what is allowed is where it lands.
-            return $this->loader->load($this->directory(
-                $name,
-                str_starts_with($name, '/') ? $name : $this->base() . '/' . $name,
-            ), $name, $this->files);
+            $path = str_starts_with($name, '/') ? $name : $this->base() . '/' . $name;
+
+            // Whether the path names a directory or a file decides what is read from it,
+            // not where it is looked for: a path is found the same way either way.
+            return is_file($path)
+                ? $this->loader->loadManifest($this->file($name, $path), $name, $this->files)
+                : $this->loader->load($this->directory($name, $path), $name, $this->files);
         }
 
         foreach ($this->themeDirectories() as $themes) {
@@ -160,6 +170,29 @@ final class ThemeResolver
             throw ThemeNotFound::noDirectory($name);
         }
 
+        $real = PathScope::resolve($found);
+
+        if ($real === null || !$this->files->holds($real)) {
+            throw ThemeNotFound::outside($name, $this->files->roots());
+        }
+
+        return $real;
+    }
+
+    /**
+     * The manifest a path named, resolved and held to the roots.
+     *
+     * The same question as {@see self::directory()} asks of a directory, asked of a file:
+     * a `theme:` is a path a document writes, and the file it lands on is read as
+     * readily as the directory beside it.
+     *
+     * @param string $name  what the document wrote
+     * @param string $found the path it resolved to before `realpath()`
+     *
+     * @throws ThemeNotFound
+     */
+    private function file(string $name, string $found): string
+    {
         $real = PathScope::resolve($found);
 
         if ($real === null || !$this->files->holds($real)) {

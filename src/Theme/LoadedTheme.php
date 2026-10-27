@@ -7,7 +7,7 @@ namespace MarkdownWord\Theme;
 use MarkdownWord\Configuration\Styles;
 
 /**
- * A theme as a directory holds it: what it calls itself, and the slots it draws from.
+ * A theme as it was read: what it calls itself, and the slots it draws from.
  *
  * A `Styles` rather than a raw array because the merge is the interesting half, and it is
  * the merge {@see \MarkdownWord\Configuration\Styles} already defines: a theme that names
@@ -23,7 +23,10 @@ final class LoadedTheme
     ) {
     }
 
-    /** The canonical directory this was read from. */
+    /**
+     * The canonical directory this was read from: the theme's own directory, or the one
+     * that holds the manifest a theme was named by.
+     */
     public function directory(): string
     {
         return $this->directory;

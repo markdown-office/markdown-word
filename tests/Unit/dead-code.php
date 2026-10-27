@@ -245,6 +245,17 @@ it('does not claim again what the code does not do', function (string $claim) {
     // does.
     'a bare name lands on the working directory itself' => 'lands on the working directory itself',
     'the theme differs from the template in where a relative name is written from' => 'The difference from a theme is where a relative name is written from',
+    // Six claims about what a theme *is*, all of which this change made false: a theme
+    // is its `theme.yml`, and the `styles.yml` beside it, so a theme may be named by the
+    // file rather than by the directory around it. Two messages said a theme is a
+    // directory, the page said the same in a longer sentence, and three docblocks said
+    // it in their own words.
+    'a theme is a directory and nothing else' => 'A theme is a directory holding that file',
+    'a theme is a directory and nothing else, on this machine' => 'A theme is a directory on this machine, not something to fetch',
+    'a theme is a directory and nothing else, on the page' => 'A theme is a directory holding a `theme.yml` and, usually, a `styles.yml`',
+    'a theme is a directory and nothing else, in the loader' => 'Reads a theme out of a directory.',
+    'a theme is a directory and nothing else, in the theme' => 'A theme as a directory holds it',
+    'a theme is a directory and nothing else, in the failure' => 'A theme directory does not describe a theme',
 ]);
 
 it('has no decorative dividers in it', function () {

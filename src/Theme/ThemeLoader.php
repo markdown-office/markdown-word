@@ -15,10 +15,15 @@ use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Reads a theme out of a directory.
+ * Reads a theme out of a directory, or out of the `theme.yml` inside one.
  *
  * Only `theme.yml` is required. `styles.yml` is read when it is there; a theme without
  * one draws in the built-in look, which is a theme rather than a broken one.
+ *
+ * A theme is a `theme.yml` and the `styles.yml` beside it. The two are usually held in a
+ * directory of their own, and a document may name either the directory or the manifest
+ * inside it: the manifest is the theme, and the directory around it is where the rest of
+ * it is looked for.
  *
  * Every slot is checked against {@see Styles::defaults()} — the list
  * {@see \MarkdownWord\Configuration\Validator} checks a `styles:` block against — so a
@@ -57,6 +62,51 @@ final class ThemeLoader
             // {@see \MarkdownWord\Exception\ThemeNotFound::outside()}.
             throw ThemeNotFound::noManifest($written);
         }
+
+        return new LoadedTheme(
+            $directory,
+            Theme::fromArray($this->mapping($manifest, 'a theme'), $manifest),
+            new Styles($this->styles($directory, $files, $written)),
+        );
+    }
+
+    /**
+     * A theme whose manifest is this file, with the rest of it read from the directory
+     * that holds the file.
+     *
+     * The file has to be a `theme.yml`. The name is what makes it the manifest of a theme
+     * rather than one of the theme's other files: a `styles.yml` named as the theme is a
+     * file the theme's own directory holds, not the theme.
+     *
+     * @param string      $file  the manifest
+     * @param string|null $name  what the document wrote, which is what a failure names
+     * @param PathScope|null $files The directories the theme's own files may resolve into.
+     *
+     * @throws ThemeNotFound  when the file is not there, or is not a `theme.yml` and so
+     *                        is not a manifest
+     * @throws MalformedTheme  when the file does not describe a theme
+     * @throws UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception      when a file in it cannot be read or parsed, or resolves out
+     *                        of the scope
+     */
+    public function loadManifest(string $file, ?string $name = null, ?PathScope $files = null): LoadedTheme
+    {
+        $written = $name ?? $file;
+
+        if (basename($written) !== self::THEME_FILE) {
+            throw ThemeNotFound::noDirectory($written);
+        }
+
+        $manifest = $this->contained($files, $file, $written);
+
+        if (!is_file($manifest)) {
+            throw ThemeNotFound::noDirectory($written);
+        }
+
+        // The directory the manifest is in, rather than the one the document wrote: a
+        // manifest reached through a symlink sits where its target is, and that is where
+        // the `styles.yml` that belongs to it is.
+        $directory = dirname($manifest);
 
         return new LoadedTheme(
             $directory,

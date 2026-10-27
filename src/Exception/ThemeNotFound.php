@@ -27,15 +27,22 @@ final class ThemeNotFound extends InvalidInput
     }
 
     /**
-     * A theme name that is not a directory here.
- *
- * The name is echoed because it is what the author wrote, not a path this machine
- * resolved — but a name may itself be a path, so the resolved form is not put in the
- * message. See {@see self::outside()} for why.
- */
+     * A path that names no theme: neither a directory holding one nor the manifest of one.
+     *
+     * The name is echoed because it is what the author wrote, not a path this machine
+     * resolved — but a name may itself be a path, so the resolved form is not put in the
+     * message. See {@see self::outside()} for why.
+     *
+     * The second sentence is there because the path may well be there: a file that is not
+     * a manifest reads as "there is no theme directory named this", which says nothing
+     * about the file the author wrote and a good deal about a directory they did not.
+     */
     public static function noDirectory(string $name): self
     {
-        return new self(sprintf('There is no theme directory named "%s".', $name));
+        return new self(sprintf(
+            'There is no theme directory named "%s". A theme is a directory holding a theme.yml, or the theme.yml itself.',
+            $name,
+        ));
     }
 
     /**
@@ -47,7 +54,7 @@ final class ThemeNotFound extends InvalidInput
     public static function noManifest(string $name): self
     {
         return new self(sprintf(
-            '"%s" is not a theme: it has no %s. A theme is a directory holding that file.',
+            '"%s" is not a theme: it has no %s.',
             $name,
             'theme.yml',
         ));
@@ -56,7 +63,7 @@ final class ThemeNotFound extends InvalidInput
     public static function aUrl(string $name): self
     {
         return new self(sprintf(
-            '"%s" is a URL. A theme is a directory on this machine, not something to fetch.',
+            '"%s" is a URL. A theme is on this machine, not something to fetch.',
             $name,
         ));
     }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord\Exception;
 
 /**
- * A theme directory does not describe a theme.
+ * A theme's own file does not describe a theme.
  *
  * The writer of a `theme.yml` is usually a person or a model, and both can act on what
  * is said here, so every failure names the file it came from and what would have worked

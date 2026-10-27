@@ -1153,8 +1153,8 @@ Validator::assertValid($config->toArray()); // throws, listing all of them
 
 ### Themes
 
-A theme is a directory holding a `theme.yml` and, usually, a `styles.yml`. Four ship
-with the library, in `themes/`:
+A theme is a `theme.yml` and, usually, a `styles.yml` beside it. Four ship with the
+library, in `themes/`, each in a directory of its own:
 
 | Theme | What it is for |
 | --- | --- |
@@ -1198,6 +1198,20 @@ an error naming the ones that do — never a silent fallback to `default`, which
 a document in the wrong colours with nothing in the output to say so. A path is resolved
 with `realpath()` and held to the document's own directory, the working directory and
 the built-in themes, because `theme:` is a path a document writes.
+
+**A path may name the manifest rather than the directory around it.** A theme is its
+`theme.yml`, so `theme: ./themes/house/theme.yml` is the same theme as
+`theme: ./themes/house` — the file is the manifest, and the `styles.yml` is read from
+the directory that holds it either way. A path is looked for in the same place and held
+to the same scope whether it names a directory or a file; only what is read from it
+differs. Only a `theme.yml` is a manifest, so a `styles.yml` named as the theme is one
+of a theme's own files rather than the theme itself.
+
+```yaml
+---
+theme: ./themes/house/theme.yml
+---
+```
 
 **A theme is found beside the document.** The library is told where the document is,
 because a document handed over as a string has no directory of its own:

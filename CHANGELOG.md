@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A theme can be named as its `theme.yml`.** A `theme:` that names a file loads that
+  file as the theme's manifest, and the theme's other files — `styles.yml` — are read
+  from the directory that holds it. A path is a path: it is written from the document's
+  own directory, resolved with `realpath()` and held to the same scope, whether it names
+  a directory or a file; only what is read from it differs. A file that is not a
+  `theme.yml` is refused, and so is a directory with no `theme.yml` in it — with a
+  message that says which of the two it was.
+
+  ```yaml
+  ---
+  theme: ./themes/house/theme.yml
+  ---
+  ```
+
 ### Fixed
 
 - **A document's theme is found beside the document.** The `theme:` a document names was
