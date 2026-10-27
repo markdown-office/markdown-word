@@ -385,8 +385,7 @@ look](#the-built-in-look) for the other half of that sentence.
 | `::textbox`, `::shape`, `::field` | carried | source form back | source form back |
 | Rendering into a template | carried | not available | not available |
 
-Five of those are worth naming in full, because they are the ones a reader is
-least likely to notice.
+The ones a reader is least likely to notice are worth naming in full.
 
 **RTF leaves every list item out of the document.** Not the bullet, not the
 number — the text of the item. PHPWord has no writer for a list item under its RTF
@@ -1689,6 +1688,10 @@ use MarkdownWord\Text\TextExtractor;
 
 TextExtractor::fromPhpWord($phpWord);
 ```
+
+A form field contributes the default it was given — the text the author wrote for
+it — and a field with no default contributes nothing. Its name is the form's
+identifier rather than the document's wording, so it is not in the text.
 
 Use a different Markdown dialect:
 

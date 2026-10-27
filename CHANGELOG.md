@@ -61,6 +61,27 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A table column's alignment is reported as lost in an `.odt`.** The ODF writer never
+  descends into a table's cells, so the paragraph style of the runs inside a cell never
+  becomes a style the cell could point at — and the alignment of a column went with it.
+  The weight of a header row was reported; the alignment was not, so a reader who
+  aligned a column and converted to `.odt` lost it in silence.
+
+  The `.docx` and the `.rtf` carry it, and the report says nothing about either of them.
+
+- **A document with a form field in it can be read back.** `TextExtractor` asked a run
+  for its text and used it as a string, and a form field has none: a form field is a
+  box, and the text in it is the default it was given rather than a run of its own.
+  Reading such a document raised a `TypeError` rather than returning its text.
+
+  A form field contributes the default it was given — the text the author wrote for it
+  — and a field with no default contributes nothing. Its name is the form's identifier
+  rather than the document's wording, so it is not in the text. A checkbox contributes
+  nothing either: it is a box.
+
+  A run that holds no text at all — a content control with no value, a list item whose
+  text was taken away — contributes nothing rather than raising.
+
 - **A label holds no Markdown that CommonMark does not call emphasis.** The rule refused
   `** text**` and `**Bakery **`, which are not emphasis: a delimiter run that opens an
   emphasis may not be followed by whitespace, and one that closes it may not be preceded
