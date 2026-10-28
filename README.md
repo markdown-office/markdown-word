@@ -1877,6 +1877,22 @@ there.
   text you want emphasised, and reserve raw HTML for content that brings its own
   markup.
 
+## Tools
+
+A document that has been built has not been looked at, and a document that has been looked at
+in a renderer that disagrees with Word is a document that has not really been looked at.
+
+| Tool | What it is |
+| --- | --- |
+| `tools/render-document.php` | Renders a document with the most truthful renderer the machine has — Microsoft Word where it can be used, WordCraft where Word cannot, LibreOffice last — and says so when it had to fall back, because a renderer that cannot be trusted is worse than none |
+| `tools/render-with-word.applescript` | Opens a document in Microsoft Word on macOS and exports it as PDF. The export is written inside Word's own sandbox container, because Word writes nowhere else |
+| `tools/render-with-word.ps1` | The same on Windows, through Word's COM automation rather than through AppleScript |
+| `tools/pdf-is-complete.sh` | Whether a PDF has been written whole, which is what the Word tool waits for before it copies one out. The one part of that tool the test suite can check, because it needs no Word to answer |
+
+The choice between the three renderers is tested without any of them: the dispatcher takes the
+platform and the renderer from the environment, so the test suite can ask what it would choose
+on a machine that has none of them. The one test that needs Word is skipped where Word is not.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE). PHPWord, which this library builds on, is

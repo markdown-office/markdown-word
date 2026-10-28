@@ -8,6 +8,22 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A document can be rendered, and looked at.** Three tools, in `tools/`:
+  `render-document.php` renders a document with the most truthful renderer the machine has
+  — Microsoft Word where it can be used, WordCraft where Word cannot, LibreOffice last —
+  and says so when it had to fall back, because a renderer that cannot be trusted is worse
+  than none. `render-with-word.applescript` and `render-with-word.ps1` drive Microsoft Word
+  on macOS and on Windows.
+
+  **The export is written inside Word's own sandbox container**, because Word writes
+  nowhere else: asked for a path outside it, Word waits for a grant the caller cannot give
+  and writes nothing. And a PDF is written lazily, so the file is copied out only once it
+  has stopped growing and carries the marker every PDF ends with.
+
+  The choice between the three renderers is tested without any of them — the dispatcher
+  takes the platform and the renderer from the environment, so the test suite can ask what
+  it would choose on a machine that has none of them.
+
 - **A word can be written in a style, in the middle of a sentence.** `:brand[Bakery]`
   is the word "Bakery" in the style the theme calls `brand`, and the theme's
   `styles.yml` gains a `textStyles` key for it:
