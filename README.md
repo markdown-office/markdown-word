@@ -699,6 +699,11 @@ from one while the document is protected for forms, so a document with a dropdow
 in it is protected for forms. A field that cannot be answered is a field that is
 not there.
 
+**A dropdown cannot start with a value.** Word records a dropdown's choice as the
+position of the chosen entry in the list, not as its text, so the text of an entry
+has nowhere to go. A `value` on a dropdown is refused rather than written where a
+number belongs; the choices themselves go in `entries`.
+
 ### A table of contents
 
 `::toc` writes a real Word table-of-contents field. Word builds it from the

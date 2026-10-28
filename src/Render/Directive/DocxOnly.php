@@ -6,6 +6,7 @@ namespace MarkdownWord\Render\Directive;
 
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Exception\InvalidInput;
 use MarkdownWord\Format;
 use MarkdownWord\Render\StyleResolver;
 use PhpOffice\PhpWord\Element\AbstractContainer;
@@ -187,21 +188,34 @@ final class DocxOnly
      * only lets a reader choose from one while the document is protected for
      * forms — so a dropdown turns that protection on, and a document with one
      * is a form.
+     *
+     * **A `value` belongs to a text field.** Word records a dropdown's choice as the
+     * position of the chosen entry in the list, not as its text, so the text of an
+     * entry has nowhere to go: a `value` on a dropdown is refused rather than written
+     * where a number belongs.
      */
     public function drawField(DirectiveBlock $node, AbstractContainer $target): void
     {
         $this->usage->add(Format::FORM_FIELD);
 
-        if (!$this->carries()) {
+        $attributes = $node->getAttributes();
+        $type = $attributes->getString('type') ?? 'textinput';
+
+        if (!in_array($type, self::FIELDS, true)) {
             $this->sourceForm($node, $target);
 
             return;
         }
 
-        $attributes = $node->getAttributes();
-        $type = $attributes->getString('type') ?? 'textinput';
+        $value = $attributes->getString('value');
 
-        if (!in_array($type, self::FIELDS, true)) {
+        if ($type === 'dropdown' && $value !== null && $value !== '') {
+            throw new InvalidInput(
+                'The "value" attribute of a dropdown field is not one Word can hold: a dropdown records the chosen entry as its position in the list, not as its text. Write the choices with "entries" and let the reader pick one.',
+            );
+        }
+
+        if (!$this->carries()) {
             $this->sourceForm($node, $target);
 
             return;
@@ -225,12 +239,8 @@ final class DocxOnly
 
         if ($type === 'checkbox') {
             $field->setDefault($attributes->getBool('checked'));
-        } else {
-            $value = $attributes->getString('value');
-
-            if ($value !== null && $value !== '') {
-                $field->setDefault($value);
-            }
+        } elseif ($value !== null && $value !== '') {
+            $field->setDefault($value);
         }
     }
 

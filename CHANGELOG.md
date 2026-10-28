@@ -65,6 +65,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A `value` on a dropdown is refused rather than written into the file.** Word
+  records a dropdown's choice as the position of the chosen entry in the list, and
+  not as its text, so `::field{type=dropdown value="Berlin"}` wrote the text of an
+  entry where `w:ddList/w:default` and `w:result` — a zero-based index — belong.
+
+  A `value` is applied to a text field, which is where it means something, and a
+  dropdown that carries one is refused with a message that says why.
+
 - **A theme may not name a text style after a directive this library draws.** The
   directive is drawn before the style is, so a style called `footnote` was never
   applied to a word: `:footnote[…]` drew the footnote, and the style was left with

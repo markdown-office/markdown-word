@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use MarkdownWord\Exception\InvalidInput;
 use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Tests\Support\Scratch;
@@ -102,6 +103,19 @@ it('draws a dropdown with the entries it offers', function () {
         ->toContain('FORMDROPDOWN')
         ->and(TemplateFactory::xmlOf($document))->toContain('<w:listEntry w:val="Vienna"/>')
         ->and(TemplateFactory::xmlOf($document))->toContain('<w:listEntry w:val="Berlin"/>');
+});
+
+it('refuses a value on a dropdown, and keeps it on a text field', function () {
+    // Word records a dropdown's choice as the position of the chosen entry in the
+    // list, not as its text: the text of an entry written where a number belongs is
+    // a `w:default` of `ST_DecimalNumber` holding a word.
+    $dropdown = '::field{name="City" type=dropdown entries="Vienna,Berlin" value="Berlin"}';
+    $text = '::field{name="Customer" value="Vienna"}';
+
+    expect(fn () => (new MarkdownToWord($dropdown))->toDocx($dropdown))
+        ->toThrow(InvalidInput::class, 'The "value" attribute of a dropdown field')
+        // And the half that is not a dropdown is untouched by the rule.
+        ->and(TemplateFactory::xmlOf(wordObjectDocument($text)))->toContain('<w:default w:val="Vienna"/>');
 });
 
 it('protects a document with a dropdown, which is what makes it work', function () {
