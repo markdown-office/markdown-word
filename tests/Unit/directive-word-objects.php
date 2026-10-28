@@ -107,21 +107,20 @@ it('draws a dropdown with the entries it offers', function () {
 
 it('refuses a value on a dropdown, and keeps it on a text field', function () {
     // Word records a dropdown's choice as the position of the chosen entry in the
-    // list, not as its text: the text of an entry written where a number belongs is
-    // a `w:default` of `ST_DecimalNumber` holding a word.
+    // list, not as its text: a `w:default` of `ST_DecimalNumber` would hold a word
+    // where a number belongs.
     $dropdown = '::field{name="City" type=dropdown entries="Vienna,Berlin" value="Berlin"}';
     $text = '::field{name="Customer" value="Vienna"}';
 
     expect(fn () => (new MarkdownToWord($dropdown))->toDocx($dropdown))
         ->toThrow(InvalidInput::class, 'The "value" attribute of a dropdown field')
-        // And the half that is not a dropdown is untouched by the rule.
         ->and(TemplateFactory::xmlOf(wordObjectDocument($text)))->toContain('<w:default w:val="Vienna"/>');
 });
 
 it('draws a dropdown that carries a value as its source text in the formats that cannot carry a field', function (Format $format) {
-    // The refusal is Word's: a dropdown records the chosen entry as its position in
-    // the list. The other two formats cannot carry a field at all, so they give the
-    // author their own characters back, as they do every other directive.
+    // Only a `.docx` builds the field, so the other two formats never reach the
+    // check: they cannot carry a field at all and give the author their own
+    // characters back, as they do every other directive.
     $markdown = '::field{name="City" type=dropdown entries="Vienna,Berlin" value="Berlin"}';
 
     $losses = wordObjectLossesIn($markdown, $format);

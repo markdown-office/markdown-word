@@ -269,8 +269,7 @@ it('does not claim again what the code does not do', function (string $claim) {
     // 1600 points, which is what made the cap look like it was not being applied.
     'the photograph is 1600pt wide' => '1600pt wide',
     // The cap is a pixel count, and the docblock that says so began by calling it
-    // points — a leftover from the change that moved the cap out of points, in the
-    // one paragraph a reader would have trusted about the unit.
+    // points — a leftover from the change that moved the cap out of points.
     'the picture cap is measured in points' => 'Points, and a bare number.',
     // The docblock of the feature list said a feature nobody asks about is "reported
     // for every document", which is the opposite of what happens: a feature the survey

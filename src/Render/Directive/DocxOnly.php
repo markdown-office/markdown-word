@@ -191,9 +191,7 @@ final class DocxOnly
      *
      * **A `value` belongs to a text field.** Word records a dropdown's choice as the
      * position of the chosen entry in the list, not as its text, so a `.docx` carrying
-     * one would write a word where a number belongs. It is refused there, and the
-     * other two formats cannot carry a field at all, so they draw the directive as its
-     * own source text as they do every other one.
+     * one would write a word where a number belongs.
      */
     public function drawField(DirectiveBlock $node, AbstractContainer $target): void
     {

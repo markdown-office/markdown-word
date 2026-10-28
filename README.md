@@ -1447,7 +1447,7 @@ textStyles:
 ```
 
 The properties are the same eight the inline attributes have, and a size is in points as it
-is everywhere else. Seven things are refused when the theme is read, because each of them
+is everywhere else. These are refused when the theme is read, because each of them
 is a mistake that would otherwise reach the document looking as though the line had never
 been written: a style that is not a set of properties at all, a style that carries no
 property, a style whose properties name an attribute that does not exist, a value that is

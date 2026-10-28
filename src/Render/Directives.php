@@ -140,8 +140,8 @@ final class Directives
      *
      * A theme's text styles are not on this list: a theme names its own, and a
      * list that changed with the theme would be a list nobody could check. A theme's
-     * style may not take a name from it either, because the library draws these
-     * names and a name that means two things is a name nobody can rely on.
+     * style may not take a name from it either, because a name that means two things
+     * is a name nobody can rely on.
      *
      * @return list<string>
      */

@@ -298,8 +298,7 @@ it('refuses a text style named with the reserved word in another case', function
 it('refuses a text style named after a directive', function () {
     // The directive is drawn before the style is, so a style called `footnote` would
     // never be applied to a word: `:footnote[…]` draws the footnote, and the style is
-    // left with nothing to reach it. The theme said nothing about that, so the theme
-    // is refused.
+    // left with nothing to reach it.
     [$root, $themes] = styleThemes();
     writeStyleTheme($themes, 'bad', "textStyles:\n  footnote:\n    color: \"0B5CAB\"\n");
 

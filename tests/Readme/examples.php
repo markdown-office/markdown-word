@@ -455,7 +455,7 @@ it('a configuration gives its array back', function () {
         ->withTextStyles(['brand' => ['color' => '0B5CAB']]);
     $array = $config->toArray();
 
-    // Exactly three keys, and not merely the three the page names: a subset would
+    // The whole shape, and not merely the keys the page names: a subset would
     // pass with a fourth key in it, and the page would be wrong about the shape.
     expect(array_keys($array))->toBe(['styles', 'options', 'textStyles'])
         ->and($array['styles'][Styles::HEADING_1])->toBe(Styles::defaults()[Styles::HEADING_1])

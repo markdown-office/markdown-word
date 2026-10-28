@@ -235,13 +235,11 @@ final class MarkdownToWord implements Converter
      *
      * The directive is drawn before the style is, so a style called `footnote` is never
      * applied to a word: `:footnote[…]` draws the footnote, and the style is left with
-     * nothing to reach it. The names are the ones the library publishes, so a name never
-     * means two things.
+     * nothing to reach it.
      *
      * Asked here rather than in the configuration, which does not know what the renderer
      * draws, and asked of the merged configuration rather than of a theme alone, so a
-     * style that comes from a theme and one that comes from a caller's code are refused
-     * in the same way.
+     * style from a theme and one from a caller's code are refused the same way.
      *
      * @throws InvalidConfiguration when a style takes the name of a directive.
      */

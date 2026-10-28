@@ -64,10 +64,10 @@ const EVERYTHING = <<<'MD'
     MD;
 
 /**
- * The directory relative image paths resolve against, holding a `.png` and a `.jpeg`.
+ * The directory relative image paths resolve against, holding a `.png` and a `.jpg`.
  *
  * Written rather than committed because the tests here are about what a writer does
- * with an image it is given, and a fixture would be a second thing to keep. The `.jpeg`
+ * with an image it is given, and a fixture would be a second thing to keep. The `.jpg`
  * is here because a picture's own name is what a writer reads to decide how to label
  * it, and nothing but a file with that extension can say it.
  */
@@ -89,9 +89,9 @@ function formatAssets(): string
     imagefilledrectangle($photo, 0, 0, 96, 96, imagecolorallocate($photo, 0x1A, 0x8B, 0x1A));
     imagejpeg($photo, $directory . '/photo.jpg');
 
-    // The one vector of the examples, copied rather than committed again: a document
-    // that cannot draw an SVG raises rather than going in flattened, so a build
-    // without a rasteriser cannot have one in it at all.
+    // The one vector of the examples, copied rather than committed again: the formats
+    // that drop the vector need a raster of it, and a build without a rasteriser
+    // raises rather than going in flattened.
     if (SvgRasteriser::available()) {
         copy(
             dirname(__DIR__, 2) . '/examples/markdown/assets/19-vector.svg',
@@ -573,11 +573,11 @@ it('reports a loss in the words of the reader of the document', function () {
 // The two lists, held together
 
 /**
- * Every feature there is, and the sentence a writer that cannot do it loses.
+ * The feature keys, and the sentence a writer that cannot do each one loses.
  *
  * Read out of the class rather than written out here: a second list would be one
- * that could drift from the first, and the whole point of the three tests below is
- * that the two are the same.
+ * that could drift from the first, and the whole point of the tests below is that
+ * the two are the same.
  *
  * @return array<string, string>
  */
@@ -670,9 +670,7 @@ function formatSurveyedDocuments(): array
         ],
         [
             // The two pictures whose names and kinds are read off the file itself. The
-            // vector is in the document only when the build can draw one: a document
-            // that cannot is refused rather than going in flattened, so there is no
-            // document here that could carry the vector and lose it.
+            // vector is in the document only when the build can draw one.
             'markdown' => "![A photo](photo.jpg)\n\n"
                 . (SvgRasteriser::available() ? "![A diagram](diagram.svg)\n" : ''),
             'config' => Configuration::create()->withOptions([
@@ -704,8 +702,8 @@ function formatSurveyedLosses(array $document, Format $format): array
 
 it('drops nothing it cannot report', function (Format $format) {
     // A name a format drops that is not a feature is a loss that is never reported:
-    // `Format::losses()` walks the features and asks the survey about each of them,
-    // so a name it does not know is never asked about and never said.
+    // `Format::losses()` walks the features, so a name it does not know is never
+    // asked about.
     $features = formatFeatures();
 
     foreach ($format->drops() as $dropped) {
@@ -737,9 +735,7 @@ it('reports every feature a document used', function () {
     $required = array_keys(formatFeatures());
 
     if (!SvgRasteriser::available()) {
-        // A build that cannot draw an SVG cannot have one in a document either: the
-        // conversion raises rather than going in flattened, so there is no document
-        // here that could carry the vector and lose it.
+        // A build that cannot draw a vector cannot have one in a document either.
         $required = array_values(array_diff($required, ['svg-vector']));
     }
 
