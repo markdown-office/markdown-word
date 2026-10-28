@@ -116,7 +116,9 @@ catch {
             $document.Close($WdDoNotSaveChanges)
         }
         catch {
-            # A document that will not close is not a reason to leave the rest open.
+            # A document that will not close is not a reason to leave the rest open, and the
+            # failure is said rather than swallowed.
+            Write-Verbose "A document did not close: $($_.Exception.Message)"
         }
     }
 
@@ -125,7 +127,7 @@ catch {
             $word.Quit()
         }
         catch {
-            # The same.
+            Write-Verbose "Word did not quit: $($_.Exception.Message)"
         }
     }
 
@@ -138,7 +140,7 @@ foreach ($document in $opened) {
         $document.Close($WdDoNotSaveChanges)
     }
     catch {
-        # The same.
+        Write-Verbose "A document did not close: $($_.Exception.Message)"
     }
 }
 
