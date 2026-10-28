@@ -94,6 +94,16 @@ the [documentation][command-line].
 See [Requirements](#requirements) for what PHP and which extensions it needs.
 Where to get help: [the issue tracker][issues].
 
+## For an agent
+
+There is a **skill**: a directory an agent reads, holding this library's
+documentation, its examples, and the tools that render a document so that it can
+be looked at. It is built from the documentation site, so it is never out of step
+with it, and it is installed with one line in `opencode.json` or by unpacking it
+where your agent looks for one.
+
+[How to install it][skill].
+
 ## Why it exists
 
 The obvious way to build a Markdown-to-Word converter is to render HTML and hand
@@ -1903,6 +1913,7 @@ LGPL-3.0.
 [issues]: https://github.com/markdown-office/markdown-word/issues
 [mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word
+[skill]: https://markdown-office.github.io/skills/
 [sonar-token]: https://sonarcloud.io/account/security
 [pest]: https://pestphp.com
 [phpword]: https://github.com/PHPOffice/PHPWord
