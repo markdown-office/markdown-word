@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Options;
 use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Render\SvgRasteriser;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\Writer\Survey;
@@ -61,10 +64,12 @@ const EVERYTHING = <<<'MD'
     MD;
 
 /**
- * The directory relative image paths resolve against, holding one `.png`.
+ * The directory relative image paths resolve against, holding a `.png` and a `.jpeg`.
  *
  * Written rather than committed because the tests here are about what a writer does
- * with an image it is given, and a fixture would be a second thing to keep.
+ * with an image it is given, and a fixture would be a second thing to keep. The `.jpeg`
+ * is here because a picture's own name is what a writer reads to decide how to label
+ * it, and nothing but a file with that extension can say it.
  */
 function formatAssets(): string
 {
@@ -79,6 +84,18 @@ function formatAssets(): string
     $image = imagecreatetruecolor(96, 96);
     imagefilledrectangle($image, 0, 0, 96, 96, imagecolorallocate($image, 0x8B, 0x1A, 0x1A));
     imagepng($image, $directory . '/logo.png');
+
+    $photo = imagecreatetruecolor(96, 96);
+    imagefilledrectangle($photo, 0, 0, 96, 96, imagecolorallocate($photo, 0x1A, 0x8B, 0x1A));
+    imagejpeg($photo, $directory . '/photo.jpg');
+
+    // The one vector of the examples, copied rather than committed again: a document
+    // that cannot draw an SVG raises rather than going in flattened, so a build
+    // without a rasteriser cannot have one in it at all.
+    copy(
+        dirname(__DIR__, 2) . '/examples/markdown/assets/19-vector.svg',
+        $directory . '/diagram.svg',
+    );
 
     return $directory;
 }
@@ -549,4 +566,180 @@ it('reports a loss in the words of the reader of the document', function () {
             ->and($loss->message)->not->toContain('::')
             ->and((string) $loss)->toBe($loss->message);
     }
+});
+
+// The two lists, held together
+
+/**
+ * Every feature there is, and the sentence a writer that cannot do it loses.
+ *
+ * Read out of the class rather than written out here: a second list would be one
+ * that could drift from the first, and the whole point of the three tests below is
+ * that the two are the same.
+ *
+ * @return array<string, string>
+ */
+function formatFeatures(): array
+{
+    $constant = (new ReflectionClass(Format::class))->getReflectionConstant('FEATURES');
+
+    expect($constant)->toBeInstanceOf(
+        ReflectionClassConstant::class,
+        'Format has to say what every feature is.',
+    );
+
+    return $constant->getValue();
+}
+
+/**
+ * The documents that between them use every feature there is.
+ *
+ * @return list<array{markdown: string, config: Configuration, parser: CommonMarkParser|null}>
+ */
+function formatSurveyedDocuments(): array
+{
+    $assets = formatAssets();
+
+    return [
+        [
+            // The body of a document: the things the walk of the element tree finds.
+            'markdown' => <<<'MD'
+                # Heading
+
+                Text with `code`, **bold**, *italic* and ~~struck~~.
+
+                - bullet one
+                - bullet two
+
+                1. ordered one
+                2. ordered two
+
+                | A | B |
+                |:---|--:|
+                | 1 | 2 |
+
+                > quoted
+
+                ---
+
+                ```php
+                $x = 1;
+                ```
+
+                ![The alt text](logo.png)
+
+                ::toc
+
+                ::textbox[Hello]{width=6 height=3}
+
+                ::shape{type=rect width=6 height=3}
+
+                ::field{name="Customer"}
+
+                ::section{columns=2}
+
+                Ahead of plan :footnote[n=12] in the west.
+                MD,
+            'config' => Configuration::create()->withOptions([
+                'imageBasePath' => $assets,
+                'images' => Options::IMAGE_EMBED,
+            ]),
+            'parser' => null,
+        ],
+        [
+            // The furniture a document describes about itself, and a slot named after
+            // a style of the caller's own rather than the built-in look's.
+            'markdown' => <<<'MD'
+                ---
+                styles:
+                  heading.1: CorpTitle
+                header:
+                  body: |
+                    Running head
+                footer:
+                  body: |
+                    Running foot
+                ---
+
+                # Heading
+                MD,
+            'config' => Configuration::create(),
+            'parser' => CommonMarkParser::withFrontMatter(),
+        ],
+        [
+            // The two pictures whose names and kinds are read off the file itself.
+            'markdown' => <<<'MD'
+                ![A photo](photo.jpg)
+
+                ![A diagram](diagram.svg)
+                MD,
+            'config' => Configuration::create()->withOptions([
+                'imageBasePath' => $assets,
+                'images' => Options::IMAGE_EMBED,
+            ]),
+            'parser' => null,
+        ],
+    ];
+}
+
+/**
+ * The features a document reports as lost when it is written as the given format.
+ *
+ * @return list<string>
+ */
+function formatSurveyedLosses(array $document, Format $format): array
+{
+    $converter = new MarkdownToWord(
+        $document['markdown'],
+        $document['config'],
+        $document['parser'],
+    );
+
+    $converter->convertTo($format, Scratch::path('survey', $format->extension()));
+
+    return array_column($converter->pendingLosses(), 'feature');
+}
+
+it('drops nothing it cannot report', function (Format $format) {
+    // A name a format drops that is not a feature is a loss that is never reported:
+    // `Format::losses()` walks the features and asks the survey about each of them,
+    // so a name it does not know is never asked about and never said.
+    $features = formatFeatures();
+
+    foreach ($format->drops() as $dropped) {
+        expect($features)->toHaveKey($dropped);
+    }
+})->with(Format::cases());
+
+it('drops every feature somewhere', function () {
+    // The other half of the same question: a feature no format drops is a feature
+    // nothing is ever lost in, and the sentence about it is one nobody reads.
+    $dropped = [...Format::Odt->drops(), ...Format::Rtf->drops()];
+
+    expect(array_values(array_diff(array_keys(formatFeatures()), $dropped)))->toBe([]);
+});
+
+it('reports every feature a document used', function () {
+    // The half that needs a document: a feature the survey is never asked about is
+    // never reported, whatever a format drops. The documents above use every feature
+    // there is between them, and the two formats that drop something drop all of it
+    // between them.
+    $reported = [];
+
+    foreach (formatSurveyedDocuments() as $document) {
+        foreach ([Format::Odt, Format::Rtf] as $format) {
+            $reported = [...$reported, ...formatSurveyedLosses($document, $format)];
+        }
+    }
+
+    $required = array_keys(formatFeatures());
+
+    if (!SvgRasteriser::available()) {
+        // A build that cannot draw an SVG cannot have one in a document either: the
+        // conversion raises rather than going in flattened, so there is no document
+        // here that could carry the vector and lose it.
+        $required = array_values(array_diff($required, ['svg-vector']));
+    }
+
+    expect(array_values(array_diff($required, $reported)))->toBe([]);
 });

@@ -176,8 +176,8 @@ enum Format: string
      * wrote the code, because that is the reader who has to act on it.
      *
      * Every key here is a question {@see Survey} answers, and `tests/Unit/format.php`
-     * holds the two lists together: a feature nobody asks about is reported for every
-     * document, and a key that is not here is a loss that is never reported at all.
+     * holds the two lists together: a feature nobody asks about is never reported,
+     * and a name that is not here is a loss that is never reported at all.
      *
      * `numbered-lists` is never dropped alongside `lists`: a writer that leaves the
      * items out has lost the numbering with them, and saying both is the same fact

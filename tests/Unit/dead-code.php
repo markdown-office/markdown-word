@@ -272,6 +272,10 @@ it('does not claim again what the code does not do', function (string $claim) {
     // points — a leftover from the change that moved the cap out of points, in the
     // one paragraph a reader would have trusted about the unit.
     'the picture cap is measured in points' => 'Points, and a bare number.',
+    // The docblock of the feature list said a feature nobody asks about is "reported
+    // for every document", which is the opposite of what happens: a feature the survey
+    // is never asked about is never reported at all.
+    'a feature nobody asks about is reported for every document' => 'a feature nobody asks about is reported for every',
 ]);
 
 it('has no decorative dividers in it', function () {
