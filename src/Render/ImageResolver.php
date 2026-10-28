@@ -541,7 +541,7 @@ final class ImageResolver
     /**
      * The width a picture is scaled down to, in pixels, or null when there is no cap.
      *
-     * Points, and a bare number. `Frame::setWidth()` puts whatever it is
+     * Pixels, and a bare number. `Frame::setWidth()` puts whatever it is
      * given through `setNumericVal()`, which keeps a number and discards
      * anything else — so a width written `'8cm'` was thrown away, both
      * dimensions went unset, and the image came out at its own size however

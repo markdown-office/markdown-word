@@ -268,6 +268,10 @@ it('does not claim again what the code does not do', function (string $claim) {
     // The photograph in the image example was 1600 pixels wide and the page said
     // 1600 points, which is what made the cap look like it was not being applied.
     'the photograph is 1600pt wide' => '1600pt wide',
+    // The cap is a pixel count, and the docblock that says so began by calling it
+    // points — a leftover from the change that moved the cap out of points, in the
+    // one paragraph a reader would have trusted about the unit.
+    'the picture cap is measured in points' => 'Points, and a bare number.',
 ]);
 
 it('has no decorative dividers in it', function () {
