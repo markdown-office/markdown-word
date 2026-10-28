@@ -1456,8 +1456,9 @@ and the style would never reach a word — and a theme that names one style twic
 spellings. A theme without the key has no named styles, and every named form written
 against it is drawn as its own source text.
 
-A configuration carries the named styles as well and refuses the same names the same way:
-`withTextStyles()` takes them, and one called `footnote` is refused there too.
+A configuration carries the named styles as well, and the same names are refused in it:
+`withTextStyles()` takes them, and one called `footnote` is refused the way a theme's
+is.
 
 **A style's name is a word, and a word does not care about case.** A theme that spells a
 style `Brand` has it under `:brand[…]` and `:Brand[…]` alike, the way the directives
