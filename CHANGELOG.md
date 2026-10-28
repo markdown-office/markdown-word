@@ -65,6 +65,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A theme may not name a text style after a directive this library draws.** The
+  directive is drawn before the style is, so a style called `footnote` was never
+  applied to a word: `:footnote[…]` drew the footnote, and the style was left with
+  nothing to reach it. Nothing said so, and the theme was accepted as it stood.
+
+  A style named after one of the names the library draws is refused now, with a
+  message that names the collision and says what the name has to be instead. A
+  configuration carries the named styles as well, and refuses the same names the
+  same way.
+
 - **A table column's alignment is reported as lost in an `.odt`.** The ODF writer never
   descends into a table's cells, so the paragraph style of the runs inside a cell never
   becomes a style the cell could point at — and the alignment of a column went with it.

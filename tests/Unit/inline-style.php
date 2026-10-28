@@ -295,6 +295,36 @@ it('refuses a text style named with the reserved word in another case', function
         ->toThrow(InvalidConfiguration::class, '"style" is the name the raw form takes.');
 });
 
+it('refuses a text style named after a directive', function () {
+    // The directive is drawn before the style is, so a style called `footnote` would
+    // never be applied to a word: `:footnote[…]` draws the footnote, and the style is
+    // left with nothing to reach it. The theme said nothing about that, so the theme
+    // is refused.
+    [$root, $themes] = styleThemes();
+    writeStyleTheme($themes, 'bad', "textStyles:\n  footnote:\n    color: \"0B5CAB\"\n");
+
+    expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
+        ->toThrow(InvalidConfiguration::class, '"footnote" is the name of a directive this library draws');
+});
+
+it('refuses a text style named after a directive in another case', function () {
+    // The names are folded, as every other name in this library is.
+    [$root, $themes] = styleThemes();
+    writeStyleTheme($themes, 'bad', "textStyles:\n  Footnote:\n    color: \"0B5CAB\"\n");
+
+    expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
+        ->toThrow(InvalidConfiguration::class, '"footnote" is the name of a directive this library draws');
+});
+
+it('refuses a configuration that names a text style after a directive', function () {
+    // The other way in: a configuration carries the named styles too, and a style
+    // named after a directive is just as unreachable there.
+    $config = styledConfig(['footnote' => ['color' => '0B5CAB']]);
+
+    expect(fn () => renderText("A :footnote[note] here.\n", $config))
+        ->toThrow(InvalidConfiguration::class, '"footnote" is the name of a directive this library draws');
+});
+
 it('renders a theme with no text styles, and draws a named style against it as source text', function () {
     [$root, $themes] = styleThemes();
     writeStyleTheme($themes, 'plain', "heading.1:\n  color: 112233\n");

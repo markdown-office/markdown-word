@@ -1440,14 +1440,19 @@ textStyles:
 ```
 
 The properties are the same eight the inline attributes have, and a size is in points as it
-is everywhere else. Six things are refused when the theme is read, because each of them
+is everywhere else. Seven things are refused when the theme is read, because each of them
 is a mistake that would otherwise reach the document looking as though the line had never
 been written: a style that is not a set of properties at all, a style that carries no
 property, a style whose properties name an attribute that does not exist, a value that is
 not one — a colour, a size, a weight or a face, refused the same way — a style called
-`style`, that word being reserved for the raw form, and a theme that names one style
-twice, in two spellings. A theme without the key has no named styles, and every named form
-written against it is drawn as its own source text.
+`style`, that word being reserved for the raw form, a style named after a directive this
+library draws — `footnote` above all, because the footnote is drawn before the style is
+and the style would never reach a word — and a theme that names one style twice, in two
+spellings. A theme without the key has no named styles, and every named form written
+against it is drawn as its own source text.
+
+A configuration carries the named styles as well and refuses the same names the same way:
+`withTextStyles()` takes them, and one called `footnote` is refused there too.
 
 **A style's name is a word, and a word does not care about case.** A theme that spells a
 style `Brand` has it under `:brand[…]` and `:Brand[…]` alike, the way the directives

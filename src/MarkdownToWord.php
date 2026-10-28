@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace MarkdownWord;
 
 use League\CommonMark\Node\Block\Document;
+use MarkdownWord\Configuration\TextStyles;
 use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
+use MarkdownWord\Exception\InvalidConfiguration;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
@@ -157,7 +159,7 @@ final class MarkdownToWord implements Converter
     public function withTheme(?string $name): self
     {
         if ($name !== null) {
-            $this->themes()->resolve($name);
+            self::assertStylesAreDrawable($this->themes()->resolve($name)->textStyles());
         }
 
         $this->theme = $name;
@@ -212,13 +214,50 @@ final class MarkdownToWord implements Converter
         // one, because it is the only layer that knows which slots were *chosen*: passed
         // through `toArray()` it would name every slot there is and would therefore bury a
         // theme underneath all of it. See {@see Configuration::withTheme()}.
-        return ConfigurationMerger::resolve(
+        $configuration = ConfigurationMerger::resolve(
             commandLine: is_array($this->overrides) ? $this->overrides : $this->overrides?->toArray(),
             frontmatter: $frontmatter,
             defaults: $theme === null
                 ? $this->config
                 : $this->config->withTheme($theme->styles(), $theme->textStyles()),
         );
+
+        self::assertStylesAreDrawable($configuration->getTextStyles());
+
+        return $configuration;
+    }
+
+    /**
+     * A named style may not take the name of a directive this library draws.
+     *
+     * The directive is drawn before the style is, so a style called `footnote` is never
+     * applied to a word: `:footnote[…]` draws the footnote, and the style is left with
+     * nothing to reach it. The names are the ones the library publishes, so a name never
+     * means two things.
+     *
+     * Asked here rather than in the configuration, which does not know what the renderer
+     * draws — and asked here rather than in the theme, which is read before the document
+     * has said which of its styles it wants.
+     *
+     * @throws InvalidConfiguration when a style takes the name of a directive.
+     */
+    private static function assertStylesAreDrawable(TextStyles $styles): void
+    {
+        $drawn = array_map(TextStyles::fold(...), Directives::names());
+
+        foreach ($styles->names() as $name) {
+            $folded = TextStyles::fold($name);
+
+            if (!in_array($folded, $drawn, true)) {
+                continue;
+            }
+
+            throw new InvalidConfiguration(sprintf(
+                'The style "%s" cannot be defined: "%s" is the name of a directive this library draws. A named style has to be a name of your own, such as "brand".',
+                $name,
+                $folded,
+            ));
+        }
     }
 
     /**
