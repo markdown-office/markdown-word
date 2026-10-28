@@ -6,6 +6,7 @@ namespace MarkdownWord\Writer;
 
 use MarkdownWord\Render\Directive\Footnote;
 use MarkdownWord\Render\Directive\Toc;
+use MarkdownWord\Render\Directive\Usage;
 use MarkdownWord\Render\ImageDescriptionCollector;
 use MarkdownWord\Render\SvgAttachmentCollector;
 use PhpOffice\PhpWord\Element\AbstractContainer;
@@ -61,6 +62,7 @@ final class Survey
         ?SvgAttachmentCollector $vectors = null,
         ?Toc $tocs = null,
         ?Footnote $footnotes = null,
+        ?Usage $usage = null,
     ): self {
         $survey = new self();
 
@@ -90,6 +92,13 @@ final class Survey
 
         if ($footnotes?->isUsed() === true) {
             $survey->used['footnotes'] = true;
+        }
+
+        // What a directive asked of a writer that cannot carry it. It is not in the
+        // element tree — the directive was drawn as its own source text instead —
+        // so it is asked of the directive rather than found.
+        foreach ($usage?->features() ?? [] as $feature) {
+            $survey->used[$feature] = true;
         }
 
         $survey->vectorOnly = $vectors?->pendingWithoutRaster() === true;

@@ -71,7 +71,7 @@ function imageExample(string $mode): array
     $zip->close();
     unlink($target);
 
-    preg_match_all('#<v:shape[^>]*style="width:([\d.]+)pt; height:([\d.]+)pt#', $xml, $widths);
+    preg_match_all('#<v:shape[^>]*style="width:([\d.]+)px; height:([\d.]+)px#', $xml, $widths);
 
     return [
         'media' => $media,
@@ -135,15 +135,20 @@ it('writes the WebP into the document as a PNG, and records having done so', fun
 });
 
 it('scales the photograph to imageMaxWidth from the block', function () {
-    // `imageMaxWidth: 8.0` is in the block. The photograph is 1600pt wide as it
-    // comes out of `getimagesize()` and is written at 8cm = 226.8pt instead; the
-    // 96pt square is narrower than the cap and keeps its own size, because the
+    // `imageMaxWidth: 8.0` is in the block. The photograph is 1600 pixels wide as it
+    // comes out of `getimagesize()` and is written at 8cm = 302.36 pixels instead;
+    // the 96 pixel square is narrower than the cap and keeps its own size, because the
     // option is a maximum rather than a target.
+    //
+    // The unit is pixels because that is the unit a picture is measured in, and the
+    // file says so: a width of 96 pixels is 72 points, which is what Word lays it out
+    // at. Labelling the number `pt` — as PHPWord's own writer does — laid every
+    // picture out a third too large.
     $example = imageExample(Options::IMAGE_EMBED);
 
     expect($example['widths'])->toHaveCount(2)
         ->and((float) $example['widths'][0])->toEqualWithDelta(96.0, 0.1)
-        ->and((float) $example['widths'][1])->toEqualWithDelta(226.77, 0.1);
+        ->and((float) $example['widths'][1])->toEqualWithDelta(302.36, 0.1);
 });
 
 it('writes the alt text and the path in placeholder mode', function () {
@@ -183,9 +188,9 @@ it('puts the WebP in the links and images example as well', function () {
     expect($converter->pendingImageConversions())->toHaveCount(1)
         ->and($converter->pendingImageConversions()[0]['source'])->toEndWith('test_landscape.webp')
         ->and($xml)->toContain('<w:pict>')
-        // The 1600pt photograph under the default 15cm cap, so it is scaled rather
+        // The 1600 pixel photograph under the default 15cm cap, so it is scaled rather
         // than left wider than the page.
-        ->and(preg_match('#<v:shape[^>]*style="width:(425\.\d+)pt#', $xml))->toBe(1);
+        ->and(preg_match('#<v:shape[^>]*style="width:(566\.\d+)px#', $xml))->toBe(1);
 
     unlink($target);
 });

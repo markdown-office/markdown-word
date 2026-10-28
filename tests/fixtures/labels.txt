@@ -1,0 +1,131 @@
+# The labels a text style may be given, and what CommonMark makes of each one.
+#
+# `markdown` — CommonMark reads a complete construct in it: emphasis, code or a link,
+# and so must both halves.
+# `text` — it does not: the label is ordinary text, and neither half may hold it.
+#
+# Both halves of the suite hold a label that is Markdown and draw one that is text,
+# and the rules for what CommonMark calls a construct are CommonMark's own: a
+# delimiter run that opens an emphasis may not be followed by whitespace, and one
+# that closes it may not be preceded by whitespace. `tools/compare-label-patterns.php`
+# reads both halves' rules out of their own sources and runs this list through them.
+#
+# The verdicts are what the reference parser makes of the label: `markdown` when
+# league/commonmark reads emphasis, code or a link in it, `text` when it does not.
+#
+# The last two markers are where the halves' rules differ from CommonMark's, and they
+# are recorded so that a change to either half's rules has to say what it does about
+# them: `markdown-only` is a label CommonMark reads as Markdown and neither half
+# holds, `text-only` is one neither half should hold and both do.
+
+# Strong emphasis.
+markdown **Bakery**
+markdown **Bakery** is open
+markdown A **Bakery** here
+markdown **Bakery** and **Coffee**
+markdown ***Bakery***
+markdown **a*b**
+markdown ***a* b***
+markdown **Bakery***
+markdown *Bakery**
+
+# Emphasis with one asterisk.
+markdown *Bakery*
+markdown A *Bakery* here
+markdown (*Bakery*)
+markdown a*b*c
+markdown 2 *3* 4
+markdown *foo* bar *baz*
+markdown **Bakery** *Coffee**
+
+# Emphasis with two underscores.
+markdown __Bakery__
+markdown A __Bakery__ here
+markdown (__Bakery__)
+markdown __Bakery__ and __Coffee__
+
+# Emphasis with one underscore.
+markdown _Bakery_
+markdown A _Bakery_ here
+markdown (_Bakery_)
+markdown a _Bakery_ b
+markdown _foo_ bar _baz_
+
+# Code and links.
+markdown `code`
+markdown A `code span` here
+markdown [text](url)
+markdown A [link](https://example.com) here
+markdown [text](url "title")
+
+# A delimiter that opens an emphasis may not be followed by whitespace.
+text ** Bakery**
+text __ Bakery__
+text * Bakery*
+text _ Bakery_
+text **Bakery **
+text __Bakery __
+text *Bakery *
+text _Bakery _
+text ** Bakery **
+text __ Bakery __
+
+# A delimiter that closes an emphasis may not be preceded by whitespace.
+text __Bakery __
+text *Bakery *
+text _Bakery _
+
+# A delimiter run that is not closed.
+text *Bakery
+text Bakery*
+text _Bakery
+text Bakery_
+text **Bakery
+text Bakery**
+text `code
+text [text](url
+
+# An underscore does not open an emphasis inside a word.
+text snake_case
+text snake_case_name
+text a_b_c
+text x_Bakery_
+text x_Bakery_ here
+text a__b__c
+
+# A marker on its own, and a pair of them.
+text *
+text _
+text **
+text __
+text `
+text * *
+text _ _
+text ``
+
+# Brackets on their own are not a link.
+text [Bakery]
+text [Bakery
+text Bakery]
+text Bakery](url)
+
+# GFM's strikethrough is not CommonMark's, and a label is plain text.
+text ~~Bakery~~
+
+# Ordinary text.
+text Bakery
+text Baking bread
+text 50% off
+text a * b * c
+text 2 * 3
+text a_b
+text a*b
+
+# A run of three underscores is emphasis to CommonMark and text to both halves.
+markdown-only ___Bakery___
+markdown-only _Bakery__
+markdown-only __Bakery_ __
+
+# A run of one asterisk and a run of two is text to CommonMark and Markdown to both.
+text-only a *Bakery**a
+text-only a *Bakery_*a

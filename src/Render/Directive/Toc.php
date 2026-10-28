@@ -9,7 +9,6 @@ use MarkdownWord\Configuration\Options;
 use MarkdownWord\Format;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Render\ParagraphStyle;
-use MarkdownWord\Render\RenderContext;
 use MarkdownWord\Render\StyleResolver;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 
@@ -86,7 +85,7 @@ final class Toc
     ) {
     }
 
-    public function __invoke(DirectiveBlock $node, AbstractContainer $target, RenderContext $context): void
+    public function __invoke(DirectiveBlock $node, AbstractContainer $target): void
     {
         $title = $node->getAttributes()->getString('title');
 

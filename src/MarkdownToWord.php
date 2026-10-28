@@ -5,17 +5,26 @@ declare(strict_types=1);
 namespace MarkdownWord;
 
 use League\CommonMark\Node\Block\Document;
-use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Configuration\TextStyles;
 use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
+use MarkdownWord\Exception\InvalidConfiguration;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
+use MarkdownWord\Render\Directive\Caption;
+use MarkdownWord\Render\Directive\DocxOnly;
 use MarkdownWord\Render\Directive\Footnote;
+use MarkdownWord\Render\Directive\Image;
+use MarkdownWord\Render\Directive\PageBreak;
+use MarkdownWord\Render\Directive\SectionBreak;
+use MarkdownWord\Render\Directive\TextStyle;
 use MarkdownWord\Render\Directive\Toc;
+use MarkdownWord\Render\Directive\Usage;
 use MarkdownWord\Render\Directives;
 use MarkdownWord\Render\DocumentRenderer;
 use MarkdownWord\Render\FurnitureWriter;
+use MarkdownWord\Render\Handlers;
 use MarkdownWord\Render\HtmlFragmentRenderer;
 use MarkdownWord\Render\ImageConversionCollector;
 use MarkdownWord\Render\SvgAttachmentCollector;
@@ -26,6 +35,7 @@ use MarkdownWord\Render\LinkPayloadCollector;
 use MarkdownWord\Render\NumberingRegistry;
 use MarkdownWord\Render\StyleRegistrar;
 use MarkdownWord\Render\StyleResolver;
+use MarkdownWord\Theme\LoadedTheme;
 use MarkdownWord\Theme\ThemeResolver;
 use MarkdownWord\Writer\DocxWriter;
 use MarkdownWord\Writer\OdtWriter;
@@ -53,6 +63,18 @@ final class MarkdownToWord implements Converter
     private ?Toc $toc = null;
 
     private ?Footnote $footnotes = null;
+
+    /**
+     * The section handler of the last render, which the renderer asks about as
+     * well: a `::section` starts a section, and the rest of the document is
+     * drawn in it.
+     */
+    private ?SectionBreak $sections = null;
+
+    /**
+     * What the last render asked of a writer that may not be able to carry it.
+     */
+    private ?Usage $usage = null;
 
     /**
      * The format the last write went through, and what that document asked of the
@@ -100,6 +122,12 @@ final class MarkdownToWord implements Converter
      *        what they are instead, because emitting them here leaves a document carrying
      *        a footnote reference to a note the package does not contain, and a run of
      *        invisible separators where a table of contents should be.
+     * @param string|null $directory The directory the document was read from, which is
+     *        where a theme beside it is found: a document names a theme, and the theme
+     *        that travels with it is the one next to it rather than the one next to
+     *        wherever the program happens to be. Null for a document handed in as a
+     *        string, which has no directory of its own; the working directory is what a
+     *        name resolves against then.
      */
     public function __construct(
         private readonly ?string $source = null,
@@ -107,6 +135,7 @@ final class MarkdownToWord implements Converter
         private readonly ?MarkdownParserInterface $parser = null,
         private readonly Configuration|array|null $overrides = null,
         private readonly bool $detached = false,
+        private readonly ?string $directory = null,
     ) {
     }
 
@@ -125,12 +154,14 @@ final class MarkdownToWord implements Converter
      *         through writing it.
      * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
      * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception\InvalidConfiguration when the theme names a text style after a
+     *         directive this library draws
      * @throws Exception\Exception when one of the theme's files cannot be read or parsed
      */
     public function withTheme(?string $name): self
     {
         if ($name !== null) {
-            $this->themes()->resolve($name);
+            self::assertStylesAreDrawable($this->themes()->resolve($name)->textStyles());
         }
 
         $this->theme = $name;
@@ -163,7 +194,8 @@ final class MarkdownToWord implements Converter
      *        {@see self::toPhpWord()} supplies it on every path that renders.
      *
      * @throws Exception\InvalidConfiguration when the block names nothing, or gives a
-     *         value that is not what it is used as.
+     *         value that is not what it is used as, or when a named text style takes
+     *         the name of a directive this library draws
      * @throws Exception\ThemeNotFound when the document's or the caller's `theme:` does
      *         not resolve. Deliberately not swallowed: see {@see self::themeFor()}.
      * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
@@ -185,11 +217,49 @@ final class MarkdownToWord implements Converter
         // one, because it is the only layer that knows which slots were *chosen*: passed
         // through `toArray()` it would name every slot there is and would therefore bury a
         // theme underneath all of it. See {@see Configuration::withTheme()}.
-        return ConfigurationMerger::resolve(
+        $configuration = ConfigurationMerger::resolve(
             commandLine: is_array($this->overrides) ? $this->overrides : $this->overrides?->toArray(),
             frontmatter: $frontmatter,
-            defaults: $theme === null ? $this->config : $this->config->withTheme($theme),
+            defaults: $theme === null
+                ? $this->config
+                : $this->config->withTheme($theme->styles(), $theme->textStyles()),
         );
+
+        self::assertStylesAreDrawable($configuration->getTextStyles());
+
+        return $configuration;
+    }
+
+    /**
+     * A named style may not take the name of a directive this library draws.
+     *
+     * The directive is drawn before the style is, so a style called `footnote` is never
+     * applied to a word: `:footnote[…]` draws the footnote, and the style is left with
+     * nothing to reach it.
+     *
+     * Asked here rather than in the configuration, which does not know what the renderer
+     * draws, and asked of the merged configuration rather than of a theme alone, so a
+     * style from a theme and one from a caller's code are refused the same way.
+     *
+     * @throws InvalidConfiguration when a style takes the name of a directive.
+     */
+    private static function assertStylesAreDrawable(TextStyles $styles): void
+    {
+        $drawn = array_map(TextStyles::fold(...), Directives::names());
+
+        foreach ($styles->names() as $name) {
+            $folded = TextStyles::fold($name);
+
+            if (!in_array($folded, $drawn, true)) {
+                continue;
+            }
+
+            throw new InvalidConfiguration(sprintf(
+                'The style "%s" cannot be defined: "%s" is the name of a directive this library draws. A named style has to be a name of your own, such as "brand".',
+                $name,
+                $folded,
+            ));
+        }
     }
 
     /**
@@ -206,16 +276,19 @@ final class MarkdownToWord implements Converter
      * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
      * @throws Exception\Exception when one of the theme's files cannot be read or parsed
      */
-    private function themeFor(Frontmatter $frontmatter): ?Styles
+    private function themeFor(Frontmatter $frontmatter): ?LoadedTheme
     {
         $name = $this->theme ?? $frontmatter->themeName();
 
-        return $name === null ? null : $this->themes()->resolve($name)->styles();
+        return $name === null ? null : $this->themes()->resolve($name);
     }
 
     private function themes(): ThemeResolver
     {
-        return new ThemeResolver(workingDirectory: getcwd() ?: '.');
+        return new ThemeResolver(
+            workingDirectory: getcwd() ?: '.',
+            documentDirectory: $this->directory,
+        );
     }
 
     public function parse(string $markdown): Document
@@ -398,7 +471,14 @@ final class MarkdownToWord implements Converter
     private function write(Format $format, PhpWord $phpWord, ?string $target): string
     {
         $this->format = $format;
-        $this->survey = Survey::of($phpWord, $this->images, $this->vectors, $this->toc, $this->footnotes);
+        $this->survey = Survey::of(
+            $phpWord,
+            $this->images,
+            $this->vectors,
+            $this->toc,
+            $this->footnotes,
+            $this->usage,
+        );
 
         return match ($format) {
             Format::Docx => $target === null
@@ -495,11 +575,6 @@ final class MarkdownToWord implements Converter
         $this->conversions ??= new ImageConversionCollector();
         $this->vectors ??= new SvgAttachmentCollector();
 
-        // One registry for both renderers: an inline directive is handled by the
-        // inline renderer and a block one by the document renderer, and a name
-        // means the same thing whichever of the two meets it.
-        $directives = new Directives();
-
         // Rebuilt per render rather than cached on the converter, because each reads
         // `$this->format` when it is drawn and a cached one keeps the format of the
         // *first* render. One converter writing a `.docx` and then an `.odt` would hand
@@ -507,13 +582,47 @@ final class MarkdownToWord implements Converter
         $this->toc = new Toc($config->getOptions(), $styles, $this->format, carries: !$this->detached);
         $this->footnotes = new Footnote($styles, $this->format, carries: !$this->detached);
 
-        $directives = $directives
-            ->withBlock('toc', $this->toc)
-            ->withInline('footnote', $this->footnotes);
+        // What the document asked of a writer that may not be able to carry it. The
+        // directives record themselves here as they are drawn, because the thing
+        // that is lost is not in the element tree for a survey to find.
+        $this->usage = new Usage();
+
+        $imageResolver = new ImageResolver(
+            $config->getOptions(),
+            $this->images,
+            $this->conversions,
+            $this->vectors,
+            $this->format,
+        );
+
+        // The section handler is the one the renderer asks about as well: a
+        // `::section` starts a section, and the rest of the document is drawn in
+        // it.
+        $this->sections = new SectionBreak(carries: !$this->detached, usage: $this->usage);
+
+        // One registry for both renderers: an inline directive is handled by the
+        // inline renderer and a block one by the document renderer, and a name means
+        // the same thing whichever of the two meets it.
+        //
+        // The theme's named styles are the names this library draws that are not fixed:
+        // they are the ones the theme brings, so the registry is handed them rather than
+        // holding them.
+        $directives = Directives::standard(
+            $this->toc,
+            $this->footnotes,
+            new Handlers(
+                textStyle: new TextStyle($config->getTextStyles(), $styles),
+                image: new Image($imageResolver),
+                caption: new Caption($styles),
+                pageBreak: new PageBreak(),
+                section: $this->sections,
+                docxOnly: new DocxOnly($styles, $this->format, $this->usage),
+            ),
+        );
 
         $inlines = new InlineRenderer(
             $styles,
-            new ImageResolver($config->getOptions(), $this->images, $this->conversions, $this->vectors, $this->format),
+            $imageResolver,
             $this->links,
             $html,
             $config->getOptions()->deferredHyperlinks,
@@ -530,6 +639,7 @@ final class MarkdownToWord implements Converter
             new NumberingRegistry($config, $phpWord),
             $html,
             $directives,
+            $this->sections,
         );
 
         $renderer->render($document, $container);

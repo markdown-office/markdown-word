@@ -10,7 +10,8 @@ in all three, because they are written onto the text rather than pointed at a
 style only Word has. What is left is the writer's: the `.rtf` has no list in it
 at all, the `.odt` has bullets where the numbers should be, and neither of the
 two has a rule under the `---`, a border round the table or a background behind
-the code. The conversion printed a line on standard error for each of those.
+the code. The `.odt`'s table has lost the alignment of its columns as well. The
+conversion printed a line on standard error for each of those.
 
 ## What is in the page
 

@@ -85,3 +85,14 @@ table:
 # slot left. A `Cell` takes a bare colour where a `Table` takes a mapping with a `fill`.
 tableCell:
   shading: "EEF1F7"
+
+# Named text styles: a word a document writes in one of them, with `:brand[Bakery]`.
+# The properties are the same eight the inline style attributes have, and a size is in
+# points as it is everywhere else.
+textStyles:
+  brand:
+    color: "0B5CAB"
+    bold: true
+  muted:
+    color: "6B7280"
+    size: 10

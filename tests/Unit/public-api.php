@@ -11,6 +11,7 @@ use MarkdownWord\Reverse\Options as ReverseOptions;
 use MarkdownWord\Render\InlineStyle;
 use MarkdownWord\Render\StyleResolver;
 use MarkdownWord\Text\TextExtractor;
+use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\Upstream;
 
 /*
@@ -101,6 +102,29 @@ it('offers a setter for the media directory and for a batch of options', functio
     expect((new ReverseOptions())->withMediaDirectory('assets')->mediaDirectory)->toBe('assets')
         ->and((new ReverseOptions())->withMediaDirectory(null)->mediaDirectory)->toBeNull()
         ->and((new ReverseOptions())->withAll(['headingSetext' => true])->headingSetext)->toBeTrue();
+});
+
+// MarkdownToWord
+
+it('takes the directory a document was read from, and finds a theme beside it', function () {
+    // A document's theme travels with the document, so the converter is told where
+    // the document is. A document handed over as a string has no directory of its own,
+    // and the working directory is where the program happens to be.
+    $directory = Scratch::directory() . '/beside';
+    mkdir($directory . '/themes/house', 0o777, true);
+    file_put_contents($directory . '/themes/house/theme.yml', "name: House\n");
+    file_put_contents($directory . '/themes/house/styles.yml', "heading.1:\n  color: 112233\n");
+
+    $markdown = "---\ntheme: house\n---\n\n# T\n";
+    $converter = new MarkdownToWord(
+        $markdown,
+        parser: CommonMarkParser::withAllExtensions(),
+        directory: $directory,
+    );
+
+    $config = $converter->configurationFor($converter->parse($markdown), $markdown);
+
+    expect($config->getStyles()->get(Styles::HEADING_1)['color'])->toBe('112233');
 });
 
 // Parser factories

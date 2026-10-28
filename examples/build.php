@@ -484,6 +484,53 @@ foreach ([
     $built[] = [$name, $description, $path];
 }
 
+// A word in a style of its own
+//
+// The document names its own theme, and the theme brings the two named styles
+// it writes with. The parser has to read the front matter and the directives
+// at once for that, which is what `$frontmatterParser` is.
+
+$path = $docs . '/28-inline-styles' . DOCX_EXTENSION;
+(new MarkdownToWord(
+    markdownOf($root, '28-inline-styles'),
+    Configuration::create(),
+    $frontmatterParser,
+))->save($path);
+
+$built[] = ['28-inline-styles', 'A word in a named style, and the four forms around it.', $path];
+
+// The objects a document may place in it
+//
+// One page, three formats, because the point of the three is what each of them
+// loses: the text box, the shape and the form field are a Word document's
+// alone, and the columns of a section are the one RTF has no room for. A
+// writer that cannot carry a directive is given the characters the author
+// wrote, and the loss is reported — so the report is printed here rather than
+// left in a return value nobody prints.
+
+$objects = markdownOf($root, '29-objects');
+$losses = [];
+
+foreach (Format::cases() as $format) {
+    $path = $docs . '/29-objects' . $format->extension();
+    $converter = new MarkdownToWord($objects, Configuration::create()->withOptions([
+        'images' => Options::IMAGE_EMBED,
+        'imageBasePath' => $root . '/markdown',
+    ]), $frontmatterParser);
+
+    $converter->convertTo($format, $path);
+
+    $built[] = [
+        '29-objects' . $format->extension(),
+        sprintf('The objects page as %s %s.', $format->value === 'rtf' ? 'an' : 'a', $format->value),
+        $path,
+    ];
+
+    foreach ($converter->pendingLosses() as $loss) {
+        $losses[$format->value][] = $loss->message;
+    }
+}
+
 // Tables
 
 foreach ([
@@ -572,6 +619,20 @@ foreach ($built as [$name, $description, $path]) {
 }
 
 echo "\n";
+
+if ($losses !== []) {
+    echo "Lost in the formats that cannot carry them:\n\n";
+
+    foreach ($losses as $format => $messages) {
+        printf("  %s\n", $format);
+
+        foreach ($messages as $message) {
+            printf("    %s\n", $message);
+        }
+    }
+
+    echo "\n";
+}
 
 renderPreviews($built, $previews);
 

@@ -4,6 +4,154 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A word can be written in a style, in the middle of a sentence.** `:brand[Bakery]`
+  is the word "Bakery" in the style the theme calls `brand`, and the theme's
+  `styles.yml` gains a `textStyles` key for it:
+
+  ```yaml
+  textStyles:
+    brand:
+      color: "0B5CAB"
+      bold: true
+  ```
+
+  Three forms, one grammar: a name a theme defines, that name with attributes over
+  it property by property (`:brand[Bakery]{color=FF0000}`), and the reserved name
+  `style` with attributes and no theme style behind it (`:style[teal]{color=00B4D8}`).
+  The attributes are eight — `color`, `size`, `font`, `bold`, `italic`, `underline`,
+  `strike` and `highlight` — and they are the same in a theme's style and in the
+  directive itself. A size is in points, as it is everywhere else.
+
+  The styles are a configuration of their own: `withTextStyles()` adds them and
+  `getTextStyles()` reads them back, and `Configuration::toArray()` carries them
+  beside the slots and the options.
+
+  A theme that brings no named styles changes nothing: every named form written
+  against it is drawn as its own source text, the way a name nothing claims has
+  always been drawn. So is everything else this library cannot draw — an attribute
+  that does not exist, a value that is not what the attribute takes, and a label
+  holding a complete Markdown construct, which a label cannot have honoured in any
+  case. The presentation half refuses all of them and names the alternative; this
+  half draws them, because a sentence and a parser nobody asked to change should not
+  change the syntax of every document converted after it.
+
+  The names this library draws are asked of `Render\Directives::names()` rather than
+  read out of the source of `MarkdownToWord`, so a check against them cannot quietly
+  find nothing.
+
+- **`CommonMarkParser::withFrontMatter()`.** The default flavour carries the
+  directives and not the front matter, and `withAllExtensions()` carries the front
+  matter and not the directives, so a document that names a theme in its own `---`
+  block and writes a word in one of the theme's styles had no parser that read
+  both. The command line reads with that parser already.
+
+- **A theme can be named as its `theme.yml`.** A `theme:` that names a file loads that
+  file as the theme's manifest, and the theme's other files — `styles.yml` — are read
+  from the directory that holds it. A path is a path: it is written from the document's
+  own directory, resolved with `realpath()` and held to the same scope, whether it names
+  a directory or a file; only what is read from it differs. A file that is not a
+  `theme.yml` is refused, and so is a directory with no `theme.yml` in it — with a
+  message that says which of the two it was.
+
+  ```yaml
+  ---
+  theme: ./themes/house/theme.yml
+  ---
+  ```
+
+### Fixed
+
+- **A `value` on a dropdown is refused rather than written into the file.** Word
+  records a dropdown's choice as the position of the chosen entry in the list, and
+  not as its text, so `::field{type=dropdown value="Berlin"}` wrote the text of an
+  entry where `w:ddList/w:default` and `w:result` — a zero-based index — belong.
+
+  A `value` is applied to a text field, which is where it means something, and a
+  dropdown that carries one is refused with a message that says why.
+
+- **A theme may not name a text style after a directive this library draws.** The
+  directive is drawn before the style is, so a style called `footnote` was never
+  applied to a word: `:footnote[…]` drew the footnote, and the style was left with
+  nothing to reach it. Nothing said so, and the theme was accepted as it stood.
+
+  A style named after one of the names the library draws is refused now, with a
+  message that names the collision and says what the name has to be instead. A
+  configuration carries the named styles as well, and refuses the same names the
+  same way.
+
+- **A table column's alignment is reported as lost in an `.odt`.** The ODF writer never
+  descends into a table's cells, so the paragraph style of the runs inside a cell never
+  becomes a style the cell could point at — and the alignment of a column went with it.
+  The weight of a header row was reported; the alignment was not, so a reader who
+  aligned a column and converted to `.odt` lost it in silence.
+
+  The `.docx` and the `.rtf` carry it, and the report says nothing about either of them.
+
+- **A document with a form field in it can be read back.** `TextExtractor` asked a run
+  for its text and used it as a string, and a form field has none: a form field is a
+  box, and the text in it is the default it was given rather than a run of its own.
+  Reading such a document raised a `TypeError` rather than returning its text.
+
+  A form field contributes the default it was given — the text the author wrote for it
+  — and a field with no default contributes nothing. Its name is the form's identifier
+  rather than the document's wording, so it is not in the text. A checkbox contributes
+  nothing either: it is a box.
+
+  A run that holds no text at all — a content control with no value, a list item whose
+  text was taken away — contributes nothing rather than raising.
+
+- **A label holds no Markdown that CommonMark does not call emphasis.** The rule refused
+  `** text**` and `**Bakery **`, which are not emphasis: a delimiter run that opens an
+  emphasis may not be followed by whitespace, and one that closes it may not be preceded
+  by whitespace. A label holding one is drawn as the word it holds.
+
+  The rules are CommonMark's own now, and they are the same rules the slides half keeps
+  them in: `tools/compare-label-patterns.php` reads both halves' lists out of their own
+  sources and runs one corpus of labels through them, and the two halves agree on every
+  label in it.
+
+- **A style's name is a word, and a word does not care about case.** A theme that spelled
+  a style `Brand` had it under `:Brand[…]` alone, so a document writing `:brand[Bakery]`
+  found nothing, and the names this library published were the folded ones rather than
+  the spelling the theme wrote — which is the spelling the author has to change. The
+  names are folded now, the way the directives package folds the names of the directives
+  themselves, and the names this library publishes spell the styles the way the theme
+  wrote them.
+
+  A theme that names one style twice, in two spellings, is refused rather than letting
+  one of the two be reached at random. The reserved word is folded with the rest of the
+  names, so a theme naming a style `Style` is refused as one naming `style`.
+
+- **A document's theme is found beside the document.** The `theme:` a document names was
+  resolved against the *process's* working directory, so a document that said
+  `theme: corporate` found it only when the run happened to start in the document's own
+  directory — and a build script that converts a document from somewhere else got an
+  error naming a theme the author had written beside the document. A document travels,
+  and the theme beside it travels with it, so a bare name is looked for in
+  `./themes/<name>` beside the document first and in the working directory's own
+  `./themes/<name>` second. The document's own directory is a root of the scope a
+  document-written path is held to, and a relative theme path is written from it — the
+  rule a `template_file:` and a relative image path already follow.
+
+  The library has to be told where the document is, because a document handed over as a
+  string has no directory of its own:
+
+  ```php
+  (new MarkdownToWord($markdown, directory: '/srv/project'))->save('report.docx');
+  ```
+
+### Changed
+
+- **`ThemeResolver` looks in the roots it is given.** They were read into the scope a
+  document-written path is held to and never looked in, so a shared library of themes
+  beside the project had to be named by its full path. A name is now looked for in each
+  of them directly, the way it is in the themes that ship with this package, and they
+  are named in the list of the themes that resolve — so a failure names them too.
+
 ## [0.2.2] - 2026-10-26
 
 ### Changed

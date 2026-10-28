@@ -236,6 +236,45 @@ it('does not claim again what the code does not do', function (string $claim) {
     // A link is followed whether its target is there or not: `is_link()` is true for
     // a dangling one, and `readlink()` names the target all the same.
     'a link is only followed when its target is there' => 'needs its target to exist',
+    // Two claims about where a theme is looked for, both of which this change made
+    // false. A theme's name is resolved beside the document now, so a bare name lands
+    // on the document's own directory rather than on the working directory's, and a
+    // relative path is written from beside the document as well — which is what a
+    // `template_file:` and a relative image path have always done here. The template's
+    // own docblock said the theme differed from it in exactly that, and it no longer
+    // does.
+    'a bare name lands on the working directory itself' => 'lands on the working directory itself',
+    'the theme differs from the template in where a relative name is written from' => 'The difference from a theme is where a relative name is written from',
+    // Six claims about what a theme *is*, all of which this change made false: a theme
+    // is its `theme.yml`, and the `styles.yml` beside it, so a theme may be named by the
+    // file rather than by the directory around it. Two messages said a theme is a
+    // directory, the page said the same in a longer sentence, and three docblocks said
+    // it in their own words.
+    'a theme is a directory and nothing else' => 'A theme is a directory holding that file',
+    'a theme is a directory and nothing else, on this machine' => 'A theme is a directory on this machine, not something to fetch',
+    'a theme is a directory and nothing else, on the page' => 'A theme is a directory holding a `theme.yml` and, usually, a `styles.yml`',
+    'a theme is a directory and nothing else, in the loader' => 'Reads a theme out of a directory.',
+    'a theme is a directory and nothing else, in the theme' => 'A theme as a directory holds it',
+    'a theme is a directory and nothing else, in the failure' => 'A theme directory does not describe a theme',
+    // PHPWord measures an image in pixels, and its RTF and ODF writers read the
+    // number back as pixels. Only its Word writer labels the number `pt`, so a
+    // picture of 96 pixels came to be laid out 96 points wide — a third too large.
+    // Four places said the library's own convention was points, and each of them
+    // was read as the reason a picture was the size it was.
+    'the library measures a picture\'s pixels as points' => 'PHPWord measures an image\'s pixels as points',
+    'the library reads a picture\'s pixels as points' => 'PHPWord reads an image\'s pixels as points',
+    'the library sizes a picture in points' => 'PHPWord sizes a picture in points',
+    'the library sizes pictures in points' => 'PHPWord sizes pictures in points',
+    // The photograph in the image example was 1600 pixels wide and the page said
+    // 1600 points, which is what made the cap look like it was not being applied.
+    'the photograph is 1600pt wide' => '1600pt wide',
+    // The cap is a pixel count, and the docblock that says so began by calling it
+    // points — a leftover from the change that moved the cap out of points.
+    'the picture cap is measured in points' => 'Points, and a bare number.',
+    // The docblock of the feature list said a feature nobody asks about is "reported
+    // for every document", which is the opposite of what happens: a feature the survey
+    // is never asked about is never reported at all.
+    'a feature nobody asks about is reported for every document' => 'a feature nobody asks about is reported for every',
 ]);
 
 it('has no decorative dividers in it', function () {

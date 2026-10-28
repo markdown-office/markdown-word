@@ -291,17 +291,17 @@ it('answers the size question from the file rather than the name', function () {
 });
 
 it('rasterises at the size the SVG stated, in points', function () {
-    // PHPWord sizes a picture in points and compares `imageMaxWidth` against them, so a
-    // raster wider than the SVG's own width would lay the document out too large.
+    // The cap is compared against the drawing's own size, so a raster wider than
+    // the width the SVG asked for would lay the document out too large.
     expect(SvgRasteriser::intrinsicWidth(anSvg() . '/diagram.svg'))->toBeGreaterThan(0.0);
 });
 
 it('states both dimensions on the picture, since a height left out is PHPWord\'s to guess', function () {
     // `imageStyle()` sets a width only for a picture wider than the cap, and sets no
     // height at all — PHPWord takes that from the file. For a raster the file is right;
-    // for a vector it is the SVG rendered at 96dpi, and PHPWord reads its pixels as
-    // points. Leaving the height out hands the picture a size that is neither the
-    // SVG's nor the cap's.
+    // for a vector it is the SVG rendered at 96dpi, whose pixel count is a third
+    // larger than the width the drawing asked for. Leaving the height out hands the
+    // picture a size that is neither the SVG's nor the cap's.
     $parts = renderWithSvg("![A diagram](diagram.svg)\n", anSvg());
 
     expect($parts['document'])->toMatch('~<wp:extent cx="\d+" cy="\d+"/>~');

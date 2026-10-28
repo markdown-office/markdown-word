@@ -10,48 +10,89 @@ use MarkdownWord\Filesystem\PathScope;
 /**
  * Turns the `theme:` a document names into a theme, in the order one is looked for:
  *
- * 1. an explicit path — anything with a `/` in it;
- * 2. `./themes/<name>` under the working directory;
- * 3. a theme that ships with this package;
- * 4. nothing, which is a failure naming every theme that did resolve.
+ * 1. an explicit path — anything with a `/` in it, written from the document's own
+ *    directory — or the working directory, where the document has none — unless it
+ *    names an absolute one;
+ * 2. `./themes/<name>` beside the document;
+ * 3. `./themes/<name>` beside the working directory;
+ * 4. a theme in a root the calling program allowed;
+ * 5. a theme that ships with this package;
+ * 6. nothing, which is a failure naming every theme that did resolve.
  *
- * Step 4 is the point. Falling back to the built-in default would produce a document in
+ * Step 6 is the point. Falling back to the built-in default would produce a document in
  * the wrong colours with nothing in the output to say so; the alternative is an error that
  * names the themes that exist, which is a sentence the author of the document can act on.
  *
+ * The document's own directory comes before the working directory because a document
+ * travels: the theme beside it travels with it, and the working directory is where the
+ * program happens to be. A run that resolved against the working directory found the
+ * theme of the machine — and found nothing at all unless it happened to start in the
+ * document's own directory.
+ *
+ * A path is looked for on its own: one that does not resolve is a failure rather than a
+ * name that is looked for elsewhere, so a document writing `theme: ./nowhere` is told
+ * about the path and not about the themes that do exist. What the path names decides
+ * only what is read from it — the `theme.yml` of a directory, or the file itself as the
+ * manifest of the theme around it — and not where it is looked for.
+ *
  * Every step resolves the path with `realpath()` and holds it to {@see PathScope}. A
- * `theme:` is a path a document writes, and a document is not trusted to mean the
- * directory it names: `../` walks out of the working directory and an absolute path is
- * read from wherever it points.
+ * `theme:` is a path a document writes, and a document is not trusted to mean the path
+ * it names: `../` walks out of the directory the path was written from and an absolute
+ * path is read from wherever it points.
  *
  * The name is worth saying once more, because the resolution is not obvious from it: a
- * bare name is looked for under `./themes/`, so `theme: ..` lands on the working
- * directory itself rather than on anything inside `themes/`. It is contained, because the
- * working directory is a root — but it is not what the name suggests, which is why a
- * theme whose own `theme.yml` sits beside the document resolves this way too.
+ * bare name is looked for under `./themes/`, so `theme: ..` lands on the directory above
+ * it rather than on anything inside `themes/`. It is contained, because that directory is
+ * a root — but it is not what the name suggests.
  */
 final class ThemeResolver
 {
+    /**
+     * The directory a theme is looked for in, under the one it was named beside.
+     *
+     * Steps 2, 3 and 5 of the order above each look in a directory of themes:
+     * the document's own, the working directory's, and the one that ships with
+     * this package.
+     */
+    private const THEMES_DIRECTORY = '/themes';
+
     private readonly string $builtinDirectory;
 
     private readonly PathScope $files;
 
+    /** @var list<string> */
+    private readonly array $roots;
+
     /**
-     * @param list<string> $roots Further directories a document may name a theme in, for a
-     *   shared library of themes beside the project. As with a theme's this is the calling
-     *   program's decision, made before a document is read: a document that could widen it
-     *   would be the arbitrary path read this argument exists to stop.
+     * @param list<string> $roots Further directories a document may name a theme in, for
+     *   a shared library of themes beside the project. Each is a directory of themes: a
+     *   name is looked for in one of them directly, the way it is in the themes that ship
+     *   with this package. As with a theme's this is the calling program's decision,
+     *   made before a document is read: a document that could widen it would be the
+     *   arbitrary path read this argument exists to stop.
+     * @param string|null $documentDirectory The directory the document was read from,
+     *   which is where its own `themes/` sits and where a relative path is written from.
+     *   Null for a document handed in as a string: there is no file beside it, so a theme
+     *   beside it is not there to be found.
      */
     public function __construct(
         private readonly string $workingDirectory = '.',
         ?string $builtinDirectory = null,
         private readonly ThemeLoader $loader = new ThemeLoader(),
         array $roots = [],
+        private readonly ?string $documentDirectory = null,
     ) {
+        $this->roots = array_values($roots);
+
         // The themes beside `src/`, so a package installed anywhere resolves its own
         // themes without being told where they are.
-        $this->builtinDirectory = $builtinDirectory ?? dirname(__DIR__, 2) . '/themes';
-        $this->files = new PathScope([$this->workingDirectory, $this->builtinDirectory, ...$roots]);
+        $this->builtinDirectory = $builtinDirectory ?? dirname(__DIR__, 2) . self::THEMES_DIRECTORY;
+        $this->files = new PathScope([
+            ...($this->documentDirectory === null ? [] : [$this->documentDirectory]),
+            $this->workingDirectory,
+            $this->builtinDirectory,
+            ...$this->roots,
+        ]);
     }
 
     /**
@@ -66,14 +107,17 @@ final class ThemeResolver
         if (str_contains($name, '/')) {
             // A `theme:` is a path a document writes, so where it is written from says
             // nothing about it; what is allowed is where it lands.
-            return $this->loader->load($this->directory(
-                $name,
-                str_starts_with($name, '/') ? $name : $this->workingDirectory . '/' . $name,
-            ), $name, $this->files);
+            $path = str_starts_with($name, '/') ? $name : $this->base() . '/' . $name;
+
+            // Whether the path names a directory or a file decides what is read from it,
+            // not where it is looked for: a path is found the same way either way.
+            return is_file($path)
+                ? $this->loader->loadManifest($this->file($name, $path), $name, $this->files)
+                : $this->loader->load($this->directory($name, $path), $name, $this->files);
         }
 
-        foreach ($this->roots() as $root) {
-            if (is_dir($directory = $root . '/' . $name)) {
+        foreach ($this->themeDirectories() as $themes) {
+            if (is_dir($directory = $themes . '/' . $name)) {
                 return $this->loader->load($this->directory($name, $directory), $name, $this->files);
             }
         }
@@ -82,13 +126,35 @@ final class ThemeResolver
     }
 
     /**
+     * The directory a relative path is written from.
+     *
+     * The document's own directory, because that is where a document's paths are written
+     * from — the rule a `template_file:` and a relative image path follow. The working
+     * directory stands in for a document handed in as a string, which has no directory
+     * of its own.
+     */
+    private function base(): string
+    {
+        return $this->documentDirectory ?? $this->workingDirectory;
+    }
+
+    /**
      * The directories a bare name is looked for in, in the order they are tried.
+     *
+     * One list because a name has to resolve the same way whether it is being looked up
+     * or enumerated: a name the resolver would accept and not list is a name a failure
+     * message leaves the reader to guess at.
      *
      * @return list<string>
      */
-    private function roots(): array
+    private function themeDirectories(): array
     {
-        return [$this->workingDirectory . '/themes', $this->builtinDirectory];
+        return [
+            ...($this->documentDirectory === null ? [] : [$this->documentDirectory . self::THEMES_DIRECTORY]),
+            $this->workingDirectory . self::THEMES_DIRECTORY,
+            ...$this->roots,
+            $this->builtinDirectory,
+        ];
     }
 
     /**
@@ -123,9 +189,33 @@ final class ThemeResolver
     }
 
     /**
-     * Every theme name that resolves, local and built-in together, sorted: a name resolves
-     * to one of them and the reader of the list cannot tell which, so listing one kind
-     * ahead of the other would say something untrue.
+     * The manifest a path named, resolved and held to the roots.
+     *
+     * The same question as {@see self::directory()} asks of a directory, asked of a file:
+     * a `theme:` is a path a document writes, and the file it lands on is read as
+     * readily as the directory beside it.
+     *
+     * @param string $name  what the document wrote
+     * @param string $found the path it resolved to before `realpath()`
+     *
+     * @throws ThemeNotFound
+     */
+    private function file(string $name, string $found): string
+    {
+        $real = PathScope::resolve($found);
+
+        if ($real === null || !$this->files->holds($real)) {
+            throw ThemeNotFound::outside($name, $this->files->roots());
+        }
+
+        return $real;
+    }
+
+    /**
+     * Every theme name that resolves — the document's own, the working directory's, the
+     * roots' and the library's — sorted: a name resolves to one of them and the reader of
+     * the list cannot tell which, so listing one kind ahead of the other would say
+     * something untrue.
      *
      * @return list<string>
      */
@@ -133,17 +223,17 @@ final class ThemeResolver
     {
         $names = [];
 
-        foreach ($this->roots() as $root) {
-            if (!is_dir($root)) {
+        foreach ($this->themeDirectories() as $themes) {
+            if (!is_dir($themes)) {
                 continue;
             }
 
-            foreach (scandir($root) ?: [] as $entry) {
+            foreach (scandir($themes) ?: [] as $entry) {
                 if (str_starts_with($entry, '.')) {
                     continue;
                 }
 
-                if (is_file($root . '/' . $entry . '/' . ThemeLoader::THEME_FILE)) {
+                if (is_file($themes . '/' . $entry . '/' . ThemeLoader::THEME_FILE)) {
                     $names[$entry] = true;
                 }
             }

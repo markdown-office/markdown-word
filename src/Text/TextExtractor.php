@@ -8,9 +8,11 @@ use MarkdownWord\Render\LinkPayloadCollector;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use MarkdownWord\Render\Directive\Toc;
 use PhpOffice\PhpWord\Element\Footnote;
+use PhpOffice\PhpWord\Element\FormField;
 use PhpOffice\PhpWord\Element\Image;
 use PhpOffice\PhpWord\Element\Link;
 use PhpOffice\PhpWord\Element\ListItem;
+use PhpOffice\PhpWord\Element\SDT;
 use PhpOffice\PhpWord\Element\Table;
 use PhpOffice\PhpWord\Element\Text;
 use PhpOffice\PhpWord\Element\TextBreak;
@@ -93,7 +95,7 @@ final class TextExtractor
             // contents' placeholder cannot be — the field it stands for is built from
             // the directive, which is not in the tree — so it is dropped rather than
             // reported as part of the document's wording.
-            return str_contains($text = $element->getText(), Toc::MARKER)
+            return str_contains($text = self::textOf($element), Toc::MARKER)
                 ? self::withoutTocPlaceholders(LinkPayloadCollector::substitute($text, $hyperlinks))
                 : LinkPayloadCollector::substitute($text, $hyperlinks);
         }
@@ -111,7 +113,7 @@ final class TextExtractor
         }
 
         if ($element instanceof ListItem) {
-            return $element->getText();
+            return self::textOf($element->getTextObject());
         }
 
         if ($element instanceof TextRun) {
@@ -138,6 +140,51 @@ final class TextExtractor
     }
 
     /**
+     * The text a run carries, or the content it holds instead of any.
+     *
+     * A `Text` may have no text of its own, and the classes that extend it keep what
+     * they hold in different places.
+     */
+    private static function textOf(Text $text): string
+    {
+        $own = $text->getText();
+
+        if ($own !== null) {
+            return $own;
+        }
+
+        return self::heldText($text);
+    }
+
+    /**
+     * The text a run holds instead of any of its own.
+     *
+     * A form field keeps it in its default and a content control in its value —
+     * in both cases the text the author wrote for it, which is what a reader of
+     * the extracted text finds. A field with nothing in it contributes nothing.
+     *
+     * A checkbox contributes nothing either: it is a box, and the name it answers to
+     * is the form's identifier rather than the document's wording. A run with no text
+     * of its own and nothing else to say says nothing.
+     */
+    private static function heldText(Text $text): string
+    {
+        if ($text instanceof FormField) {
+            $default = $text->getDefault();
+
+            return is_string($default) ? $default : '';
+        }
+
+        if ($text instanceof SDT) {
+            $value = $text->getValue();
+
+            return is_string($value) ? $value : '';
+        }
+
+        return '';
+    }
+
+    /**
      * @param list<array{placeholder: string, url: string, title: ?string, runs: list<array{text: string, style: array<string, mixed>}>}> $hyperlinks
      */
     private static function runs(AbstractContainer $container, string $separator, array $hyperlinks = []): string
@@ -149,7 +196,7 @@ final class TextExtractor
                 // Both ways in see a `::toc` placeholder: it is written as a run of its
                 // own, so it arrives here and not through {@see self::fromElement()}.
                 $parts[] = self::withoutTocPlaceholders(
-                    LinkPayloadCollector::substitute($child->getText(), $hyperlinks),
+                    LinkPayloadCollector::substitute(self::textOf($child), $hyperlinks),
                 );
             } elseif ($child instanceof Link) {
                 $parts[] = $child->getText();

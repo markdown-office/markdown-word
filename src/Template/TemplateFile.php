@@ -12,9 +12,8 @@ use MarkdownWord\Filesystem\PathScope;
  *
  * A Markdown file is text and `template_file:` is a path it writes, so it is held to
  * the same rule as `theme:`: resolved with `realpath()` and landed inside a root the
- * calling program allowed. The difference from a theme is where a relative name is
- * written from — beside the document, which is where relative image paths already
- * resolve from too.
+ * calling program allowed. A relative name is written from beside the document, which is
+ * where relative image paths resolve from too.
  *
  * The roots are the working directory and the document's own, so a document in
  * `docs/` names the template beside it whether the run started in `docs/` or above

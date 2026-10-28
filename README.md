@@ -238,8 +238,13 @@ Markdown --> Word --> Markdown --> Word
 
 #### What the round trip does not preserve
 
-Word does not record these, so there is nothing for the reader to find. All five
-are what the round trip actually produces:
+Word does not record these, so there is nothing for the reader to find. All of
+them are what the round trip actually produces:
+
+- **A word in a text style comes back as the word.** `:brand[Bakery]` is written as
+  direct formatting — a colour, a weight, a size — and the reader reads bold, italic
+  and strike and no colour. The word is there; the style is not, and neither is the
+  name it was written under.
 
 - **A table's header row comes back bold.** A run is bold in the document, and
   the document does not say whether the renderer or the author made it so:
@@ -282,6 +287,17 @@ are what the round trip actually produces:
   writes no trailing newline: `"# Title\n"` comes back as `"# Title"`. It is the
   first thing a `diff` shows. `lineEnding` set to `crlf` does add one, because
   that is the one case where the writer appends its own.
+
+- **A text box comes back without its text.** The text of a box is in a
+  `w:txbxContent` inside the run that holds it, and the reader reads the
+  paragraphs of the body and not the boxes inside them. A shape has no text and
+  so comes back as nothing at all.
+
+- **A form field comes back as the blank field Word draws.** A `FORMTEXT` is a
+  field with a run of thirty spaces in it, and that is what the reader finds.
+
+- **A page break and the columns of a section come back as nothing.** Both are
+  in the file — `w:br` and `w:cols` — and the reader reads neither.
 
 The round-trip suite runs all 1300 specification examples through both
 directions and checks that the second Word document says the same thing as the
@@ -364,10 +380,12 @@ look](#the-built-in-look) for the other half of that sentence.
 | `:footnote[…]` | carried as a Word footnote | source form back | source form back |
 | A header and a footer | carried | not carried | carried |
 | `::toc` | carried as a field | source form back | source form back |
+| `::image`, `::caption`, `::pagebreak` | carried | carried | carried |
+| `::section{columns=2}` | carried, the columns and all | carried, the count of them | the break, not the columns |
+| `::textbox`, `::shape`, `::field` | carried | source form back | source form back |
 | Rendering into a template | carried | not available | not available |
 
-Five of those are worth naming in full, because they are the ones a reader is
-least likely to notice.
+The ones a reader is least likely to notice are worth naming in full.
 
 **RTF leaves every list item out of the document.** Not the bullet, not the
 number — the text of the item. PHPWord has no writer for a list item under its RTF
@@ -398,8 +416,11 @@ text. `pendingLosses()` reports it, and only for a document that did it.
 
 `Format::drops()` is the list of features a writer cannot express, whatever the
 document. Whether this document used any of them is a separate question, answered
-over the same element tree every writer is handed, and a feature nobody used is
-not reported: a document with no tables says nothing about table borders.
+over the same element tree every writer is handed and over the directives that
+recorded what they were asked for — a directive a writer cannot carry is drawn
+as its own source text, so there is nothing of it in the tree to find. A feature
+nobody used is not reported: a document with no tables says nothing about table
+borders.
 
 ```php
 foreach ($converter->pendingLosses() as $loss) {
@@ -469,6 +490,8 @@ library, and is what `mdoffice` calls.
 | Footnotes, description lists | with `CommonMarkParser::extended()` |
 | A table of contents | `::toc`; see [A table of contents](#a-table-of-contents) |
 | Directives — `:name[…]`, `::name[…]`, `:::name` … `:::` | on by default; a name nothing draws comes back as the characters it was written as, see [Directives](#directives) |
+| Inline styles — `:name[text]`, `:name[text]{attrs}` | a word in a style, in the middle of a sentence, see [Inline styles](#inline-styles) |
+| Objects — `::image`, `::caption`, `::pagebreak`, `::section`, `::textbox`, `::shape`, `::field` | a picture, a caption, a page break, a section, a box, a shape, a form field; see [Objects in a document](#objects-in-a-document) |
 
 A link whose label contains formatting, such as `[**bold** link](url)`, becomes a
 genuine Word hyperlink *with* the bold applied. PHPWord cannot express that
@@ -485,7 +508,7 @@ Three shapes, told apart by their colons and by nothing else:
 ```markdown
 Ship it :badge[PRODUCTION]{type=success} today.
 
-::image[caption]{src="chart.png"}
+::chart[caption]{src="chart.png"}
 
 :::callout{type=info}
 Inside the container.
@@ -505,7 +528,7 @@ sentence you wrote, and `:green[go   fast]` reads as `:green[go fast]`.
 | --- | --- |
 | `:::callout{type=info}` … `:::` | the body, as ordinary Markdown; the fence is gone |
 | `:badge[PRODUCTION]{type=success}` | `:badge[PRODUCTION]{type="success"}` — the same characters back |
-| `::image[caption]{src="chart.png"}` | `::image[caption]{src="chart.png"}` |
+| `::chart[caption]{src="chart.png"}` | `::chart[caption]{src="chart.png"}` |
 
 A container is transparent because its body is the author's own Markdown and the
 fence is not; drawing the fence would put `:callout` in the document as a line of
@@ -530,6 +553,158 @@ Names are not otherwise checked. `GenericDirectiveExtension` takes a
 `UnknownDirective` rather than being rendered as text — but `CommonMarkParser`
 builds its extensions from class names and cannot pass one in, so strict mode is
 not reachable through the factory.
+
+#### Inline styles
+
+A word in a style, in the middle of a sentence:
+
+```markdown
+Resilience :brand[Bakery] is open.
+```
+
+Three forms, one grammar:
+
+| Written | In the document |
+| --- | --- |
+| `:accent[brand]` | the word "brand", in the style the theme calls `accent` |
+| `:accent[brand]{color=FF0000}` | the same word in red: the attribute wins over the style |
+| `:style[brand]{color=00B4D8}` | the word "brand" in teal, with no theme style involved |
+
+The named styles come from the [theme](#themes), and the eight attributes are the
+same wherever a style is written:
+
+| Attribute | Carries |
+| --- | --- |
+| `color` | the ink: six hexadecimal digits, as `8B0000` |
+| `size` | the size, in points |
+| `font` | the family |
+| `bold` | the weight |
+| `italic` | the slant |
+| `underline` | the underline |
+| `strike` | the strike |
+| `highlight` | a colour behind the word |
+
+**An attribute overrides the named style, property by property.** An attribute the
+style does not set and that does not name itself is not set either: the run
+inherits whatever the paragraph around it gave it, and nothing is reset to a
+default.
+
+**A label is plain text.** The directives package stores a label as a string
+rather than parsing it as inline Markdown, because CommonMark's inline engine
+offers no way for a parser to say "the rest of this run is mine". So
+`:brand[**Bakery**]` cannot have its emphasis honoured — and a *complete* Markdown
+construct in a label is not honoured either: `**text**`, `__text__`, `*text*`,
+`_text_`, `` `code` `` and `[text](url)` all leave the label alone. A bare `*` or
+`_` is not Markdown: `2 * 3` and `snake_case` are ordinary text, and the word is
+written in the style as it stands. So is a construct CommonMark does not call
+emphasis: `__ Bakery__` and `** text**` are text, because a delimiter that opens an
+emphasis may not be followed by a space and one that closes it may not be preceded
+by one.
+
+**What this library cannot draw is drawn as its own source text.** That is the
+policy of this half, and the inline styles keep it:
+
+| Written | In the document |
+| --- | --- |
+| `:brand[Bakery]` where the theme has no `brand` | `:brand[Bakery]` |
+| `:style[Bakery]` with no attributes | `:style[Bakery]` |
+| `:brand[Bakery]{weight=900}` | `:brand[Bakery]{weight="900"}` |
+| `:brand[**Bakery**]` | `:brand[**Bakery**]` |
+
+The presentation half refuses all four and names the alternative. This half draws
+them, because *a sentence and a parser nobody asked to change should not change
+the syntax of every document converted after it* — and the author gets back the
+characters they typed.
+
+### Objects in a document
+
+A document is more than paragraphs, and these are the names that place the rest of
+it:
+
+| Directive | Carries | Carried by |
+| --- | --- | --- |
+| `::image{src=… width=… height=… align=…}` | a picture | `.docx`, `.odt`, `.rtf` |
+| `::caption[Figure 1]{}` | a caption | `.docx`, `.odt`, `.rtf` |
+| `::pagebreak` | a page break | `.docx`, `.odt`, `.rtf` |
+| `::section{columns=2}` | a section break, and its columns | `.docx`, `.odt` |
+| `::textbox[…]{width=… height=…}` | a box with text in it | `.docx` only |
+| `::shape{type=rect …}` | a shape | `.docx` only |
+| `::field{name=…}` | a form field | `.docx` only |
+
+```markdown
+::image[Revenue by quarter]{src="chart.png" width=12 height=8 align=center}
+
+::caption[Figure 1: Revenue by quarter]{}
+
+::pagebreak
+
+::section{columns=2}
+```
+
+**A picture is measured in centimetres**, the unit `imageMaxWidth` is in, so a
+document that names a size and a document that leaves it to the option are in the
+same unit. A size that is asked for is the size the picture gets: the cap is what
+happens to a picture that says nothing about its own size, and shrinking a
+picture to a limit the author did not know about is the kind of quiet change this
+library does not make.
+
+| Attribute | |
+| --- | --- |
+| `src` | the file, resolved against `imageBasePath` the way a Markdown image's URL is |
+| `width`, `height` | the size in centimetres; one of them leaves the other to the picture's own proportions |
+| `align` | `left`, `center`, `right` |
+
+The label is the alternative text, and a file that is not there falls back to it —
+the same answer a Markdown image gives.
+
+**A caption is not numbered.** PHPWord has no `SEQ` field, which is the field Word
+numbers a figure with, so a caption that numbered itself would be a number
+written out at conversion time — wrong the moment a figure is inserted above it.
+The number is in the caption, where a reader can see it and an author can change
+it.
+
+**The columns of a section are carried by `.docx` and `.odt`, and not by `.rtf`.**
+RTF has no columns at all, so the section break survives and the columns do not.
+That is reported the way every other loss is, and the sentence names the
+directive: *the columns of a ::section are lost*.
+
+**A text box, a shape and a form field are carried by `.docx` alone.** PHPWord
+writes them as VML and as Word's own `FORMTEXT`, `FORMCHECKBOX` and
+`FORMDROPDOWN` fields, and neither the ODF writer nor the RTF writer has an
+element for any of them. A writer that cannot carry one is given the characters
+the author wrote — the same answer an unclaimed directive gets — and the loss is
+reported: *a ::textbox is left out of the document*.
+
+The three of them take these:
+
+| Attribute | |
+| --- | --- |
+| `type` | for `::field`: `textinput` (the default), `checkbox`, `dropdown` |
+| `name` | the name of the form field |
+| `entries` | the choices a dropdown offers, separated by commas |
+| `value` | what a text field starts with |
+| `checked` | for `::field`: `true` leaves a checkbox ticked |
+| `width`, `height` | the size of a box or a shape, in centimetres |
+| `left`, `top` | where a text box floats: from the left margin, and from the top of the paragraph it stands in |
+| `border` | the colour of the line round a text box |
+| `fill`, `line` | the colours a shape is drawn in, six hexadecimal digits without a `#` |
+
+**A text box floats, and the text flows around it.** A box that sat in the flow
+would be a paragraph with a border round it, and a paragraph is what a document
+can already say. `left` and `top` place it, in centimetres like every other
+size here.
+
+**A dropdown turns the document into a form.** Word only lets a reader choose
+from one while the document is protected for forms, so a document with a dropdown
+in it is protected for forms. A field that cannot be answered is a field that is
+not there.
+
+**A dropdown cannot start with a value.** Word records a dropdown's choice as the
+position of the chosen entry in the list, not as its text, so the text of an entry
+has nowhere to go. A `.docx` that carries one is refused rather than given a word
+where a number belongs; the choices themselves go in `entries`. The other two formats
+cannot carry a field at all, so they draw the directive as its own source text, as
+they do every other one.
 
 ### A table of contents
 
@@ -682,11 +857,12 @@ the time the document is printed; the field is not. The `date`, `chapter`,
 
 Three things that are easy to get wrong, and are therefore worth stating:
 
-**Size a header logo with `options: imageMaxWidth`,** because there is no
-per-image width. The default is 15 cm, which is a body picture's width and fills
-a third of the page as a logo. It is a global cap, so it applies to the body as
-well — the alternative, a per-image attribute, is a syntax this library would
-have to invent.
+**Size a header logo with `options: imageMaxWidth`, or with a `::image` of its
+own.** A header's body is Markdown, so the directive is available there too —
+`::image[Logo]{src="assets/logo.png" width=2}` is two centimetres wide, whatever
+the global cap says. The default cap is 15 cm, which is a body picture's width
+and fills a third of the page as a logo, so a header that says nothing about its
+logo gets a very large one.
 
 **`firstPage: true` applies to the whole section, not just the header.** Word's
 `<w:titlePg/>` has no finer setting, so page 1 then looks for a *first-page
@@ -888,12 +1064,23 @@ Whatever a configuration holds can be read back as the array it came from, which
 is what to write into a config file, to log, or to compare:
 
 ```php
-$config->toArray();   // ['styles' => [...], 'options' => [...]]
+$config->toArray();   // ['styles' => [...], 'options' => [...], 'textStyles' => [...]]
 ```
 
 `Configuration\Styles` and `Configuration\Options` have a `toArray()` of their own,
 and so does `Reverse\Options` — which is how the reader's options are spelled as
 an array in the first place.
+
+**A configuration holds three things.** The slots and the options are the first
+two, and the named text styles are the third: `withTextStyles()` adds them and
+`getTextStyles()` reads them back. A [theme](#themes) brings them, and so does a
+caller that would rather name them in code:
+
+```php
+$config = Configuration::create()->withTextStyles(['brand' => ['color' => '0B5CAB']]);
+
+$config->getTextStyles()->names();   // ['brand']
+```
 
 ### The built-in look
 
@@ -1064,6 +1251,13 @@ block is printed at the top of the document. Ask for
 `CommonMarkParser::withAllExtensions()`, which carries `FrontMatterExtension`, when
 a document is to configure itself.
 
+**A document that configures itself and writes a directive needs both.** The two
+parsers are apart by design — `withAllExtensions()` carries the front matter and not
+the directives, and the default flavour the other way round — so a document that
+names a theme in its own block and writes a word in one of the theme's styles wants
+`CommonMarkParser::withFrontMatter()`, which has both. The command line reads with
+that parser already.
+
 `Frontmatter` also reads the block for its own sake, if a caller wants it rather
 than the configuration: `getString()`, `getInt()`, `getBool()`, `getArray()`,
 `has()` and `toArray()`. A key of the wrong type returns the caller's default
@@ -1153,8 +1347,8 @@ Validator::assertValid($config->toArray()); // throws, listing all of them
 
 ### Themes
 
-A theme is a directory holding a `theme.yml` and, usually, a `styles.yml`. Four ship
-with the library, in `themes/`:
+A theme is a `theme.yml` and, usually, a `styles.yml` beside it. Four ship with the
+library, in `themes/`, each in a directory of its own:
 
 | Theme | What it is for |
 | --- | --- |
@@ -1190,12 +1384,39 @@ styles:
 ---
 ```
 
-A name is resolved in `./themes/<name>` beside the working directory first, then among
-the themes that ship with the package, and anything with a `/` in it is read as a path
-instead. A name that does not resolve is an error naming the ones that do — never a
-silent fallback to `default`, which would be a document in the wrong colours with nothing
-in the output to say so. A path is resolved with `realpath()` and held to the working
-directory and the built-in themes, because `theme:` is a path a document writes.
+A name is resolved in `./themes/<name>` beside the document first, then in
+`./themes/<name>` beside the working directory, then among the themes that ship with
+the package, and anything with a `/` in it is read as a path instead — written from
+beside the document, the way a relative image path is. A name that does not resolve is
+an error naming the ones that do — never a silent fallback to `default`, which would be
+a document in the wrong colours with nothing in the output to say so. A path is resolved
+with `realpath()` and held to the document's own directory, the working directory and
+the built-in themes, because `theme:` is a path a document writes.
+
+**A path may name the manifest rather than the directory around it.** A theme is its
+`theme.yml`, so `theme: ./themes/house/theme.yml` is the same theme as
+`theme: ./themes/house` — the file is the manifest, and the `styles.yml` is read from
+the directory that holds it either way. A path is looked for in the same place and held
+to the same scope whether it names a directory or a file; only what is read from it
+differs. Only a `theme.yml` is a manifest, so a `styles.yml` named as the theme is one
+of a theme's own files rather than the theme itself.
+
+```yaml
+---
+theme: ./themes/house/theme.yml
+---
+```
+
+**A theme is found beside the document.** The library is told where the document is,
+because a document handed over as a string has no directory of its own:
+
+```php
+(new MarkdownToWord($markdown, directory: '/srv/project'))->save('report.docx');
+```
+
+A theme beside the document is the one that travels with it, so it is looked for
+before the working directory's own `themes/`. Without the directory, the working
+directory is what a name is looked for in.
 
 `styles.yml` takes the slot names from `Styles::defaults()` and nothing else, and is
 checked the way a `styles:` block is: an unknown slot, an unknown property inside one, a
@@ -1210,6 +1431,42 @@ slot.
 and also scientific notation, and YAML resolves it to infinity before the theme is read.
 Quoted, it is a colour; unquoted, it is a load-time error rather than a document drawn in
 the wrong ink.
+
+**A theme may bring named text styles.** `styles.yml` takes one key beside the slots, and
+the key is not a slot — it is the styles a document may write a word in, under
+[Inline styles](#inline-styles):
+
+```yaml
+textStyles:
+  brand:
+    color: "0B5CAB"
+    bold: true
+  muted:
+    color: "6B7280"
+    size: 10
+```
+
+The properties are the same eight the inline attributes have, and a size is in points as it
+is everywhere else. These are refused when the theme is read, because each of them
+is a mistake that would otherwise reach the document looking as though the line had never
+been written: a style that is not a set of properties at all, a style that carries no
+property, a style whose properties name an attribute that does not exist, a value that is
+not one — a colour, a size, a weight or a face, refused the same way — a style called
+`style`, that word being reserved for the raw form, a style named after a directive this
+library draws — `footnote` above all, because the footnote is drawn before the style is
+and the style would never reach a word — and a theme that names one style twice, in two
+spellings. A theme without the key has no named styles, and every named form written
+against it is drawn as its own source text.
+
+A configuration carries the named styles as well, and the same names are refused in it:
+`withTextStyles()` takes them, and one called `footnote` is refused the way a theme's
+is.
+
+**A style's name is a word, and a word does not care about case.** A theme that spells a
+style `Brand` has it under `:brand[…]` and `:Brand[…]` alike, the way the directives
+package folds the names of the directives themselves. The names this library publishes
+spell the styles the way the theme wrote them, because that is the spelling the author
+has to change.
 
 A theme applies to a document rendered into a template too. The template keeps its own
 style definitions, and the theme is written onto the text as direct formatting over them
@@ -1227,7 +1484,22 @@ bullet, `o`, and a small filled square, repeated by nesting depth.
 
 An image is resolved against `imageBasePath`, embedded, and scaled to
 `imageMaxWidth` when it is wider than that — the option is a maximum, so a small
-picture is not enlarged to reach it. `0` disables the scaling.
+picture is not enlarged to reach it. `0` disables the scaling. A picture that
+names a size of its own — [`::image`](#objects-in-a-document) — keeps it.
+
+**A picture is measured in pixels, and the file says so.** PHPWord measures an image
+in pixels and its RTF and ODF writers read the number back as pixels; only its Word
+writer labels the number `pt`, which is how a picture of 96 pixels came to be laid
+out 96 points wide — a third too large, since a point is a 72nd of an inch and a
+pixel a 96th. The unit is therefore stated on the picture rather than left to
+PHPWord's default:
+
+```
+<v:shape type="#_x0000_t75" stroked="f" style="width:96px; height:48px; …">
+```
+
+The same picture is 72 points wide in the `.rtf` and 2.54 cm wide in the `.odt`,
+which is the same size in each format's own unit.
 
 **A format Word cannot embed is converted, and never quietly.** Word has no support
 for WebP and PHPWord has never added any, so a `.webp` is decoded with GD and written
@@ -1315,8 +1587,9 @@ markup untouched. And the picture is found by its position among the document's
 images, the same way its alt text is, rather than by the bytes of the raster beside it:
 PHPWord names media parts as it writes them, so a part name says nothing about which
 picture became it. The size comes from the SVG's own dimensions rather than the
-raster's, because PHPWord reads an image's pixels as points and the raster is the SVG at
-96dpi: a 480-unit diagram would otherwise be laid out a third too large.
+raster's, because the raster is the SVG at 96dpi and its pixel count is a third larger
+than the width the drawing asked for: a 480-unit diagram is 360 points, which is 480
+pixels, and measured from the file it would be laid out 480 pixels wide.
 
 **A file that is there and cannot be used at all is refused.** A truncated download, a
 format this build has no decoder for: `Exception\UnsupportedImageFormat`, naming the
@@ -1389,7 +1662,7 @@ below the first with the first, since there is no other heading style to give.
 | `html` | `strip` | how raw HTML is handled: `strip` rebuilds it as Word, `preserve` shows it as monospaced text, `drop` discards it |
 | `images` | `embed` | `embed`, `placeholder`, `skip` |
 | `imageBasePath` | `null` | directory relative image paths resolve against |
-| `imageMaxWidth` | `15.0` | centimetres, as a maximum; `0` disables scaling |
+| `imageMaxWidth` | `15.0` | centimetres, the width a picture that names no size of its own is scaled to; `0` disables scaling |
 | `maxHeadingLevel` | `6` | deeper headings become paragraphs |
 | `orderedListFormat` | `decimal` | any OOXML `w:numFmt`, e.g. `lowerRoman` |
 | `orderedListSuffix` | `tab` | `tab`, `space`, `nothing` |
@@ -1439,6 +1712,10 @@ use MarkdownWord\Text\TextExtractor;
 
 TextExtractor::fromPhpWord($phpWord);
 ```
+
+A form field contributes the default it was given — the text the author wrote for
+it — and a field with no default contributes nothing. Its name is the form's
+identifier rather than the document's wording, so it is not in the text.
 
 Use a different Markdown dialect:
 

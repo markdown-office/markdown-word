@@ -118,6 +118,24 @@ function readmeLosses(MarkdownToWord $converter): array
     return array_column($converter->pendingLosses(), 'feature');
 }
 
+/**
+ * A document with a table whose columns are aligned, converted to one format.
+ *
+ * Its own document rather than the example page, because the page aligns its
+ * picture as well — and that alignment is in the file whether or not the table's
+ * is, so the two cannot be told apart in the whole body.
+ *
+ * @return array{0: MarkdownToWord, 1: string}
+ */
+function alignedTableFormat(Format $format): array
+{
+    $converter = new MarkdownToWord("| Left | Right |\n|:-----|------:|\n| a | b |\n");
+    $path = Scratch::path('readme-aligned', $format->extension());
+    $converter->convertTo($format, $path);
+
+    return [$converter, $path];
+}
+
 // The example itself
 
 it('names the three documents the example page produces', function () {
@@ -220,6 +238,26 @@ it('keeps the borders of a table in two of the three', function (Format $format,
     'odt' => [Format::Odt, 'table:table'],
     'rtf' => [Format::Rtf, '\clbrdrt'],
 ]);
+
+it('carries a table column\'s alignment in two of the three, and says so in the third', function () {
+    foreach (Format::cases() as $format) {
+        [$converter, $path] = alignedTableFormat($format);
+        $body = readmeBody($path);
+
+        // The `.odt` is the one with nothing to find: PHPWord's ODF writer never
+        // descends into a table's cells, so a column's alignment never reaches the
+        // file. The other two carry it, and say nothing about losing it.
+        if ($format === Format::Odt) {
+            expect($body)->not->toContain('fo:text-align')
+                ->and(readmeLosses($converter))->toContain('cell-alignment');
+
+            continue;
+        }
+
+        expect($body)->toContain($format === Format::Docx ? '<w:jc w:val="right"/>' : '\qr')
+            ->and(readmeLosses($converter))->not->toContain('cell-alignment');
+    }
+});
 
 it('drops the rule under a thematic break in the two that are not a .docx', function (Format $format, string $marker) {
     [$converter, $path] = readmeFormat($format);

@@ -169,8 +169,11 @@ it('draws an inline directive nobody claims as the source form', function () {
 it('draws a leaf nobody claims as a paragraph, label and all', function () {
     // A leaf has no body to descend into, so before there was anything to draw it
     // disappeared and took the paragraph it stood between with it.
-    expect(renderDirectives("Before.\n\n::image[caption]{src=\"chart.png\"}\n\nAfter.\n"))
-        ->toBe("Before.\n::image[caption]{src=\"chart.png\"}\nAfter.");
+    //
+    // The name is one nothing claims: `::image` is drawn now, so a leaf that is
+    // left alone has to be a leaf whose name this library has no handler for.
+    expect(renderDirectives("Before.\n\n::chart[caption]{src=\"chart.png\"}\n\nAfter.\n"))
+        ->toBe("Before.\n::chart[caption]{src=\"chart.png\"}\nAfter.");
 });
 
 it('leaves a container\'s Markdown as Markdown', function () {
@@ -197,12 +200,12 @@ it('counts a document of nothing but directives as having something in it', func
     // raises `NothingToConvert` for a converter that has no input at all, which is
     // a different thing and would let this pass without saying anything about how
     // a leaf is drawn. The old version of this test made exactly that mistake.
-    $markdown = "::image{src=\"chart.png\"}\n";
+    $markdown = "::chart{src=\"chart.png\"}\n";
     $document = Scratch::path('leaf-only');
 
     (new MarkdownToWord($markdown, new Configuration(), CommonMarkParser::directives()))->save($document);
 
-    expect(TemplateFactory::xmlOf($document))->toContain('::image')
+    expect(TemplateFactory::xmlOf($document))->toContain('::chart')
         ->and((new MarkdownToWord($markdown, new Configuration(), CommonMarkParser::directives()))->convert())
         ->toStartWith('PK');
 });

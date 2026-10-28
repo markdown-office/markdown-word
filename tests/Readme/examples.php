@@ -8,6 +8,7 @@ use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Converter;
 use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
+use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Render\LinkPlaceholder;
@@ -449,17 +450,30 @@ it('the built-in heading styles, and the rest of the built-in set', function () 
 });
 
 it('a configuration gives its array back', function () {
-    $config = Configuration::create()->withOptions(['tableBorders' => false]);
+    $config = Configuration::create()
+        ->withOptions(['tableBorders' => false])
+        ->withTextStyles(['brand' => ['color' => '0B5CAB']]);
     $array = $config->toArray();
 
-    expect($array)->toHaveKeys(['styles', 'options'])
+    // The whole shape, and not merely the keys the page names: a subset would
+    // pass with a fourth key in it, and the page would be wrong about the shape.
+    expect(array_keys($array))->toBe(['styles', 'options', 'textStyles'])
         ->and($array['styles'][Styles::HEADING_1])->toBe(Styles::defaults()[Styles::HEADING_1])
-        ->and($array['options']['tableBorders'])->toBeFalse();
+        ->and($array['options']['tableBorders'])->toBeFalse()
+        ->and($array['textStyles'])->toBe(['brand' => ['color' => '0B5CAB']]);
 
     // Round trip: what comes out can go back in.
     expect(Configuration::fromArray($array)->getOptions()->tableBorders)->toBeFalse()
         ->and($config->getStyles()->toArray())->toBe($array['styles'])
-        ->and($config->getOptions()->toArray())->toBe($array['options']);
+        ->and($config->getOptions()->toArray())->toBe($array['options'])
+        ->and($config->getTextStyles()->toArray())->toBe($array['textStyles']);
+});
+
+it('a configuration holds the named text styles a theme brings', function () {
+    $config = Configuration::create()->withTextStyles(['brand' => ['color' => '0B5CAB']]);
+
+    expect($config->getTextStyles()->names())->toBe(['brand'])
+        ->and($config->getTextStyles()->get('brand'))->toBe(['color' => '0B5CAB']);
 });
 
 it('the reader options survive the array they are written in', function () {
@@ -589,7 +603,7 @@ it('the directives table on the page, run', function () {
 
     // A leaf has no body to descend into, so it is drawn rather than dropped —
     // dropping it would take the paragraph it stood between with it.
-    expect($render("::image[caption]{src=\"chart.png\"}\n"))->toBe('::image[caption]{src="chart.png"}');
+    expect($render("::chart[caption]{src=\"chart.png\"}\n"))->toBe('::chart[caption]{src="chart.png"}');
 });
 
 it('the default parser: what needs extended() and what does not', function () {
@@ -838,6 +852,50 @@ it('the footnotes section, run', function () {
     expect($notes)->toContain('n=12')
         ->and(preg_match('/w:footnoteReference w:id="(\d+)"/', $body, $mark) === 1)
         ->and($notes)->toContain('<w:footnote w:id="' . $mark[1] . '"');
+});
+
+it('the objects section, run', function () {
+    // The claims the section makes: a picture of the size it names, in centimetres,
+    // and centred where it says to be; a caption; a page break; and the columns of a
+    // section.
+    $directory = Scratch::path('readme-objects', '');
+    mkdir($directory, 0o777, true);
+
+    $image = imagecreatetruecolor(96, 48);
+    imagefilledrectangle($image, 0, 0, 96, 48, imagecolorallocate($image, 0x8B, 0x1A, 0x1A));
+    imagepng($image, $directory . '/chart.png');
+
+    $markdown = "::image[Revenue by quarter]{src=\"chart.png\" width=12 height=8 align=center}\n\n"
+        . "::caption[Figure 1: Revenue by quarter]{}\n\n"
+        . "::pagebreak\n\n"
+        . "::section{columns=2}\n";
+
+    $path = Scratch::path('readme-objects', '.docx');
+    (new MarkdownToWord($markdown, Configuration::create()->withOptions([
+        'images' => 'embed',
+        'imageBasePath' => $directory,
+    ])))->save($path);
+
+    $body = TemplateFactory::xmlOf($path);
+
+    // 12cm is 453.54 pixels and 8cm is 302.36.
+    expect($body)->toContain('width:453.54330708661px; height:302.36220472441px')
+        ->and($body)->toContain('<w:jc w:val="center"/>')
+        ->and(TemplateFactory::textOf($path))->toContain('Figure 1: Revenue by quarter')
+        ->and($body)->toContain('<w:br w:type="page"/>')
+        ->and($body)->toContain('<w:cols w:num="2"');
+});
+
+it('the objects section names the losses it reports', function () {
+    // The sentences the section quotes are the sentences a reader of the finished
+    // document is given, so they are checked as they are written.
+    $converter = new MarkdownToWord("::section{columns=2}\n\n::textbox[Hello]{width=6 height=3}\n");
+    $converter->convertTo(Format::Rtf, Scratch::path('readme-objects', '.rtf'));
+
+    $messages = implode(' ', array_column($converter->pendingLosses(), 'message'));
+
+    expect($messages)->toContain('the columns of a ::section are lost')
+        ->and($messages)->toContain('a ::textbox is left out of the document');
 });
 
 it('leaves the note body out of the sentence', function () {

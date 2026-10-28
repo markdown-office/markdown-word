@@ -302,6 +302,25 @@ it('to string produces a document', function () {
     expect(strlen($bytes))->toBeGreaterThan(1000);
 });
 
+it('finds a theme beside the document it is given', function () {
+    // The template renders a document of its own, so the directory that document was
+    // read from has to reach the converter behind it — otherwise a document naming a
+    // theme beside it is refused by a template and accepted by a plain conversion.
+    $directory = Scratch::directory() . '/beside';
+    mkdir($directory . '/themes/house', 0o777, true);
+    file_put_contents($directory . '/themes/house/theme.yml', "name: House\n");
+
+    $template = new MarkdownTemplate(
+        Scratch::remember(TemplateFactory::placeholder()),
+        theme: 'house',
+        directory: $directory,
+    );
+
+    $template->insert('# Title');
+
+    expect(renderTemplateToString($template))->toStartWith('PK');
+});
+
 /**
  * Fill in a template and write the result, returning the path to it.
  *

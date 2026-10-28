@@ -88,3 +88,21 @@ it('still puts the content into the template', function () {
     // The thing this path exists for, and the thing the four above must not break.
     expect(TemplateFactory::textOf(fillTemplateWithDirectives()))->toContain('Chapter');
 });
+
+it('draws a ::section as the source form, and keeps the text after it', function () {
+    // A section break in a template would start a section of the scratch document
+    // that nobody copies: the text after the break would be in a section of its own
+    // and would go nowhere at all. So the directive is drawn as what it is, and the
+    // text after it stays in the document.
+    $document = Scratch::path('directive-template', '.docx');
+
+    (new MarkdownTemplate(
+        Scratch::remember(TemplateFactory::report()),
+        Configuration::create(),
+    ))
+        ->insert("Before.\n\n::section{columns=2}\n\nAfter.\n")
+        ->save($document);
+
+    expect(TemplateFactory::xmlOf($document))->toContain('::section')
+        ->and(TemplateFactory::textOf($document))->toContain('After.');
+});

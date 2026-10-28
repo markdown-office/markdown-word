@@ -20,11 +20,21 @@ use Throwable;
  * the library has no HTTP client and will not invent a download. A file that *is*
  * there and cannot be used is a different case and does not fall back — see
  * {@see UnsupportedImageFormat} and {@see self::transcode()}.
+ *
+ * **A picture's size is in pixels.** PHPWord measures an image in pixels and its
+ * RTF and ODF writers read the number back as pixels; only its Word writer labels
+ * the number `pt`, which is how a picture of 104 pixels came to be laid out 104
+ * points wide — a third too large. The unit is therefore stated on the style
+ * rather than left to PHPWord's default, and every size here is converted into it
+ * before it is handed over.
  */
 final class ImageResolver
 {
-    /** A centimetre in points, which is what a `v:shape` width is written in. */
-    private const POINTS_PER_CENTIMETRE = 72 / 2.54;
+    /** A centimetre in pixels, which is the unit a picture's size is measured in. */
+    private const PIXELS_PER_CENTIMETRE = 96 / 2.54;
+
+    /** A point in pixels, which is the unit a vector's own size is stated in. */
+    private const PIXELS_PER_POINT = 96 / 72;
 
     public function __construct(
         private readonly Options $options,
@@ -74,20 +84,82 @@ final class ImageResolver
     }
 
     /**
+     * Draw a picture of a file, at a size in centimetres.
+     *
+     * The same answer a Markdown image gives: the file is resolved against
+     * `imageBasePath`, embedded when the mode says so, and the alt text stands in
+     * when it cannot be. The size is in centimetres because that is the unit
+     * `imageMaxWidth` is in, and a document that named a size in one unit and left
+     * the other in another would be a document nobody could reason about.
+     *
+     * @param float|null $width the width in centimetres, or null for the picture's own
+     * @param float|null $height the height in centimetres, or null for the picture's own
+     *
+     * @throws UnsupportedImageFormat when a file in hand has no format Word can take
+     *         and none GD can decode.
+     */
+    public function drawFile(
+        string $source,
+        AbstractContainer $target,
+        ?string $alt = null,
+        ?float $width = null,
+        ?float $height = null,
+        string $alignment = 'left',
+    ): void {
+        if ($this->options->images === Options::IMAGE_SKIP) {
+            return;
+        }
+
+        $path = $this->resolvePath($source);
+
+        if ($this->options->images === Options::IMAGE_EMBED && $path !== null) {
+            $this->embed(
+                $path,
+                $target,
+                $this->descriptions->countPending(),
+                $width === null ? null : self::PIXELS_PER_CENTIMETRE * $width,
+                $height === null ? null : self::PIXELS_PER_CENTIMETRE * $height,
+                $alignment,
+            );
+            $this->descriptions->add($alt ?? '');
+
+            return;
+        }
+
+        // A file that is not there, or a URL that is remote. The alt text stands in,
+        // which is what a Markdown image does in the same case.
+        if ($alt !== null && $alt !== '') {
+            $target->addText($alt);
+        }
+
+        if ($this->options->images === Options::IMAGE_PLACEHOLDER && $source !== '') {
+            $target->addText($alt !== null && $alt !== '' ? sprintf(' (%s)', $source) : $source);
+        }
+    }
+
+    /**
      * Add the image, decoding it first when Word will not take the format it is in.
  *
      * @param int $position where this image falls among the document's pictures, which is
      *        how {@see SvgAttachmentCollector} finds it again once the file has been written
+     * @param float|null $width the width asked for, in pixels, or null for the picture's own
+     * @param float|null $height the height asked for, in pixels, or null for the picture's own
      *
      * @throws UnsupportedImageFormat when the file is in hand and unusable.
      */
-    private function embed(string $path, AbstractContainer $target, int $position): void
-    {
+    private function embed(
+        string $path,
+        AbstractContainer $target,
+        int $position,
+        ?float $width = null,
+        ?float $height = null,
+        string $alignment = 'left',
+    ): void {
         // SVG is not a format Word refuses, which is what the branches below assume.
         // Word holds one happily, but never on its own — see {@see self::embedSvg()} —
         // so it cannot be discovered by letting PHPWord fail on it.
         if (self::looksLikeSvg($path)) {
-            $this->embedSvg($path, $target, $position);
+            $this->embedSvg($path, $target, $position, $width, $height, $alignment);
 
             return;
         }
@@ -95,7 +167,7 @@ final class ImageResolver
         [$naturalWidth, $format] = self::inspect($path);
 
         try {
-            $target->addImage($path, $this->imageStyle($naturalWidth));
+            $target->addImage($path, $this->imageStyle($naturalWidth, $width, $height, $alignment));
 
             return;
         } catch (UnsupportedImageTypeException) {
@@ -119,7 +191,7 @@ final class ImageResolver
         // The bytes go straight to `addImage()`. PHPWord reads a source that is
         // neither a path nor a URL as the image itself, so there is nothing in the
         // temporary directory to leak and nothing to clean up.
-        $target->addImage($png, $this->imageStyle($naturalWidth));
+        $target->addImage($png, $this->imageStyle($naturalWidth, $width, $height, $alignment));
         $this->conversions->add($path, $format);
     }
 
@@ -132,12 +204,21 @@ final class ImageResolver
      * only a writer that keeps the vector has something for a raster to sit beside, so
      * `.odt` and `.rtf`, which drop it, need the raster or they have no picture.
      *
+     * @param float|null $width the width asked for, in pixels, or null for the drawing's own
+     * @param float|null $height the height asked for, in pixels, or null for the drawing's own
+     *
      * @throws UnsupportedImageFormat when a picture is needed and this PHP cannot produce
      *         one, when the file claims to be a vector and is not one, or when it states
      *         no size to be placed at.
      */
-    private function embedSvg(string $path, AbstractContainer $target, int $position): void
-    {
+    private function embedSvg(
+        string $path,
+        AbstractContainer $target,
+        int $position,
+        ?float $width = null,
+        ?float $height = null,
+        string $alignment = 'left',
+    ): void {
         // Read first, so a file that holds no SVG is reported as that rather than as one
         // that cannot be sized — the two have different fixes for whoever wrote it.
         $original = $this->readVector($path);
@@ -165,35 +246,40 @@ final class ImageResolver
             $raster = PlaceholderRaster::bytes();
         }
 
-        // PHPWord measures the raster in pixels and lays it out in points, one pixel
-        // to a point — but the raster is the SVG at 96dpi, so its pixel count is 1.33
-        // times the width the SVG asked for. Left to measure the file, a 480-unit
-        // diagram comes out 480pt wide instead of 361pt, and a whole page of them
-        // overflows the text column. The size is stated rather than measured, and the
-        // ratio comes with it so the height follows the drawing's own.
-        [$width, $height] = SvgRasteriser::intrinsicSize($path);
+        // The drawing's own size, in points, turned into the pixels a picture is measured
+        // in. The raster is the SVG at 96dpi, so its pixel count is a third larger than
+        // the width the SVG asked for: a 480-unit diagram is 360pt, which is 480 pixels,
+        // and left to measure the file PHPWord would lay it out 480 pixels wide.
+        //
+        // The size is stated rather than measured, and the ratio comes with it so the
+        // height follows the drawing's own.
+        [$drawingWidth, $drawingHeight] = SvgRasteriser::intrinsicSize($path);
+
+        $drawingWidth *= self::PIXELS_PER_POINT;
+        $drawingHeight *= self::PIXELS_PER_POINT;
 
         // Stated rather than left to PHPWord's measurement, which reads the raster's
         // pixels as points and so lays the picture out 96/72 too large. `imageStyle()`
         // only sets a width for a picture *wider* than the cap, because for a raster the
         // file's own size is already right; here it is not, so both are always given.
-        if ($this->options->imageMaxWidth > 0.0) {
-            $widest = self::POINTS_PER_CENTIMETRE * $this->options->imageMaxWidth;
+        $widest = $this->capWidth();
 
-            if ($width > $widest) {
-                $height = $height > 0.0 ? $widest * $height / $width : 0.0;
-                $width = $widest;
-            }
+        if ($widest !== null && $drawingWidth > $widest) {
+            $drawingHeight = $drawingHeight > 0.0 ? $widest * $drawingHeight / $drawingWidth : 0.0;
+            $drawingWidth = $widest;
         }
 
-        $style = ['alignment' => 'left'];
+        $style = ['alignment' => $alignment, 'unit' => 'px'];
 
-        if ($width > 0.0) {
-            $style['width'] = $width;
+        $finalWidth = $width ?? $drawingWidth;
+        $finalHeight = $height ?? $drawingHeight;
+
+        if ($finalWidth > 0.0) {
+            $style['width'] = $finalWidth;
         }
 
-        if ($height > 0.0) {
-            $style['height'] = $height;
+        if ($finalHeight > 0.0) {
+            $style['height'] = $finalHeight;
         }
 
         $target->addImage($raster, $style);
@@ -288,15 +374,15 @@ final class ImageResolver
     }
 
     /**
-     * A file's own width in points, and its format.
+     * A file's own width in pixels, and its format.
      *
      * `getimagesize()` reads the header rather than the name, so it is right for a
      * file called `logo.png` that is actually something else. It returns false for
      * anything that is not a raster image at all — an SVG, a truncated download —
      * and the extension is the only thing left to say, so it is what is said.
      *
-     * PHPWord measures an image's pixels as points, so the number it hands back is
-     * the one its own scaling is compared against.
+     * The width is in pixels, which is the unit a picture is measured in: PHPWord
+     * reads an image's own dimensions as pixels, and so does everything here.
      *
      * @return array{0: ?float, 1: string}
      */
@@ -410,24 +496,63 @@ final class ImageResolver
      * The cap is a *maximum*, so an image already narrower than it keeps its own
      * size: enlarging a small picture to fill a limit it was never reaching is not
      * what `imageMaxWidth` says, and it would make every logo in a document bigger.
+     *
+     * A size the document asked for is the size the picture gets. The cap is what
+     * happens to a picture that says nothing about its own size, and shrinking a
+     * picture to a limit the author did not know about is the kind of quiet change
+     * this library does not make.
+     *
+     * @param float|null $naturalWidth the picture's own width in pixels, or null when
+     *        the file does not say
+     * @param float|null $width the width asked for, in pixels, or null for the cap to decide
+     * @param float|null $height the height asked for, in pixels, or null for the picture's own
+     *
+     * @return array<string, mixed>
      */
-    private function imageStyle(?float $naturalWidth = null): array
-    {
-        $style = ['alignment' => 'left'];
+    private function imageStyle(
+        ?float $naturalWidth,
+        ?float $width = null,
+        ?float $height = null,
+        string $alignment = 'left',
+    ): array {
+        // The unit is stated rather than left to PHPWord's default, which is `pt` for
+        // an image. The number is a pixel count — PHPWord measures an image in
+        // pixels, and its RTF and ODF writers read the number back as pixels — so
+        // labelling it `pt` lays every picture out a third too large.
+        $style = ['alignment' => $alignment, 'unit' => 'px'];
 
-        if ($this->options->imageMaxWidth > 0.0) {
-            // Points, and a bare number. `Frame::setWidth()` puts whatever it is
-            // given through `setNumericVal()`, which keeps a number and discards
-            // anything else — so a width written `'8cm'` was thrown away, both
-            // dimensions went unset, and the image came out at its own size however
-            // wide the option said it could be.
-            $widest = self::POINTS_PER_CENTIMETRE * $this->options->imageMaxWidth;
+        if ($width !== null) {
+            $style['width'] = $width;
+        } else {
+            $widest = $this->capWidth();
 
-            if ($naturalWidth === null || $naturalWidth > $widest) {
+            if ($widest !== null && ($naturalWidth === null || $naturalWidth > $widest)) {
                 $style['width'] = $widest;
             }
         }
 
+        if ($height !== null) {
+            $style['height'] = $height;
+        }
+
         return $style;
+    }
+
+    /**
+     * The width a picture is scaled down to, in pixels, or null when there is no cap.
+     *
+     * Pixels, and a bare number. `Frame::setWidth()` puts whatever it is
+     * given through `setNumericVal()`, which keeps a number and discards
+     * anything else — so a width written `'8cm'` was thrown away, both
+     * dimensions went unset, and the image came out at its own size however
+     * wide the option said it could be.
+     */
+    private function capWidth(): ?float
+    {
+        if ($this->options->imageMaxWidth <= 0.0) {
+            return null;
+        }
+
+        return self::PIXELS_PER_CENTIMETRE * $this->options->imageMaxWidth;
     }
 }

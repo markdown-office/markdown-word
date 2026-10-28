@@ -42,19 +42,30 @@ function configurationFor(string $markdown, ?Configuration $config = null, ?arra
 }
 
 /**
+ * A scratch directory with nothing in it, for a root a document may name a theme in.
+ */
+function scratchRoot(): string
+{
+    $root = sys_get_temp_dir() . '/mdword-scratch-' . bin2hex(random_bytes(6));
+    mkdir($root, 0o777, true);
+
+    register_shutdown_function(static function () use ($root): void {
+        removeTree($root);
+    });
+
+    return $root;
+}
+
+/**
  * A scratch working directory, with `themes/` in it where a bare theme name is looked for.
  *
  * @return array{0: string, 1: string} The working directory, and its `themes/` directory.
  */
 function scratchThemes(): array
 {
-    $root = sys_get_temp_dir() . '/mdword-themes-' . bin2hex(random_bytes(6));
+    $root = scratchRoot();
     $themes = $root . '/themes';
     mkdir($themes, 0o777, true);
-
-    register_shutdown_function(static function () use ($root): void {
-        removeTree($root);
-    });
 
     return [$root, $themes];
 }
@@ -209,6 +220,259 @@ it('reads a theme out of the working directory before the built-in ones', functi
         ->and($resolver->available())->toContain('minimal')->toContain('corporate');
 });
 
+it('reads a theme out of the document\'s own directory before the working directory\'s', function () {
+    // The defect this guards against: a document names a theme, the theme sits beside
+    // the document, and the name was resolved against the process's working directory
+    // — so the theme was found only when the run happened to start in the document's
+    // own directory.
+    [$document, $documentThemes] = scratchThemes();
+    writeTheme($documentThemes, 'house', styles: "heading.1:\n  color: 112233\n");
+
+    [$working, $workingThemes] = scratchThemes();
+    writeTheme($workingThemes, 'house', styles: "heading.1:\n  color: 445566\n");
+
+    $resolver = new ThemeResolver(
+        workingDirectory: $working,
+        documentDirectory: $document,
+    );
+
+    expect($resolver->resolve('house')->styles()->get(Styles::HEADING_1)['color'])->toBe('112233');
+});
+
+it('reads a theme out of the working directory when the document\'s own has none', function () {
+    [$document, $documentThemes] = scratchThemes();
+    writeTheme($documentThemes, 'house', styles: "heading.1:\n  color: 112233\n");
+
+    [$working, $workingThemes] = scratchThemes();
+    writeTheme($workingThemes, 'kitchen', styles: "heading.1:\n  color: 445566\n");
+
+    $resolver = new ThemeResolver(
+        workingDirectory: $working,
+        documentDirectory: $document,
+    );
+
+    expect($resolver->resolve('kitchen')->styles()->get(Styles::HEADING_1)['color'])->toBe('445566');
+});
+
+it('names the themes of the document\'s own directory and of the library together', function () {
+    // One list, because a name the resolver would accept and not list is a name a
+    // failure message leaves the reader to guess at.
+    [$document, $documentThemes] = scratchThemes();
+    writeTheme($documentThemes, 'house');
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        documentDirectory: $document,
+    );
+
+    expect($resolver->available())->toContain('house')->toContain('corporate');
+});
+
+it('refuses a theme outside the roots, the document\'s own directory included', function () {
+    [$outside, $outsideThemes] = scratchThemes();
+    writeTheme($outsideThemes, 'secrets');
+
+    [$document] = scratchThemes();
+    [$working] = scratchThemes();
+
+    $resolver = new ThemeResolver(
+        workingDirectory: $working,
+        documentDirectory: $document,
+    );
+
+    expect(fn () => $resolver->resolve($outside . '/themes/secrets'))
+        ->toThrow(ThemeNotFound::class, 'outside the directories a document may name');
+});
+
+it('reads a theme path from beside the document', function () {
+    // A path is written from the document's own directory, the way a relative image
+    // path and a `template_file:` are.
+    [$document, $documentThemes] = scratchThemes();
+    writeTheme($documentThemes, 'house', styles: "heading.1:\n  color: 112233\n");
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        documentDirectory: $document,
+    );
+
+    expect($resolver->resolve('./themes/house')->styles()->get(Styles::HEADING_1)['color'])->toBe('112233');
+});
+
+it('refuses a theme path that walks out of the document\'s own directory', function () {
+    [$outside, $outsideThemes] = scratchThemes();
+    writeTheme($outsideThemes, 'secrets');
+
+    [$document] = scratchThemes();
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        documentDirectory: $document,
+    );
+
+    expect(fn () => $resolver->resolve('../' . basename($outside) . '/themes/secrets'))
+        ->toThrow(ThemeNotFound::class, 'outside the directories a document may name');
+});
+
+it('reads a theme named as the manifest file that is it', function () {
+    // A theme is a `theme.yml` and the `styles.yml` beside it, so a document may name
+    // the manifest rather than the directory around it. The file is the theme; what
+    // matters is that the styles are read from the directory that holds it.
+    [$document, $documentThemes] = scratchThemes();
+    writeTheme($documentThemes, 'house', styles: "heading.1:\n  color: 112233\n");
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        documentDirectory: $document,
+    );
+
+    $loaded = $resolver->resolve('./themes/house/theme.yml');
+
+    expect($loaded->theme()->name())->toBe('Test')
+        ->and($loaded->styles()->get(Styles::HEADING_1)['color'])->toBe('112233')
+        ->and($loaded->directory())->toBe(realpath($documentThemes . '/house'));
+});
+
+it('draws a document in the theme whose manifest it names', function () {
+    // The form the feature is for: a document names the file, the file is the theme,
+    // and the styles are read from the directory it sits in.
+    [$document] = scratchThemes();
+    file_put_contents($document . '/theme.yml', "name: House\n");
+    file_put_contents($document . '/styles.yml', "heading.1:\n  color: 112233\n");
+
+    $markdown = "---\ntheme: ./theme.yml\n---\n\n# T\n";
+    $converter = new MarkdownToWord(
+        $markdown,
+        parser: CommonMarkParser::withAllExtensions(),
+        directory: $document,
+    );
+
+    $config = $converter->configurationFor($converter->parse($markdown), $markdown);
+
+    expect($config->getStyles()->get(Styles::HEADING_1)['color'])->toBe('112233');
+});
+
+it('writes a manifest path from beside the document', function () {
+    // The rule a `template_file:` and a relative image path follow, and the one the
+    // theme path was given: a relative path is written from the document's own
+    // directory, so the theme beside the document is the one that is found.
+    [$document, $documentThemes] = scratchThemes();
+    writeTheme($documentThemes, 'house', styles: "heading.1:\n  color: 112233\n");
+
+    [$working, $workingThemes] = scratchThemes();
+    writeTheme($workingThemes, 'house', styles: "heading.1:\n  color: 445566\n");
+
+    $resolver = new ThemeResolver(
+        workingDirectory: $working,
+        documentDirectory: $document,
+    );
+
+    expect($resolver->resolve('./themes/house/theme.yml')->styles()->get(Styles::HEADING_1)['color'])
+        ->toBe('112233');
+});
+
+it('refuses a file that is not a theme manifest', function () {
+    // The manifest of a theme is a `theme.yml`; the file beside it is one of the theme's
+    // own files rather than the theme, and naming it is a mistake worth saying so about.
+    [$document] = scratchThemes();
+    file_put_contents($document . '/styles.yml', "heading.1:\n  color: 112233\n");
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        documentDirectory: $document,
+    );
+
+    expect(fn () => $resolver->resolve('./styles.yml'))
+        ->toThrow(ThemeNotFound::class, 'There is no theme directory named "./styles.yml"');
+
+    try {
+        $resolver->resolve('./styles.yml');
+    } catch (ThemeNotFound $e) {
+        // And the rule that makes it a mistake, so the reader is not left guessing.
+        expect($e->getMessage())->toContain('A theme is a directory holding a theme.yml, or the theme.yml itself.');
+    }
+});
+
+it('still refuses a directory with no theme.yml', function () {
+    // The other half of the refusal above, and a different message: the directory is
+    // there, and what it is missing is the manifest.
+    [$document, $documentThemes] = scratchThemes();
+    mkdir($documentThemes . '/bare', 0o777, true);
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        documentDirectory: $document,
+    );
+
+    expect(fn () => $resolver->resolve('./themes/bare'))
+        ->toThrow(ThemeNotFound::class, 'is not a theme: it has no theme.yml');
+});
+
+it('refuses a manifest file outside the roots', function () {
+    // The scope is asked of the file as well as of the directory: a path a document
+    // writes may not read a manifest outside the roots, whatever the file is called.
+    [$outside, $outsideThemes] = scratchThemes();
+    writeTheme($outsideThemes, 'house');
+
+    [$document] = scratchThemes();
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        documentDirectory: $document,
+    );
+
+    expect(fn () => $resolver->resolve($outside . '/themes/house/theme.yml'))
+        ->toThrow(ThemeNotFound::class, 'outside the directories a document may name');
+});
+
+it('refuses a styles file beside a manifest that is a symlink out of the scope', function () {
+    // The manifest is held to the scope, and so is the file beside it: a `styles.yml`
+    // that points out of the roots is read as readily as one inside them, and its
+    // values reach the document as direct formatting.
+    [$document] = scratchThemes();
+    file_put_contents($document . '/theme.yml', "name: Evil\n");
+
+    [, $outside] = scratchThemes();
+    file_put_contents($outside . '/styles.yml', "heading.1:\n  color: DEADBEEF\n");
+    symlink($outside . '/styles.yml', $document . '/styles.yml');
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        documentDirectory: $document,
+    );
+
+    expect(fn () => $resolver->resolve('./theme.yml'))
+        ->toThrow(Exception::class, 'resolves outside the directories this render may read');
+});
+
+it('still reads a bare name as a theme in a directory', function () {
+    // The file form is an addition rather than a replacement: a name that is not a path
+    // is looked for under `./themes/`, as it always was.
+    [$root, $themes] = scratchThemes();
+    writeTheme($themes, 'house', styles: "heading.1:\n  color: 112233\n");
+
+    $loaded = (new ThemeResolver($root))->resolve('house');
+
+    expect($loaded->theme()->name())->toBe('Test')
+        ->and($loaded->styles()->get(Styles::HEADING_1)['color'])->toBe('112233')
+        ->and($loaded->directory())->toBe(realpath($themes . '/house'));
+});
+
+it('reads a theme from a root the calling program allowed', function () {
+    // A shared library of themes beside the project: the roots widen what a document
+    // may read, and a name is looked for in one of them the way it is in the themes
+    // that ship with this package.
+    $library = scratchRoot();
+    writeTheme($library, 'shared', styles: "heading.1:\n  color: 112233\n");
+
+    $resolver = new ThemeResolver(
+        workingDirectory: scratchThemes()[0],
+        roots: [$library],
+    );
+
+    expect($resolver->resolve('shared')->styles()->get(Styles::HEADING_1)['color'])->toBe('112233')
+        ->and($resolver->available())->toContain('shared');
+});
+
 it('refuses a theme a document points outside the directories it may name', function () {
     // A `theme:` is a path a document writes, and a document naming a directory outside
     // the roots must not load it however innocent the reference looks.
@@ -224,7 +488,7 @@ it('refuses a theme a document points outside the directories it may name', func
 
 it('refuses a theme name that is a URL', function () {
     expect(fn () => (new ThemeResolver(scratchThemes()[0]))->resolve('https://example.com/theme.yml'))
-        ->toThrow(ThemeNotFound::class, 'A theme is a directory on this machine, not something to fetch.');
+        ->toThrow(ThemeNotFound::class, 'A theme is on this machine, not something to fetch.');
 });
 
 it('draws a document in the theme its own frontmatter names', function () {
@@ -274,6 +538,46 @@ it('takes the theme from the converter in code over the one in the block', funct
     $config = $converter->configurationFor($converter->parse($markdown), $markdown);
 
     expect($config->getStyles()->get(Styles::HEADING_1)['name'])->toBe('Georgia');
+});
+
+it('draws a document in the theme beside it, whatever the process is working in', function () {
+    // The converter is told where the document is: a document handed over as a string
+    // has no directory of its own, and the working directory is where the program
+    // happens to be rather than where the document is.
+    [$document, $documentThemes] = scratchThemes();
+    writeTheme($documentThemes, 'house', styles: "heading.1:\n  color: 112233\n");
+
+    [$elsewhere] = scratchThemes();
+    $before = getcwd();
+
+    chdir($elsewhere);
+
+    try {
+        $markdown = "---\ntheme: house\n---\n\n# T\n";
+        $converter = new MarkdownToWord(
+            $markdown,
+            parser: CommonMarkParser::withAllExtensions(),
+            directory: $document,
+        );
+
+        $config = $converter->configurationFor($converter->parse($markdown), $markdown);
+
+        expect($config->getStyles()->get(Styles::HEADING_1)['color'])->toBe('112233');
+    } finally {
+        chdir($before === false ? '.' : $before);
+    }
+});
+
+it('takes a theme named in code from beside the document', function () {
+    // The name is checked when it is given rather than at render time, so a theme that
+    // is only beside the document has to be found there.
+    [$document, $documentThemes] = scratchThemes();
+    writeTheme($documentThemes, 'house', styles: "heading.1:\n  color: 112233\n");
+
+    $converter = (new MarkdownToWord('# T', directory: $document))->withTheme('house');
+    $config = $converter->configurationFor($converter->parse('# T'), '# T');
+
+    expect($config->getStyles()->get(Styles::HEADING_1)['color'])->toBe('112233');
 });
 
 it('reads the block when no theme was named in code', function () {
