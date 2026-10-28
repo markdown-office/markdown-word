@@ -92,10 +92,12 @@ function formatAssets(): string
     // The one vector of the examples, copied rather than committed again: a document
     // that cannot draw an SVG raises rather than going in flattened, so a build
     // without a rasteriser cannot have one in it at all.
-    copy(
-        dirname(__DIR__, 2) . '/examples/markdown/assets/19-vector.svg',
-        $directory . '/diagram.svg',
-    );
+    if (SvgRasteriser::available()) {
+        copy(
+            dirname(__DIR__, 2) . '/examples/markdown/assets/19-vector.svg',
+            $directory . '/diagram.svg',
+        );
+    }
 
     return $directory;
 }
@@ -667,12 +669,12 @@ function formatSurveyedDocuments(): array
             'parser' => CommonMarkParser::withFrontMatter(),
         ],
         [
-            // The two pictures whose names and kinds are read off the file itself.
-            'markdown' => <<<'MD'
-                ![A photo](photo.jpg)
-
-                ![A diagram](diagram.svg)
-                MD,
+            // The two pictures whose names and kinds are read off the file itself. The
+            // vector is in the document only when the build can draw one: a document
+            // that cannot is refused rather than going in flattened, so there is no
+            // document here that could carry the vector and lose it.
+            'markdown' => "![A photo](photo.jpg)\n\n"
+                . (SvgRasteriser::available() ? "![A diagram](diagram.svg)\n" : ''),
             'config' => Configuration::create()->withOptions([
                 'imageBasePath' => $assets,
                 'images' => Options::IMAGE_EMBED,
