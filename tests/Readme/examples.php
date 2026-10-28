@@ -450,17 +450,30 @@ it('the built-in heading styles, and the rest of the built-in set', function () 
 });
 
 it('a configuration gives its array back', function () {
-    $config = Configuration::create()->withOptions(['tableBorders' => false]);
+    $config = Configuration::create()
+        ->withOptions(['tableBorders' => false])
+        ->withTextStyles(['brand' => ['color' => '0B5CAB']]);
     $array = $config->toArray();
 
-    expect($array)->toHaveKeys(['styles', 'options'])
+    // Exactly three keys, and not merely the three the page names: a subset would
+    // pass with a fourth key in it, and the page would be wrong about the shape.
+    expect(array_keys($array))->toBe(['styles', 'options', 'textStyles'])
         ->and($array['styles'][Styles::HEADING_1])->toBe(Styles::defaults()[Styles::HEADING_1])
-        ->and($array['options']['tableBorders'])->toBeFalse();
+        ->and($array['options']['tableBorders'])->toBeFalse()
+        ->and($array['textStyles'])->toBe(['brand' => ['color' => '0B5CAB']]);
 
     // Round trip: what comes out can go back in.
     expect(Configuration::fromArray($array)->getOptions()->tableBorders)->toBeFalse()
         ->and($config->getStyles()->toArray())->toBe($array['styles'])
-        ->and($config->getOptions()->toArray())->toBe($array['options']);
+        ->and($config->getOptions()->toArray())->toBe($array['options'])
+        ->and($config->getTextStyles()->toArray())->toBe($array['textStyles']);
+});
+
+it('a configuration holds the named text styles a theme brings', function () {
+    $config = Configuration::create()->withTextStyles(['brand' => ['color' => '0B5CAB']]);
+
+    expect($config->getTextStyles()->names())->toBe(['brand'])
+        ->and($config->getTextStyles()->get('brand'))->toBe(['color' => '0B5CAB']);
 });
 
 it('the reader options survive the array they are written in', function () {

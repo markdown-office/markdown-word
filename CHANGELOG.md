@@ -26,6 +26,10 @@ All notable changes to this project are documented here. The format follows
   `strike` and `highlight` — and they are the same in a theme's style and in the
   directive itself. A size is in points, as it is everywhere else.
 
+  The styles are a configuration of their own: `withTextStyles()` adds them and
+  `getTextStyles()` reads them back, and `Configuration::toArray()` carries them
+  beside the slots and the options.
+
   A theme that brings no named styles changes nothing: every named form written
   against it is drawn as its own source text, the way a name nothing claims has
   always been drawn. So is everything else this library cannot draw — an attribute

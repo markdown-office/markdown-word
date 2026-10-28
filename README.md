@@ -1057,12 +1057,23 @@ Whatever a configuration holds can be read back as the array it came from, which
 is what to write into a config file, to log, or to compare:
 
 ```php
-$config->toArray();   // ['styles' => [...], 'options' => [...]]
+$config->toArray();   // ['styles' => [...], 'options' => [...], 'textStyles' => [...]]
 ```
 
 `Configuration\Styles` and `Configuration\Options` have a `toArray()` of their own,
 and so does `Reverse\Options` — which is how the reader's options are spelled as
 an array in the first place.
+
+**A configuration holds three things.** The slots and the options are the first
+two, and the named text styles are the third: `withTextStyles()` adds them and
+`getTextStyles()` reads them back. A [theme](#themes) brings them, and so does a
+caller that would rather name them in code:
+
+```php
+$config = Configuration::create()->withTextStyles(['brand' => ['color' => '0B5CAB']]);
+
+$config->getTextStyles()->names();   // ['brand']
+```
 
 ### The built-in look
 
