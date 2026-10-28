@@ -239,7 +239,7 @@ final class DocxOnly
 
         if ($type === 'checkbox') {
             $field->setDefault($attributes->getBool('checked'));
-        } elseif ($value !== null && $value !== '') {
+        } elseif ($type === 'textinput' && $value !== null && $value !== '') {
             $field->setDefault($value);
         }
     }

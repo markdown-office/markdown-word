@@ -154,6 +154,8 @@ final class MarkdownToWord implements Converter
      *         through writing it.
      * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
      * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception\InvalidConfiguration when the theme names a text style after a
+     *         directive this library draws
      * @throws Exception\Exception when one of the theme's files cannot be read or parsed
      */
     public function withTheme(?string $name): self
@@ -192,7 +194,8 @@ final class MarkdownToWord implements Converter
      *        {@see self::toPhpWord()} supplies it on every path that renders.
      *
      * @throws Exception\InvalidConfiguration when the block names nothing, or gives a
-     *         value that is not what it is used as.
+     *         value that is not what it is used as, or when a named text style takes
+     *         the name of a directive this library draws
      * @throws Exception\ThemeNotFound when the document's or the caller's `theme:` does
      *         not resolve. Deliberately not swallowed: see {@see self::themeFor()}.
      * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
@@ -236,8 +239,9 @@ final class MarkdownToWord implements Converter
      * means two things.
      *
      * Asked here rather than in the configuration, which does not know what the renderer
-     * draws — and asked here rather than in the theme, which is read before the document
-     * has said which of its styles it wants.
+     * draws, and asked of the merged configuration rather than of a theme alone, so a
+     * style that comes from a theme and one that comes from a caller's code are refused
+     * in the same way.
      *
      * @throws InvalidConfiguration when a style takes the name of a directive.
      */
