@@ -701,8 +701,10 @@ not there.
 
 **A dropdown cannot start with a value.** Word records a dropdown's choice as the
 position of the chosen entry in the list, not as its text, so the text of an entry
-has nowhere to go. A `value` on a dropdown is refused rather than written where a
-number belongs; the choices themselves go in `entries`.
+has nowhere to go. A `.docx` that carries one is refused rather than given a word
+where a number belongs; the choices themselves go in `entries`. The other two formats
+cannot carry a field at all, so they draw the directive as its own source text, as
+they do every other one.
 
 ### A table of contents
 

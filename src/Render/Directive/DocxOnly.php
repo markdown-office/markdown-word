@@ -190,13 +190,20 @@ final class DocxOnly
      * is a form.
      *
      * **A `value` belongs to a text field.** Word records a dropdown's choice as the
-     * position of the chosen entry in the list, not as its text, so the text of an
-     * entry has nowhere to go: a `value` on a dropdown is refused rather than written
-     * where a number belongs.
+     * position of the chosen entry in the list, not as its text, so a `.docx` carrying
+     * one would write a word where a number belongs. It is refused there, and the
+     * other two formats cannot carry a field at all, so they draw the directive as its
+     * own source text as they do every other one.
      */
     public function drawField(DirectiveBlock $node, AbstractContainer $target): void
     {
         $this->usage->add(Format::FORM_FIELD);
+
+        if (!$this->carries()) {
+            $this->sourceForm($node, $target);
+
+            return;
+        }
 
         $attributes = $node->getAttributes();
         $type = $attributes->getString('type') ?? 'textinput';
@@ -213,12 +220,6 @@ final class DocxOnly
             throw new InvalidInput(
                 'The "value" attribute of a dropdown field is not one Word can hold: a dropdown records the chosen entry as its position in the list, not as its text. Write the choices with "entries" and let the reader pick one.',
             );
-        }
-
-        if (!$this->carries()) {
-            $this->sourceForm($node, $target);
-
-            return;
         }
 
         $field = $target->addFormField($type);

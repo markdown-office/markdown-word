@@ -118,6 +118,18 @@ it('refuses a value on a dropdown, and keeps it on a text field', function () {
         ->and(TemplateFactory::xmlOf(wordObjectDocument($text)))->toContain('<w:default w:val="Vienna"/>');
 });
 
+it('draws a dropdown that carries a value as its source text in the formats that cannot carry a field', function (Format $format) {
+    // The refusal is Word's: a dropdown records the chosen entry as its position in
+    // the list. The other two formats cannot carry a field at all, so they give the
+    // author their own characters back, as they do every other directive.
+    $markdown = '::field{name="City" type=dropdown entries="Vienna,Berlin" value="Berlin"}';
+
+    $losses = wordObjectLossesIn($markdown, $format);
+
+    expect(array_column($losses, 'feature'))->toContain('form-field')
+        ->and(implode(' ', array_column($losses, 'message')))->toContain('::field');
+})->with(['odt' => Format::Odt, 'rtf' => Format::Rtf]);
+
 it('protects a document with a dropdown, which is what makes it work', function () {
     $path = Scratch::path('dropdown', '.docx');
 
