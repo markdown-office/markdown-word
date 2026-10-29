@@ -79,6 +79,13 @@ function toolsHolding(string ...$commands): string
  */
 function toolsHoldingWith(string $body, string ...$commands): string
 {
+    // The tools these tests fake are shell scripts, and a Windows command prompt does
+    // not run them. Skipping is better than failing: a test that cannot run on the
+    // machine it is on says nothing about the code, and says it by failing.
+    if (PHP_OS_FAMILY === 'Windows') {
+        test()->markTestSkipped('The tools these tests fake are shell scripts, and Windows does not run them.');
+    }
+
     $directory = Scratch::directory() . '/tools-' . bin2hex(random_bytes(6));
 
     if (! mkdir($directory, 0o777, true) && ! is_dir($directory)) {
@@ -189,6 +196,11 @@ function declarationsOf(string $path): string
  */
 function packageAsDocument(string $source, string $target): array
 {
+    // The tool is a shell script, for the same reason the fake tools are.
+    if (PHP_OS_FAMILY === 'Windows') {
+        test()->markTestSkipped('The tool that turns a template into a document is a shell script.');
+    }
+
     $root = dirname(__DIR__, 2);
 
     $status = 0;
