@@ -52,7 +52,7 @@ on run argv
 	end repeat
 
 	if (count of documents_) is 0 then
-		error "Nothing to render. Pass one or more .docx paths, then --out <directory>." number 1
+		error "Nothing to render. Pass one or more .docx or .dotx paths, then --out <directory>." number 1
 	end if
 
 	if outDirectory is missing value then
@@ -117,10 +117,14 @@ on render(documentPath, place, stamp, working, opened)
 	set staged to working & (stagedStem & ".docx")
 	set target to working & (stagedStem & ".pdf")
 
+	-- The document is staged through the helper rather than copied, because a template is
+	-- not a document Word will open: Word's AppleScript opens a package whose body is
+	-- typed as a template by opening nothing at all, and it raises no error when it does
+	-- so. The helper rewrites that one content type, and a document is what Word opens.
 	try
-		do shell script "cp -f " & quoted form of documentPath & " " & quoted form of staged
-	on error
-		error "Unable to read " & documentPath & "." number 1
+		do shell script "sh " & quoted form of (helperPath("package-as-document.sh")) & " " & quoted form of documentPath & " " & quoted form of staged
+	on error errorMessage
+		error "Unable to read " & documentPath & ": " & errorMessage number 1
 	end try
 
 	set openedName to openDocument(staged, stagedStem & ".docx")
@@ -317,7 +321,7 @@ end fileSize
 --
 on pdfIsComplete(candidate)
 	try
-		do shell script "sh " & quoted form of (helperPath()) & " " & quoted form of candidate
+		do shell script "sh " & quoted form of (helperPath("pdf-is-complete.sh")) & " " & quoted form of candidate
 		return true
 	on error
 		return false
@@ -328,11 +332,11 @@ end pdfIsComplete
 -- The helper beside this script, found through the script's own path rather than through the
 -- working directory: the tool is run from wherever the caller happens to be.
 --
-on helperPath()
+on helperPath(name)
 	set here to POSIX path of (path to me)
 	set base to nameOf(here)
 
-	return (text 1 thru -(length of base + 1) of here) & "pdf-is-complete.sh"
+	return (text 1 thru -(length of base + 1) of here) & name
 end helperPath
 
 --
@@ -457,14 +461,19 @@ end nameOf
 -- The file name of a document without its extension, which is what Word calls the document
 -- it opened.
 --
+-- Both the extensions a Word document has are stripped, because a template is one of
+-- them: `report.dotx` is a document to render, and the PDF it produces is `report.pdf`.
+--
 -- `$name` rather than `$fileName`, which AppleScript parses as its own `file name` class and
 -- then rejects wherever it appears.
 on documentNameOf(name)
-	set suffix to ".docx"
+	set endings to {".docx", ".dotx"}
 
-	if name ends with suffix then
-		return text 1 thru -(length of suffix + 1) of name
-	end if
+	repeat with one in endings
+		if name ends with (one as text) then
+			return text 1 thru -(length of (one as text) + 1) of name
+		end if
+	end repeat
 
 	return name
 end documentNameOf

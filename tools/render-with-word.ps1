@@ -19,6 +19,10 @@
 # writes a PDF without changing the document the caller opened — `SaveAs` would leave the
 # document pointing at the PDF instead of at itself.
 #
+# The document is opened where it is, rather than staged under a name of this run's own:
+# Word's COM automation opens a document read-only and writes the PDF wherever it is told
+# to, so there is no sandbox to stay inside and no name to keep unique.
+#
 # A validator that cannot run must never report success. Every step here either produces
 # the file it promised or raises, and a raised error exits non-zero.
 
@@ -56,7 +60,7 @@ foreach ($argument in $Arguments) {
 }
 
 if ($documents.Count -eq 0) {
-    Write-Error 'Nothing to render. Pass one or more .docx paths, then --out <directory>.'
+    Write-Error 'Nothing to render. Pass one or more .docx or .dotx paths, then --out <directory>.'
     exit 1
 }
 

@@ -12,9 +12,10 @@ declare(strict_types=1);
  * saying: a run that falls back to a backend that is not Word says so, and a run that
  * produced no file exits non-zero.
  *
- * The tests that need a choice of platform set `MARKDOWN_OFFICE_PLATFORM` and `PATH`
- * themselves, so they are the same on a laptop with Word on it and on a build machine
- * with nothing on it. The one test that needs Word is skipped where Word is not.
+ * The tests that need a choice of platform set `MARKDOWN_OFFICE_PLATFORM`, `PATH` and
+ * `MARKDOWN_OFFICE_WORD` themselves, so they are the same on a laptop with Word on it and
+ * on a build machine with nothing on it. The tests that need Word are skipped where Word
+ * is not.
  */
 
 use MarkdownWord\MarkdownToWord;
@@ -113,6 +114,96 @@ function commandOnPath(string $command): bool
     return $status === 0;
 }
 
+/**
+ * A directory that stands for an installed application.
+ *
+ * The dispatcher looks for Word where Word is installed, and a test cannot install Word.
+ * So the test points it at a directory that is there, and the directory is all it looks
+ * for.
+ */
+function anApplication(): string
+{
+    $directory = Scratch::directory() . '/application-' . bin2hex(random_bytes(6));
+
+    if (! mkdir($directory, 0o777, true) && ! is_dir($directory)) {
+        throw new RuntimeException(sprintf('Unable to create the directory "%s".', $directory));
+    }
+
+    return $directory;
+}
+
+/**
+ * A Word package, whose body is typed as a template's or as a document's.
+ *
+ * Built rather than carried: a package is a zip archive with one part that says what it
+ * holds, and a binary fixture would show a reader nothing about that part.
+ */
+function wordPackage(string $path, bool $template): string
+{
+    $type = $template
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml'
+        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+
+    $zip = new ZipArchive();
+    $zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+
+    $zip->addFromString(
+        '[Content_Types].xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            . '<Override PartName="/word/document.xml" ContentType="' . $type . '"/>'
+            . '</Types>',
+    );
+
+    $zip->addFromString(
+        'word/document.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            . '<w:body><w:p><w:r><w:t>A paragraph.</w:t></w:r></w:p></w:body></w:document>',
+    );
+
+    $zip->close();
+
+    return $path;
+}
+
+/**
+ * What a package says it holds.
+ */
+function declarationsOf(string $path): string
+{
+    $zip = new ZipArchive();
+    $zip->open($path);
+
+    $declared = (string) $zip->getFromName('[Content_Types].xml');
+
+    $zip->close();
+
+    return $declared;
+}
+
+/**
+ * The answer of the tool that turns a template into a document.
+ *
+ * @return array{status: int, out: string}
+ */
+function packageAsDocument(string $source, string $target): array
+{
+    $root = dirname(__DIR__, 2);
+
+    $status = 0;
+    $output = [];
+
+    exec(
+        'sh ' . escapeshellarg($root . '/tools/package-as-document.sh') . ' '
+            . escapeshellarg($source) . ' ' . escapeshellarg($target) . ' 2>&1',
+        $output,
+        $status,
+    );
+
+    return ['status' => $status, 'out' => implode("\n", $output)];
+}
+
 it('prefers Word on the platforms that can run it', function () {
     expect(dispatcher(['MARKDOWN_OFFICE_PLATFORM' => 'darwin'], ['--platform-backend'])['out'])->toBe("word\n")
         ->and(dispatcher(['MARKDOWN_OFFICE_PLATFORM' => 'windows'], ['--platform-backend'])['out'])->toBe("word\n");
@@ -154,12 +245,33 @@ it('says so when the backend it fell back to is not Word', function () {
 
 it('says nothing when the backend it used is Word', function () {
     $answer = dispatcher(
-        ['MARKDOWN_OFFICE_PLATFORM' => 'darwin', 'PATH' => toolsHolding('osascript')],
+        [
+            'MARKDOWN_OFFICE_PLATFORM' => 'darwin',
+            'MARKDOWN_OFFICE_WORD' => anApplication(),
+            'PATH' => toolsHolding('osascript'),
+        ],
         ['--which'],
     );
 
     expect($answer['out'])->toBe("word\n")
         ->and($answer['err'])->toBe('');
+});
+
+it('does not say Word on a machine that has none', function () {
+    // The application, and not the tool that drives it: `osascript` is on every Mac
+    // whether or not Word is, and a backend that says "word" where there is no Word
+    // fails later, inside Word, with a message about the document rather than about
+    // Word.
+    $answer = dispatcher(
+        [
+            'MARKDOWN_OFFICE_PLATFORM' => 'darwin',
+            'MARKDOWN_OFFICE_WORD' => Scratch::directory() . '/no-word-here',
+            'PATH' => toolsHolding('soffice'),
+        ],
+        ['--which'],
+    );
+
+    expect($answer['out'])->toBe("libreoffice\n");
 });
 
 it('refuses rather than falling back to nothing it can trust', function () {
@@ -169,6 +281,40 @@ it('refuses rather than falling back to nothing it can trust', function () {
     );
 
     expect($answer['out'])->toBe("none\n");
+});
+
+it('turns a template into a document, and leaves a document alone', function () {
+    // A template and a document are the same archive with one content type different,
+    // and that one line is what Word goes by: a package typed as a template is not one
+    // Word will open at all.
+    $template = wordPackage(Scratch::path('template', '.dotx'), true);
+    $document = wordPackage(Scratch::path('document', '.docx'), false);
+
+    $written = Scratch::path('written', '.docx');
+
+    expect(packageAsDocument($template, $written)['status'])->toBe(0)
+        ->and(declarationsOf($written))->toContain('wordprocessingml.document.main+xml')
+        ->and(declarationsOf($written))->not->toContain('wordprocessingml.template.main+xml');
+
+    // A document is copied as it is, byte for byte: there is nothing to rewrite, and a
+    // copy that is not the same is a copy that is not the document.
+    $copied = Scratch::path('copied', '.docx');
+
+    expect(packageAsDocument($document, $copied)['status'])->toBe(0)
+        ->and(md5_file($copied))->toBe(md5_file($document));
+});
+
+it('refuses a file that is not a package at all', function () {
+    // A file that is not a zip archive is not a Word document, and saying so is better
+    // than repacking whatever it holds.
+    $nothing = Scratch::path('nothing', '.docx');
+
+    file_put_contents($nothing, 'not a package');
+
+    $answer = packageAsDocument($nothing, Scratch::path('written', '.docx'));
+
+    expect($answer['status'])->not->toBe(0)
+        ->and($answer['out'])->not->toBe('');
 });
 
 it('fails rather than reporting a render that produced no file', function () {
@@ -269,4 +415,29 @@ it('renders a document through Microsoft Word', function () {
 
     expect($pdf)->toStartWith('%PDF')
         ->and($pdf)->toContain('%%EOF');
+});
+
+it('renders a template, and names the PDF after the template', function () {
+    // Word's AppleScript opens a package typed as a template by opening nothing at all,
+    // and raises no error when it does so: the template is staged as a document, and
+    // the PDF is named after the template rather than after the template's extension.
+    if (PHP_OS_FAMILY !== 'Darwin') {
+        test()->markTestSkipped('Microsoft Word is only here on macOS, so the render cannot be checked.');
+    }
+
+    if (! commandOnPath('osascript')) {
+        test()->markTestSkipped('AppleScript is not here, so Word cannot be driven.');
+    }
+
+    $template = dirname(__DIR__, 2) . '/examples/templates/meridian-qbr.dotx';
+    $target = Scratch::path('meridian-qbr', '.pdf');
+
+    $answer = dispatcher(
+        ['MARKDOWN_OFFICE_PLATFORM' => 'darwin'],
+        [$template, '--out', $target],
+    );
+
+    expect($answer['status'])->toBe(0)
+        ->and(file_exists($target))->toBeTrue()
+        ->and((string) file_get_contents($target))->toContain('%%EOF');
 });

@@ -33,6 +33,7 @@ declare(strict_types=1);
  *
  *   * `MARKDOWN_OFFICE_PLATFORM` — `darwin`, `windows`, `linux`, `freebsd`.
  *   * `MARKDOWN_OFFICE_RENDERER` — `word`, `wordcraft`, `libreoffice`.
+ *   * `MARKDOWN_OFFICE_WORD` — where Word is, where it is not where it is looked for.
  *
  * A run that produced no file exits non-zero, so a caller reading only the exit status
  * learns the render did not happen.
@@ -96,16 +97,19 @@ function preferred(string $platform): string
 /**
  * Whether a backend can be used on this machine.
  *
- * The command is the whole of the test: a backend whose command is not on the path is a
- * backend that is not installed, and no amount of looking for it elsewhere will change
- * that.
+ * The command that drives the backend is the first half of the test, and the backend
+ * itself is the second: `osascript` is on every Mac whether or not Word is, and a backend
+ * that answers "word" where there is no Word fails later, inside Word, with a message
+ * about the document rather than about Word.
  */
 function installed(string $backend, string $platform): bool
 {
     return match ($backend) {
         'word' => $platform === 'darwin'
-            ? \command_exists('osascript')
-            : ($platform === 'windows' ? \command_exists('powershell') : false),
+            ? \command_exists('osascript') && word_is_installed('darwin')
+            : ($platform === 'windows'
+                ? \command_exists('powershell') && word_is_installed('windows')
+                : false),
         'wordcraft' => \command_exists('wordcraft-cli') || \command_exists('deckcraft-cli'),
         'libreoffice' => \command_exists('soffice') || \command_exists('libreoffice'),
         default => false,
@@ -113,12 +117,69 @@ function installed(string $backend, string $platform): bool
 }
 
 /**
+ * Whether Microsoft Word is installed on this machine.
+ *
+ * The application is looked for rather than asked about, because asking means starting
+ * it: a check that starts the thing it is checking is not a check.
+ *
+ * `MARKDOWN_OFFICE_WORD` names the place to look instead of the default one. It is what
+ * makes the check testable — a test can point it at something that is not Word and see
+ * that the tool says so — and it is the way to say where Word is on a machine that
+ * keeps it somewhere else.
+ *
+ * On macOS it is the path of the application bundle; on Windows it is the registry key
+ * that holds Word's class.
+ */
+function word_is_installed(string $platform): bool
+{
+    $given = \getenv('MARKDOWN_OFFICE_WORD');
+
+    if ($platform === 'darwin') {
+        $candidates = \is_string($given) && $given !== ''
+            ? [$given]
+            : [
+                '/Applications/Microsoft Word.app',
+                \trim((\getenv('HOME') ?: '') . '/Applications/Microsoft Word.app'),
+            ];
+
+        foreach ($candidates as $candidate) {
+            if ($candidate !== '' && \is_dir($candidate)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    if ($platform === 'windows') {
+        $key = \is_string($given) && $given !== '' ? $given : 'HKCR\Word.Application\CLSID';
+
+        $status = 0;
+        \exec('reg query ' . \escapeshellarg($key) . ' >NUL 2>&1', $ignored, $status);
+
+        return $status === 0;
+    }
+
+    return false;
+}
+
+/**
  * Whether a command is on the path.
+ *
+ * The lookup is the running platform's, because the question is about this machine: a
+ * Windows command prompt has no `command -v`, and a Unix shell has no `where`. Asking
+ * the wrong one of the two is how a tool ends up reporting that nothing is installed on
+ * the one platform it was never tried on.
  */
 function command_exists(string $command): bool
 {
     $status = 0;
-    \exec('command -v ' . \escapeshellarg($command) . ' 2>/dev/null', $ignored, $status);
+
+    $lookup = PHP_OS_FAMILY === 'Windows'
+        ? 'where ' . \escapeshellarg($command)
+        : 'command -v ' . \escapeshellarg($command) . ' 2>/dev/null';
+
+    \exec($lookup, $ignored, $status);
 
     return $status === 0;
 }

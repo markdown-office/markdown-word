@@ -1897,11 +1897,17 @@ in a renderer that disagrees with Word is a document that has not really been lo
 | `tools/render-document.php` | Renders a document with the most truthful renderer the machine has — Microsoft Word where it can be used, WordCraft where Word cannot, LibreOffice last — and says so when it had to fall back, because a renderer that cannot be trusted is worse than none |
 | `tools/render-with-word.applescript` | Opens a document in Microsoft Word on macOS and exports it as PDF. The export is written inside Word's own sandbox container, because Word writes nowhere else |
 | `tools/render-with-word.ps1` | The same on Windows, through Word's COM automation rather than through AppleScript |
+| `tools/package-as-document.sh` | Turns a Word template into a Word document, which is the one rewrite that makes a template a file Word will open |
 | `tools/pdf-is-complete.sh` | Whether a PDF has been written whole, which is what the Word tool waits for before it copies one out. The one part of that tool the test suite can check, because it needs no Word to answer |
 
 The choice between the three renderers is tested without any of them: the dispatcher takes the
 platform and the renderer from the environment, so the test suite can ask what it would choose
 on a machine that has none of them. The one test that needs Word is skipped where Word is not.
+
+A **template** is rendered as well as a document. Word's AppleScript opens a package typed as a
+template by opening nothing at all, and raises no error when it does so, so the template is
+staged as a document first — which is the one rewrite that turns a template into a file Word
+will open.
 
 ## Licence
 
