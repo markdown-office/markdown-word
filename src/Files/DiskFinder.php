@@ -19,6 +19,10 @@ use MarkdownWord\Theme\ThemeLoader;
  * the document before the ones that ship with this package, a shared library of
  * themes before either.
  *
+ * A name that is already a path — one that begins with `/` — is taken as it stands,
+ * whatever the role: it names a file, and resolving it against a base would name a
+ * file nobody meant.
+ *
  * A theme is resolved by its directory first: the first base where `<base>/<theme>`
  * is a directory is the theme's directory, and the theme's files are looked for
  * inside it. So a theme directory that exists but holds no manifest still shadows a
@@ -146,14 +150,14 @@ final class DiskFinder implements FileFinder
      */
     private function resolve(string $name, ?string $role): ?string
     {
-        if ($role === 'theme') {
-            return $this->themeFile($name);
+        if (str_starts_with($name, '/')) {
+            // A name that is already a path is taken as it stands, whatever the role:
+            // resolving it against a base would name a file nobody meant.
+            return is_file($name) ? $name : null;
         }
 
-        if (str_starts_with($name, '/')) {
-            // A name that is already a path is taken as it stands, because resolving
-            // it against a base would name a file nobody meant.
-            return is_file($name) ? $name : null;
+        if ($role === 'theme') {
+            return $this->themeFile($name);
         }
 
         foreach ($this->worlds($role) as $base) {
@@ -175,20 +179,27 @@ final class DiskFinder implements FileFinder
      * the file is inside it. A theme directory that holds no manifest therefore
      * shadows a later one that does — the theme is there, and what it is missing is
      * the manifest.
+     *
+     * A name that is already a path is not split here: it is taken as it stands, so
+     * a path to a file of a theme is the file and not a theme whose name is the
+     * empty string.
      */
     private function themeFile(string $name): ?string
     {
-        $parts = explode('/', $name, 2);
-        $theme = $parts[0];
-        $file = $parts[1] ?? '';
+        $slash = strpos($name, '/');
 
-        $directory = $this->themeDirectory($theme);
+        if ($slash === false) {
+            // A name without a theme in it names no file of a theme.
+            return null;
+        }
+
+        $directory = $this->themeDirectory(substr($name, 0, $slash));
 
         if ($directory === null) {
             return null;
         }
 
-        $path = $this->join($directory, $file);
+        $path = $this->join($directory, substr($name, $slash + 1));
 
         return is_file($path) ? $path : null;
     }

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use MarkdownWord\Files\DiskFinder;
+use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Tests\Support\Scratch;
 
 /*
@@ -85,6 +86,45 @@ it('takes a name that is already a path as it stands', function () {
 
     expect($finder->read($base . '/report.dotx', 'document'))->toBe('the bytes')
         ->and($finder->read($base . '/nowhere.dotx', 'document'))->toBeNull();
+});
+
+it('takes a name that is already a path as it stands, whatever the role', function () {
+    // The theme role is where this is easiest to get wrong, because a theme's name
+    // is split into a theme and a file: the role says how a name is resolved, and a
+    // name that is already a path is not resolved at all.
+    $base = finderDirectory('absolute-role');
+    $outside = finderDirectory('absolute-outside');
+
+    mkdir($base . '/house', 0o777, true);
+    file_put_contents($base . '/house/theme.yml', "name: House\n");
+    file_put_contents($outside . '/theme.yml', "name: Outside\n");
+
+    $finder = new DiskFinder(theme: [$base], picture: [$base], document: [$base]);
+
+    expect($finder->read($outside . '/theme.yml', 'theme'))->toBe("name: Outside\n")
+        ->and($finder->path($outside . '/theme.yml', 'theme'))->toBe($outside . '/theme.yml')
+        ->and($finder->read($outside . '/theme.yml', 'picture'))->toBe("name: Outside\n")
+        ->and($finder->read($outside . '/theme.yml', 'document'))->toBe("name: Outside\n")
+        ->and($finder->read($outside . '/nowhere.yml', 'theme'))->toBeNull()
+        ->and($finder->path($outside . '/nowhere.yml', 'theme'))->toBeNull()
+        // And the theme of the base is still where it was.
+        ->and($finder->read('house/theme.yml', 'theme'))->toBe("name: House\n");
+});
+
+it('does not split a name that is already a path into a theme and a file', function () {
+    // The leading slash is not a theme whose name is the empty string, and the rest
+    // of the name is not a file inside the first base: a name that is already a path
+    // is the path.
+    $base = finderDirectory('split');
+    mkdir($base . '/house', 0o777, true);
+    file_put_contents($base . '/house/theme.yml', "name: House\n");
+
+    $finder = new DiskFinder(theme: [$base]);
+
+    expect($finder->path('/house/theme.yml', 'theme'))
+        ->not->toBe($base . '/house/theme.yml')
+        // And the theme of that name is still the theme it is.
+        ->and($finder->read('house/theme.yml', 'theme'))->toBe("name: House\n");
 });
 
 it('answers for a file that is out of reach rather than refusing it', function () {
@@ -261,4 +301,27 @@ it('finds nothing for a theme file that is not inside a theme', function () {
 
     expect($finder->read('logo.png', 'theme'))->toBeNull()
         ->and($finder->read('house/logo.png', 'theme'))->toBeNull();
+});
+
+it('gives the finder the shape an adapter is written against', function () {
+    // One adapter serves both halves of this suite, so this interface is the shape
+    // both of them promise, and a change to it is a change to both.
+    $shape = [];
+
+    foreach ((new ReflectionClass(FileFinder::class))->getMethods() as $method) {
+        $parameters = [];
+
+        foreach ($method->getParameters() as $parameter) {
+            $parameters[] = $parameter->getName() . ': ' . (string) $parameter->getType();
+        }
+
+        $shape[$method->getName()] = implode(', ', $parameters) . ' => ' . (string) $method->getReturnType();
+    }
+
+    expect($shape)->toBe([
+        'read' => 'name: string, role: ?string => ?string',
+        'path' => 'name: string, role: ?string => ?string',
+        'themes' => ' => array',
+        'files' => 'theme: string => array',
+    ]);
 });
