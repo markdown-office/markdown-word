@@ -2,20 +2,19 @@
 
 declare(strict_types=1);
 
-use MarkdownWord\Exception\InvalidInput;
 use MarkdownWord\Files\DiskFinder;
-use MarkdownWord\Filesystem\PathScope;
 use MarkdownWord\Tests\Support\Scratch;
 
 /*
  * The finder: where a document's files come from.
  *
  * The library asks for names and a finder answers, so these are about the answers —
- * a file that is read, a file that may not be, a theme that resolves and a theme
- * that does not. The scope is the part worth reading twice: a name that looks
- * harmless and resolves somewhere else is the ordinary way a path becomes a read of
- * the wrong file, and the check belongs on the file rather than on the directory it
- * was found in.
+ * a file that is read, a file that is not there, a theme that resolves and a theme
+ * that does not. What a finder does *not* do is refuse: a file that is out of reach
+ * is answered like any other, because the question of what this render may read is
+ * the library's, and the library holds the path to its own scope. That is what lets
+ * one adapter serve both halves of this suite, so the tests here are as much about
+ * what the finder does not throw as about what it answers.
  */
 
 /** A scratch directory no other test is using. */
@@ -49,14 +48,20 @@ it('reads a theme file through the finder', function () {
     expect($finder->read('house/theme.yml', 'theme'))->toBe("name: House\n");
 });
 
-it('gives the path of a file it holds', function () {
+it('gives the path of a file as it was written', function () {
+    // The path as written rather than as the file system resolved it: the library
+    // does the resolving and the holding, and a path this machine chose is a path
+    // this machine's own rules should be asked about.
     $base = finderDirectory('paths');
     file_put_contents($base . '/logo.png', 'the bytes');
 
     $finder = new DiskFinder(picture: [$base]);
 
-    expect($finder->path('logo.png', 'picture'))
-        ->toBe(PathScope::canonical($base . '/logo.png'));
+    expect($finder->path('logo.png', 'picture'))->toBe($base . '/logo.png')
+        // A name that walks out of the base and back into it names the same file in
+        // two spellings, and the finder answers with the one it was given.
+        ->and($finder->path('../' . basename($base) . '/logo.png', 'picture'))
+        ->toBe($base . '/../' . basename($base) . '/logo.png');
 });
 
 it('has no file for a name that is not there', function () {
@@ -76,27 +81,33 @@ it('takes a name that is already a path as it stands', function () {
     $base = finderDirectory('absolute');
     file_put_contents($base . '/report.dotx', 'the bytes');
 
-    $finder = new DiskFinder(document: [$base], scope: new PathScope([$base]));
+    $finder = new DiskFinder(document: [$base]);
 
     expect($finder->read($base . '/report.dotx', 'document'))->toBe('the bytes')
         ->and($finder->read($base . '/nowhere.dotx', 'document'))->toBeNull();
 });
 
-it('refuses a file that resolves outside the scope', function () {
+it('answers for a file that is out of reach rather than refusing it', function () {
+    // The scope is the library's question, not the finder's. A finder that refused
+    // would throw this package's exception, which the other half of this suite would
+    // not catch — and the two finders have the same signatures so that one adapter
+    // can serve both.
     $inside = finderDirectory('inside');
     $outside = finderDirectory('outside');
     file_put_contents($outside . '/secret.txt', 'not yours');
 
-    $finder = new DiskFinder(document: [$inside], scope: new PathScope([$inside]));
+    $finder = new DiskFinder(document: [$inside]);
+    $name = '../' . basename($outside) . '/secret.txt';
 
-    expect(fn () => $finder->read('../' . basename($outside) . '/secret.txt', 'document'))
-        ->toThrow(InvalidInput::class, 'outside the directories this render may read');
+    expect($finder->read($name, 'document'))->toBe('not yours')
+        ->and($finder->path($name, 'document'))
+        ->toBe($inside . '/' . $name);
 });
 
-it('refuses a file that is a symlink out of the scope', function () {
-    // The file is in a directory the scope holds and resolves out of it: the name
-    // looks contained and the file is not, which is the ordinary way a path that
-    // reads harmlessly becomes a read of the wrong file.
+it('answers for a file that is a symlink out of reach', function () {
+    // The other half of the refusal the library makes: the file is in a directory
+    // the caller may read and resolves out of it. The finder answers the path; the
+    // library holds it to its scope and refuses it.
     $inside = finderDirectory('linked');
     $outside = finderDirectory('secrets');
     file_put_contents($outside . '/secret.txt', 'not yours');
@@ -105,15 +116,14 @@ it('refuses a file that is a symlink out of the scope', function () {
         test()->markTestSkipped('symlinks are not available here');
     }
 
-    $finder = new DiskFinder(document: [$inside], scope: new PathScope([$inside]));
+    $finder = new DiskFinder(document: [$inside]);
 
-    expect(fn () => $finder->read('looks-fine.txt', 'document'))
-        ->toThrow(InvalidInput::class);
+    expect($finder->read('looks-fine.txt', 'document'))->toBe('not yours');
 });
 
-it('reads a file through a symlink that stays inside the scope', function () {
-    // The other half of the refusal above: a link that resolves within the roots is
-    // a file like any other and must still be read.
+it('reads a file through a symlink', function () {
+    // A link that resolves within the roots is a file like any other and must still
+    // be read.
     $base = finderDirectory('shared');
     file_put_contents($base . '/real.txt', 'the bytes');
 
@@ -126,23 +136,22 @@ it('reads a file through a symlink that stays inside the scope', function () {
     expect($finder->read('linked.txt', 'document'))->toBe('the bytes');
 });
 
-it('names the roots it allows when refusing a file, and not where it pointed', function () {
-    $inside = finderDirectory('roots');
-    $outside = finderDirectory('elsewhere');
-    file_put_contents($outside . '/secret.txt', 'not yours');
+it('resolves a theme by its directory, so one without a manifest shadows a later one', function () {
+    // The theme is there and the manifest is not, which is a theme the caller can be
+    // told about — and it is not the theme of the same name in the next base.
+    $first = finderDirectory('shadow-first');
+    $second = finderDirectory('shadow-second');
 
-    $finder = new DiskFinder(document: [$inside], scope: new PathScope([$inside]));
+    mkdir($first . '/house', 0o777, true);
+    mkdir($second . '/house', 0o777, true);
+    file_put_contents($second . '/house/theme.yml', "name: House\n");
 
-    try {
-        $finder->read('../' . basename($outside) . '/secret.txt', 'document');
-        expect(false)->toBeTrue('the file should have been refused');
-    } catch (InvalidInput $refusal) {
-        // The roots are this program's own and the same for every caller; where the
-        // name resolved to is a path this machine chose.
-        expect($refusal->getMessage())->toContain('outside the directories this render may read')
-            ->toContain($inside)
-            ->not->toContain($outside);
-    }
+    $finder = new DiskFinder(theme: [$first, $second]);
+
+    expect($finder->read('house/theme.yml', 'theme'))->toBeNull()
+        ->and($finder->path('house/theme.yml', 'theme'))->toBeNull()
+        // The directory is the theme's, and the later base's file is not in it.
+        ->and($finder->files('house'))->toBe([]);
 });
 
 it('lists the themes that hold a manifest, sorted', function () {
@@ -230,7 +239,26 @@ it('finds nothing for a role it has no bases for', function () {
 
     $finder = new DiskFinder(theme: [$base]);
 
-    expect($finder->read('logo.png', 'picture'))->toBeNull()
-        // The same file is there for the role the finder was given bases for.
-        ->and($finder->read('logo.png', 'theme'))->toBe('the bytes');
+    expect($finder->read('logo.png', 'picture'))->toBeNull();
+});
+
+it('finds nothing for a role it does not know', function () {
+    $base = finderDirectory('noworld');
+    file_put_contents($base . '/logo.png', 'the bytes');
+
+    $finder = new DiskFinder(picture: [$base]);
+
+    expect($finder->read('logo.png', 'sound'))->toBeNull();
+});
+
+it('finds nothing for a theme file that is not inside a theme', function () {
+    // The theme role names a file inside a theme: `<theme>/<file>`. A name with no
+    // theme in it is not one of the theme's files.
+    $base = finderDirectory('notatheme');
+    file_put_contents($base . '/logo.png', 'the bytes');
+
+    $finder = new DiskFinder(theme: [$base]);
+
+    expect($finder->read('logo.png', 'theme'))->toBeNull()
+        ->and($finder->read('house/logo.png', 'theme'))->toBeNull();
 });

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Files;
 
-use MarkdownWord\Exception\InvalidInput;
-
 /**
  * Where the files a document names come from.
  *
@@ -14,6 +12,17 @@ use MarkdownWord\Exception\InvalidInput;
  * for the names it is handed, and lists what is under a name it is handed. That is
  * what lets a directory of themes on disk and a database of themes that never had a
  * directory serve the same library.
+ *
+ * **A finder answers; it does not refuse.** A file that is not there is null, and
+ * nothing else. The question of what this render may read stays with the library,
+ * which holds the path a finder answered to its own scope and refuses what is out
+ * of reach in its own words: {@see \MarkdownWord\Theme\ThemeResolver::resolve()} and
+ * {@see \MarkdownWord\Theme\ThemeLoader::load()} are where that is asked.
+ *
+ * The reason is not politeness. Each package of this suite has its own exception
+ * classes, so a finder that threw would throw one package's exception and the other
+ * package would not catch it — and the two finders have the same signatures on
+ * purpose, so that one adapter can serve both.
  *
  * The role is the kind of file — `theme`, `picture` or `document` — and it says which
  * world a name is resolved in. It is a hint and never a filter: it says where to
@@ -24,11 +33,6 @@ use MarkdownWord\Exception\InvalidInput;
  * The names are the library's own: a theme's manifest is `corporate/theme.yml`, a
  * picture is `logo.png`, a document's own file is `report.docx`. A name is looked
  * for in the places the finder was told about.
- *
- * A file that is there and out of reach is not the same as a file that is not there:
- * the first is a document reaching for something and the second is a name that
- * resolves to nothing, and the library reports the two differently. So a finder
- * refuses the first rather than answering null for it.
  */
 interface FileFinder
 {
@@ -39,8 +43,6 @@ interface FileFinder
      * themselves. A source that has bytes and no path — the plugin that keeps its
      * themes in a database — serves a document this way, and the library stages
      * them into a file of their own.
-     *
-     * @throws InvalidInput when the file is there and this render may not read it.
      */
     public function read(string $name, ?string $role = null): ?string;
 
@@ -50,8 +52,6 @@ interface FileFinder
      * For the thing a document cannot be handed as bytes: a `template_file:`, which
      * PHPWord opens as a package. A finder with no path says so, and the library
      * stages the bytes into a file of its own.
-     *
-     * @throws InvalidInput when the file is there and this render may not read it.
      */
     public function path(string $name, ?string $role = null): ?string;
 

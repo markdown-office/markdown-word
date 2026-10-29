@@ -63,6 +63,19 @@ All notable changes to this project are documented here. The format follows
   ---
   ```
 
+- **`MarkdownWord\Files\FileFinder`: where a document's files come from.** The library
+  composes names and asks; a finder answers for the names it is handed. `read()` and
+  `path()` answer for one file, `themes()` lists the themes that resolve and
+  `files()` the files of one theme. `Files\DiskFinder` is the default and answers out
+  of directories on this machine, one list of bases per role — `theme`, `picture` and
+  `document` — tried in the order they are given.
+
+  A finder answers; it does not refuse. A file that is not there is `null`, and a file
+  that is out of reach is answered like any other, because the question of what a
+  render may read belongs to the library and to the messages it already had. That is
+  also what lets one adapter serve both halves of this suite: each has its own
+  exception classes, and a finder that threw would throw one of them.
+
 ### Fixed
 
 - **A `value` on a dropdown is refused rather than written into the file.** Word
@@ -145,6 +158,14 @@ All notable changes to this project are documented here. The format follows
   ```
 
 ### Changed
+
+- **`ThemeLoader::load()` and `loadManifest()` take a name and a finder.** The third
+  parameter was the scope a theme's own files were held to and is now the finder they
+  are read through; the first was a directory and is now the name the theme is known
+  by. The scope check stays where it was, with the messages it had, and a loader holds
+  the theme's own files to the scope it was given — so a `styles.yml` that is a
+  symlink out of the scope is still refused. `ThemeResolver` builds a loader with its
+  own scope unless it is given one.
 
 - **`ThemeResolver` looks in the roots it is given.** They were read into the scope a
   document-written path is held to and never looked in, so a shared library of themes

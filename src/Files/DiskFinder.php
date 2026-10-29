@@ -4,32 +4,29 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Files;
 
-use MarkdownWord\Exception\InvalidInput;
-use MarkdownWord\Filesystem\PathScope;
 use MarkdownWord\Theme\ThemeLoader;
 
 /**
  * The default finder: the files are in directories on this machine.
  *
- * It holds two things, and they are not the same thing. The bases say where to look
- * for a file; the scope says what may be read. A file looked for in a directory of
- * themes can be a symlink pointing out of every one of them, and a document that
- * names it must not get to read it — so the scope is asked of the file as it is
- * read, and never of the directory it was found in.
+ * It holds the bases and nothing else — where to look, not what may be read. The
+ * library asks its own scope of the path this answers, and refuses what is out of
+ * reach in its own words; a finder that refused would throw this package's
+ * exception, which the other half of this suite would not catch.
  *
  * The bases are given per role and are tried in the order they are given, so the
  * calling program decides what a document's file is looked for in: the themes beside
  * the document before the ones that ship with this package, a shared library of
  * themes before either.
  *
- * Every file goes through the scope, a theme's `styles.yml` as surely as the theme's
- * manifest. That is what stops a theme from putting a file outside the roots into
- * the document as direct formatting.
+ * A theme is resolved by its directory first: the first base where `<base>/<theme>`
+ * is a directory is the theme's directory, and the theme's files are looked for
+ * inside it. So a theme directory that exists but holds no manifest still shadows a
+ * later one, and is reported as a theme without a manifest rather than as a theme
+ * that is not there.
  */
 final class DiskFinder implements FileFinder
 {
-    private readonly PathScope $scope;
-
     /**
      * @param list<string> $theme The directories a theme's files are looked for in, in the
      *        order they are tried.
@@ -37,23 +34,16 @@ final class DiskFinder implements FileFinder
      *        they are tried.
      * @param list<string> $document The directories a document's own file is looked for in,
      *        in the order they are tried.
-     * @param PathScope|null $scope The directories a file may resolve into. Null holds the
-     *        finder to its own bases, which is the safe reading of a scope that was not
-     *        given: a file in a base is a file this finder may read, and nothing else is.
      */
     public function __construct(
         private readonly array $theme = [],
         private readonly array $picture = [],
         private readonly array $document = [],
-        ?PathScope $scope = null,
     ) {
-        $this->scope = $scope ?? new PathScope([...$theme, ...$picture, ...$document]);
     }
 
     /**
      * The contents of a file a name identifies, or null when there is none.
-     *
-     * @throws InvalidInput when the file is there and this render may not read it.
      */
     public function read(string $name, ?string $role = null): ?string
     {
@@ -71,11 +61,9 @@ final class DiskFinder implements FileFinder
     /**
      * The path of a file a name identifies, when this finder holds it as a file.
      *
-     * The resolved path rather than the name as it was written, because the caller
-     * opens this file — as a package, or as a template — and a name that resolves
-     * elsewhere is a different file.
-     *
-     * @throws InvalidInput when the file is there and this render may not read it.
+     * The path as it was written rather than as the file system resolved it: the
+     * library does the resolving and the holding, and a path this machine chose is
+     * a path this machine's own rules should be asked about.
      */
     public function path(string $name, ?string $role = null): ?string
     {
@@ -105,7 +93,7 @@ final class DiskFinder implements FileFinder
                     continue;
                 }
 
-                if (is_file(rtrim($base, '/') . '/' . $entry . '/' . ThemeLoader::THEME_FILE)) {
+                if (is_file($this->join($this->join($base, $entry), ThemeLoader::THEME_FILE))) {
                     $names[$entry] = true;
                 }
             }
@@ -122,12 +110,9 @@ final class DiskFinder implements FileFinder
      * The names of the files of a theme, sorted.
      *
      * A name that begins with a dot is not one of the theme's files: it is a thing
-     * the file system put there rather than something the library reads.
-     *
-     * What is on disk rather than what this render may read: the listing is how the
-     * library tells a file the theme does not have from a source that cannot serve
-     * the one it does, and a file this render may not read is still a file the theme
-     * has.
+     * the file system put there rather than something the library reads. A
+     * directory is not one either — the library reads files, and a file inside a
+     * directory of the theme's is not one the theme has.
      *
      * @return list<string>
      */
@@ -146,7 +131,7 @@ final class DiskFinder implements FileFinder
                 continue;
             }
 
-            if (is_file($directory . '/' . $entry)) {
+            if (is_file($this->join($directory, $entry))) {
                 $names[] = $entry;
             }
         }
@@ -157,62 +142,75 @@ final class DiskFinder implements FileFinder
     }
 
     /**
-     * The file a name identifies, resolved and held to the scope, or null when there
-     * is none.
-     *
-     * The first base that has the file decides, and the scope is asked of that file.
-     * A file that is there and may not be read is refused rather than passed over in
-     * favour of another base's file of the same name: a document naming it is
-     * reaching for something, and a different file with the same name is not what it
-     * asked for.
-     *
-     * @throws InvalidInput when the file is outside the directories this render may read.
+     * The file a name identifies, or null when there is none.
      */
     private function resolve(string $name, ?string $role): ?string
     {
+        if ($role === 'theme') {
+            return $this->themeFile($name);
+        }
+
         if (str_starts_with($name, '/')) {
             // A name that is already a path is taken as it stands, because resolving
             // it against a base would name a file nobody meant.
-            return $this->held(PathScope::resolve($name), $name);
+            return is_file($name) ? $name : null;
         }
 
-        foreach ($this->bases($role) as $base) {
-            $real = PathScope::resolve(rtrim($base, '/') . '/' . $name);
+        foreach ($this->worlds($role) as $base) {
+            $path = $this->join($base, $name);
 
-            if ($real === null || !is_file($real)) {
-                continue;
+            if (is_file($path)) {
+                return $path;
             }
-
-            return $this->held($real, $name);
         }
 
         return null;
     }
 
     /**
-     * A resolved path, held to the scope.
+     * A file of a theme, looked for inside the theme's own directory.
      *
-     * The name is echoed and the path it resolved to is not, for the reason
-     * {@see \MarkdownWord\Exception\ThemeNotFound::outside()} gives: the resolved form
-     * is a path this machine chose, and the roots are the program's own.
-     *
-     * @throws InvalidInput when the file is outside the directories this render may read.
+     * The name is `<theme>/<file>`, and the theme is resolved by its directory: the
+     * first base where `<base>/<theme>` is a directory is the theme's directory, and
+     * the file is inside it. A theme directory that holds no manifest therefore
+     * shadows a later one that does — the theme is there, and what it is missing is
+     * the manifest.
      */
-    private function held(?string $resolved, string $name): ?string
+    private function themeFile(string $name): ?string
     {
-        if ($resolved === null) {
+        $parts = explode('/', $name, 2);
+        $theme = $parts[0];
+        $file = $parts[1] ?? '';
+
+        $directory = $this->themeDirectory($theme);
+
+        if ($directory === null) {
             return null;
         }
 
-        if (!$this->scope->holds($resolved)) {
-            throw new InvalidInput(sprintf(
-                'The file "%s" is outside the directories this render may read: %s.',
-                $name,
-                $this->scope->roots() === [] ? 'none' : implode(', ', $this->scope->roots()),
-            ));
+        $path = $this->join($directory, $file);
+
+        return is_file($path) ? $path : null;
+    }
+
+    /**
+     * The directory a theme is in, or null when there is no such theme.
+     *
+     * The first base where a directory of that name is, whether it holds a manifest
+     * or not: a theme that is there without a manifest is a theme the caller can
+     * hear about, and the files of another theme that shares its name are not it.
+     */
+    private function themeDirectory(string $theme): ?string
+    {
+        foreach ($this->theme as $base) {
+            $directory = $this->join($base, $theme);
+
+            if (is_dir($directory)) {
+                return $directory;
+            }
         }
 
-        return $resolved;
+        return null;
     }
 
     /**
@@ -223,38 +221,27 @@ final class DiskFinder implements FileFinder
      * it can answer for. A name with no role is looked for in every world, in the
      * order the roles are declared.
      *
+     * The theme role is not among them: a theme is resolved by its directory rather
+     * than by a file in a base, which {@see self::themeFile()} is where happens.
+     *
      * @return list<string>
      */
-    private function bases(?string $role): array
+    private function worlds(?string $role): array
     {
         if ($role === null) {
             return [...$this->theme, ...$this->picture, ...$this->document];
         }
 
         return match ($role) {
-            'theme' => $this->theme,
             'picture' => $this->picture,
             'document' => $this->document,
             default => [],
         };
     }
 
-    /**
-     * The directory a theme is in, or null when there is no such theme.
-     *
-     * The first directory of that name holding a manifest, so a theme that is not
-     * there has no files rather than the files of something that shares its name.
-     */
-    private function themeDirectory(string $theme): ?string
+    /** A path in a base, with one separator between them. */
+    private function join(string $base, string $name): string
     {
-        foreach ($this->theme as $base) {
-            $directory = rtrim($base, '/') . '/' . $theme;
-
-            if (is_dir($directory) && is_file($directory . '/' . ThemeLoader::THEME_FILE)) {
-                return $directory;
-            }
-        }
-
-        return null;
+        return rtrim($base, '/') . '/' . $name;
     }
 }

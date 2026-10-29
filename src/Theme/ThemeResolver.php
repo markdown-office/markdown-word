@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace MarkdownWord\Theme;
 
 use MarkdownWord\Exception\ThemeNotFound;
+use MarkdownWord\Files\DiskFinder;
+use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Filesystem\PathScope;
 
 /**
@@ -44,6 +46,11 @@ use MarkdownWord\Filesystem\PathScope;
  * bare name is looked for under `./themes/`, so `theme: ..` lands on the directory above
  * it rather than on anything inside `themes/`. It is contained, because that directory is
  * a root — but it is not what the name suggests.
+ *
+ * The theme's files are read through a finder, which is given the directory that holds
+ * the theme: the name the library asks for then resolves to the theme this resolver
+ * found and not to another theme that shares its name. The listing of the themes that
+ * resolve comes from a finder given the directories of themes above.
  */
 final class ThemeResolver
 {
@@ -60,6 +67,8 @@ final class ThemeResolver
 
     private readonly PathScope $files;
 
+    private readonly ThemeLoader $loader;
+
     /** @var list<string> */
     private readonly array $roots;
 
@@ -74,11 +83,14 @@ final class ThemeResolver
      *   which is where its own `themes/` sits and where a relative path is written from.
      *   Null for a document handed in as a string: there is no file beside it, so a theme
      *   beside it is not there to be found.
+     * @param ThemeLoader|null $loader The loader the themes are read through. A loader
+     *   given here brings its own scope; the scope of this resolver still holds the
+     *   theme's own directory.
      */
     public function __construct(
         private readonly string $workingDirectory = '.',
         ?string $builtinDirectory = null,
-        private readonly ThemeLoader $loader = new ThemeLoader(),
+        ?ThemeLoader $loader = null,
         array $roots = [],
         private readonly ?string $documentDirectory = null,
     ) {
@@ -93,6 +105,7 @@ final class ThemeResolver
             $this->builtinDirectory,
             ...$this->roots,
         ]);
+        $this->loader = $loader ?? new ThemeLoader($this->files);
     }
 
     /**
@@ -112,13 +125,13 @@ final class ThemeResolver
             // Whether the path names a directory or a file decides what is read from it,
             // not where it is looked for: a path is found the same way either way.
             return is_file($path)
-                ? $this->loader->loadManifest($this->file($name, $path), $name, $this->files)
-                : $this->loader->load($this->directory($name, $path), $name, $this->files);
+                ? $this->themeOfManifest($this->file($name, $path), $name)
+                : $this->themeIn($this->directory($name, $path), $name);
         }
 
         foreach ($this->themeDirectories() as $themes) {
             if (is_dir($directory = $themes . '/' . $name)) {
-                return $this->loader->load($this->directory($name, $directory), $name, $this->files);
+                return $this->themeIn($this->directory($name, $directory), $name);
             }
         }
 
@@ -155,6 +168,47 @@ final class ThemeResolver
             ...$this->roots,
             $this->builtinDirectory,
         ];
+    }
+
+    /**
+     * The finder the themes are listed from: the directories of themes the six steps
+     * name, in the order they are tried.
+     */
+    private function finder(): FileFinder
+    {
+        return new DiskFinder(theme: $this->themeDirectories());
+    }
+
+    /**
+     * The theme in a directory, read through a finder that resolves it there.
+     *
+     * The finder is given the directory that holds the theme, so the name it resolves
+     * is the theme this resolver found and not another theme that shares its name.
+     */
+    private function themeIn(string $directory, string $written): LoadedTheme
+    {
+        return $this->loader->load(
+            basename($directory),
+            $written,
+            new DiskFinder(theme: [dirname($directory)]),
+        );
+    }
+
+    /**
+     * The theme a manifest is, read through a finder that resolves it there.
+     *
+     * The manifest's own directory, so the styles beside it are the ones the manifest
+     * was written next to.
+     */
+    private function themeOfManifest(string $file, string $written): LoadedTheme
+    {
+        $directory = dirname($file);
+
+        return $this->loader->loadManifest(
+            basename($directory),
+            $written,
+            new DiskFinder(theme: [dirname($directory)]),
+        );
     }
 
     /**
@@ -221,28 +275,6 @@ final class ThemeResolver
      */
     public function available(): array
     {
-        $names = [];
-
-        foreach ($this->themeDirectories() as $themes) {
-            if (!is_dir($themes)) {
-                continue;
-            }
-
-            foreach (scandir($themes) ?: [] as $entry) {
-                if (str_starts_with($entry, '.')) {
-                    continue;
-                }
-
-                if (is_file($themes . '/' . $entry . '/' . ThemeLoader::THEME_FILE)) {
-                    $names[$entry] = true;
-                }
-            }
-        }
-
-        $found = array_keys($names);
-
-        sort($found);
-
-        return $found;
+        return $this->finder()->themes();
     }
 }
