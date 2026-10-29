@@ -94,6 +94,16 @@ the [documentation][command-line].
 See [Requirements](#requirements) for what PHP and which extensions it needs.
 Where to get help: [the issue tracker][issues].
 
+## For an agent
+
+There is a **skill**: a directory an agent reads, holding this library's
+documentation, its examples, and the tools that render a document so that it can
+be looked at. It is built from the documentation site, so it is never out of step
+with it, and it is installed with one line in `opencode.json` or by unpacking it
+where your agent looks for one.
+
+[How to install it][skill].
+
 ## Why it exists
 
 The obvious way to build a Markdown-to-Word converter is to render HTML and hand
@@ -1915,6 +1925,28 @@ there.
   text you want emphasised, and reserve raw HTML for content that brings its own
   markup.
 
+## Tools
+
+A document that has been built has not been looked at, and a document that has been looked at
+in a renderer that disagrees with Word is a document that has not really been looked at.
+
+| Tool | What it is |
+| --- | --- |
+| `tools/render-document.php` | Renders a document with the most truthful renderer the machine has — Microsoft Word where it can be used, WordCraft where Word cannot, LibreOffice last — and says so when it had to fall back, because a renderer that cannot be trusted is worse than none |
+| `tools/render-with-word.applescript` | Opens a document in Microsoft Word on macOS and exports it as PDF. The export is written inside Word's own sandbox container, because Word writes nowhere else |
+| `tools/render-with-word.ps1` | The same on Windows, through Word's COM automation rather than through AppleScript |
+| `tools/package-as-document.sh` | Turns a Word template into a Word document, which is the one rewrite that makes a template a file Word will open |
+| `tools/pdf-is-complete.sh` | Whether a PDF has been written whole, which is what the Word tool waits for before it copies one out. The one part of that tool the test suite can check, because it needs no Word to answer |
+
+The choice between the three renderers is tested without any of them: the dispatcher takes the
+platform and the renderer from the environment, so the test suite can ask what it would choose
+on a machine that has none of them. The one test that needs Word is skipped where Word is not.
+
+A **template** is rendered as well as a document. Word's AppleScript opens a package typed as a
+template by opening nothing at all, and raises no error when it does so, so the template is
+staged as a document first — which is the one rewrite that turns a template into a file Word
+will open.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE). PHPWord, which this library builds on, is
@@ -1925,6 +1957,7 @@ LGPL-3.0.
 [issues]: https://github.com/markdown-office/markdown-word/issues
 [mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word
+[skill]: https://markdown-office.github.io/skills/
 [sonar-token]: https://sonarcloud.io/account/security
 [pest]: https://pestphp.com
 [phpword]: https://github.com/PHPOffice/PHPWord

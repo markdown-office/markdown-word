@@ -8,6 +8,32 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A document can be rendered, and looked at.** Four tools, in `tools/`:
+  `render-document.php` renders a document with the most truthful renderer the machine has
+  — Microsoft Word where it can be used, WordCraft where Word cannot, LibreOffice last —
+  and says so when it had to fall back, because a renderer that cannot be trusted is worse
+  than none. `render-with-word.applescript` and `render-with-word.ps1` drive Microsoft Word
+  on macOS and on Windows, and `package-as-document.sh` turns a Word template into a Word
+  document.
+
+  **The export is written inside Word's own sandbox container**, because Word writes
+  nowhere else: asked for a path outside it, Word waits for a grant the caller cannot give
+  and writes nothing. And a PDF is written lazily, so the file is copied out only once it
+  has stopped growing and carries the marker every PDF ends with.
+
+  **A template is rendered as well as a document.** Word's AppleScript opens a package
+  typed as a template by opening nothing at all, and raises no error when it does so, so
+  the template is staged as a document first: the one content-type rewrite that turns a
+  template into a file Word will open. The PDF is named after the template rather than
+  after the template's extension.
+
+  The choice between the three renderers is tested without any of them — the dispatcher
+  takes the platform and the renderer from the environment, so the test suite can ask what
+  it would choose on a machine that has none of them. The dispatcher looks for Word itself
+  and not only for the tool that drives it: `osascript` is on every Mac whether or not
+  Word is, and a backend that says "word" where there is no Word fails later, inside Word,
+  with a message about the document rather than about Word.
+
 - **A word can be written in a style, in the middle of a sentence.** `:brand[Bakery]`
   is the word "Bakery" in the style the theme calls `brand`, and the theme's
   `styles.yml` gains a `textStyles` key for it:
