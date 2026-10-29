@@ -183,6 +183,18 @@ function toolWithMock(): string
 }
 
 /**
+ * The error as one line.
+ *
+ * PowerShell writes an error as a record, and a record is wrapped to the width of the
+ * console — so the same message arrives with a line break in a different place on a
+ * different machine. What the words are is what matters, and not where the line ended.
+ */
+function oneLine(string $text): string
+{
+    return (string) preg_replace('/\s+/', ' ', $text);
+}
+
+/**
  * Run the tool with the stand-in for Word, and say what happened.
  *
  * @param list<string> $arguments
@@ -292,7 +304,7 @@ it('fails rather than reporting a render that produced no file', function () {
     );
 
     expect($answer['status'])->not->toBe(0)
-        ->and($answer['err'])->toContain('no PDF')
+        ->and(oneLine($answer['err']))->toContain('no PDF')
         ->and(is_file($workspace['out'] . '/report.pdf'))->toBeFalse();
 });
 
@@ -308,7 +320,7 @@ it('fails rather than reporting a PDF that was not finished', function () {
     );
 
     expect($answer['status'])->not->toBe(0)
-        ->and($answer['err'])->toContain('no finished PDF');
+        ->and(oneLine($answer['err']))->toContain('no finished PDF');
 });
 
 it('closes what it opened, and lets Word go', function () {
@@ -347,7 +359,7 @@ it('says so when there is nothing to render', function () {
     $answer = runPowerShell($interpreter, [windowsTool(), '--out', Scratch::path('rendered', '')]);
 
     expect($answer['status'])->not->toBe(0)
-        ->and($answer['err'])->toContain('Nothing to render');
+        ->and(oneLine($answer['err']))->toContain('Nothing to render');
 });
 
 it('says so when there is no output directory', function () {
@@ -362,7 +374,7 @@ it('says so when there is no output directory', function () {
     $answer = runPowerShell($interpreter, [windowsTool(), $workspace['document']]);
 
     expect($answer['status'])->not->toBe(0)
-        ->and($answer['err'])->toContain('No output directory');
+        ->and(oneLine($answer['err']))->toContain('No output directory');
 });
 
 it('changes nothing in the tool but the line that loads the stand-in', function () {
