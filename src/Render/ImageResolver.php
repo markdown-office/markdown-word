@@ -539,13 +539,7 @@ final class ImageResolver
      */
     private function resolve(string $url): ?array
     {
-        if ($url === '' || $url === '/') {
-            return null;
-        }
-
-        // A remote URL cannot be fetched without network access, and the library
-        // deliberately has no HTTP client.
-        if (preg_match('#^(https?|ftp|//)#i', $url) === 1) {
+        if (!self::isLocal($url)) {
             return null;
         }
 
@@ -555,13 +549,22 @@ final class ImageResolver
             return $found;
         }
 
-        if ($this->options->imageBasePath === null) {
-            return is_file($url) ? ['source' => $url, 'bytes' => null] : null;
+        return $this->onDisk($url);
+    }
+
+    /**
+     * Whether a name is one the library looks for on this machine.
+     *
+     * A remote URL cannot be fetched without network access, and the library
+     * deliberately has no HTTP client.
+     */
+    private static function isLocal(string $url): bool
+    {
+        if ($url === '' || $url === '/') {
+            return false;
         }
 
-        $candidate = rtrim($this->options->imageBasePath, '/\\') . DIRECTORY_SEPARATOR . ltrim($url, '/\\');
-
-        return is_file($candidate) ? ['source' => $candidate, 'bytes' => null] : null;
+        return preg_match('#^(https?|ftp|//)#i', $url) !== 1;
     }
 
     /**
@@ -575,23 +578,55 @@ final class ImageResolver
      */
     private function fromFinder(string $url): ?array
     {
-        if ($this->files === null) {
+        $files = $this->files;
+
+        if ($files === null) {
             return null;
         }
 
-        $path = $this->files->path($url, 'picture');
+        $path = $files->path($url, 'picture');
 
         if ($path !== null) {
             return ['source' => $path, 'bytes' => null];
         }
 
-        $bytes = $this->files->read($url, 'picture');
+        return $this->fromBytes($url, $files);
+    }
+
+    /**
+     * The picture the source holds as bytes, or null when it holds none.
+     *
+     * A source that holds the bytes has no file for them, so the name the document
+     * wrote is the source of the picture.
+     *
+     * @return array{source: string, bytes: ?string}|null
+     */
+    private function fromBytes(string $url, FileFinder $files): ?array
+    {
+        $bytes = $files->read($url, 'picture');
 
         if ($bytes === null) {
             return null;
         }
 
         return ['source' => $url, 'bytes' => $bytes];
+    }
+
+    /**
+     * The picture on this machine, or null when there is none.
+     *
+     * Without a base path the name is a path of its own; with one it is a name in
+     * that base.
+     *
+     * @return array{source: string, bytes: ?string}|null
+     */
+    private function onDisk(string $url): ?array
+    {
+        $path = $this->options->imageBasePath === null
+            ? $url
+            : rtrim($this->options->imageBasePath, '/\\') . DIRECTORY_SEPARATOR . ltrim($url, '/\\');
+
+        return is_file($path) ? ['source' => $path, 'bytes' => null] : null;
     }
 
     /**

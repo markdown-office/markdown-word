@@ -118,7 +118,7 @@ final class MarkdownTemplate
         Configuration|array|null $overrides = null,
         ?string $theme = null,
         ?string $directory = null,
-        private readonly ?FileFinder $files = null,
+        ?FileFinder $files = null,
     ) {
         if (!is_file($template)) {
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));

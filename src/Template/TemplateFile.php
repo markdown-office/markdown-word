@@ -83,19 +83,8 @@ final class TemplateFile
         }
 
         $base = $this->baseFor($written);
-        $canonical = PathScope::canonical($base);
 
-        if ($canonical === null || !is_file($canonical)) {
-            throw TemplateNotFound::aMissingFile($written, $this->searchedIn());
-        }
-
-        $files = new PathScope($this->roots);
-
-        if (!$files->holds($canonical)) {
-            throw TemplateNotFound::aRefusedPath($written, $files->roots());
-        }
-
-        return $canonical;
+        return $this->held($written, $base);
     }
 
     /**
@@ -123,41 +112,64 @@ final class TemplateFile
      * The template in the source the document's files come from, or null when it has
      * none.
      *
-     * A path the finder answers is held to the roots, exactly as a path on disk is: a
-     * `template_file:` is written by the document, and what is allowed is where it
-     * lands. A finder that answers the bytes has the caller's word for them.
+     * A source that holds the template as a file answers a path, and one that holds
+     * the bytes answers no path: the bytes are the caller's word for them.
      */
     private function fromFinder(string $written): ?string
     {
-        if ($this->files === null) {
+        $files = $this->files;
+
+        if ($files === null) {
             return null;
         }
 
-        $path = $this->files->path($written, 'document');
+        $path = $files->path($written, 'document');
 
         if ($path !== null) {
-            $canonical = PathScope::canonical($path);
-
-            if ($canonical === null || !is_file($canonical)) {
-                throw TemplateNotFound::aMissingFile($written, $this->searchedIn());
-            }
-
-            $files = new PathScope($this->roots);
-
-            if (!$files->holds($canonical)) {
-                throw TemplateNotFound::aRefusedPath($written, $files->roots());
-            }
-
-            return $canonical;
+            return $this->held($written, $path);
         }
 
-        $bytes = $this->files->read($written, 'document');
+        return $this->fromBytes($written, $files);
+    }
+
+    /**
+     * The template's bytes, staged into a file of the library's own.
+     */
+    private function fromBytes(string $written, FileFinder $files): ?string
+    {
+        $bytes = $files->read($written, 'document');
 
         if ($bytes === null) {
             return null;
         }
 
         return $this->stage($bytes, $written);
+    }
+
+    /**
+     * The path a name resolved to, held to the roots.
+     *
+     * One rule for both: a path from the disk and a path from the caller's source are
+     * held to the roots alike, because a `template_file:` is written by the document
+     * either way.
+     *
+     * @throws TemplateNotFound when the path is not a file, or is out of reach
+     */
+    private function held(string $written, string $path): string
+    {
+        $canonical = PathScope::canonical($path);
+
+        if ($canonical === null || !is_file($canonical)) {
+            throw TemplateNotFound::aMissingFile($written, $this->searchedIn());
+        }
+
+        $files = new PathScope($this->roots);
+
+        if (!$files->holds($canonical)) {
+            throw TemplateNotFound::aRefusedPath($written, $files->roots());
+        }
+
+        return $canonical;
     }
 
     /**

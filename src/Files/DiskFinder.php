@@ -160,6 +160,14 @@ final class DiskFinder implements FileFinder
             return $this->themeFile($name);
         }
 
+        return $this->inWorlds($name, $role);
+    }
+
+    /**
+     * The file one of the worlds holds, or null when none of them does.
+     */
+    private function inWorlds(string $name, ?string $role): ?string
+    {
         foreach ($this->worlds($role) as $base) {
             $path = $this->join($base, $name);
 
