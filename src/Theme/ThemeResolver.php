@@ -51,6 +51,12 @@ use MarkdownWord\Filesystem\PathScope;
  * the theme: the name the library asks for then resolves to the theme this resolver
  * found and not to another theme that shares its name. The listing of the themes that
  * resolve comes from a finder given the directories of themes above.
+ *
+ * A finder the calling program brought is the source of themes in its own right: a
+ * theme that never had a directory is resolved by asking for its manifest by name, and
+ * the directories of themes on disk are the fallback rather than the only place a
+ * theme is looked for. The themes that ship with this package are among them, so a
+ * program that brings a source of its own does not lose the built-in ones.
  */
 final class ThemeResolver
 {
@@ -65,12 +71,15 @@ final class ThemeResolver
 
     private readonly string $builtinDirectory;
 
-    private readonly PathScope $files;
+    private readonly PathScope $scope;
 
     private readonly ThemeLoader $loader;
 
     /** @var list<string> */
     private readonly array $roots;
+
+    /** The source of themes the calling program brought, if it brought one. */
+    private readonly ?FileFinder $files;
 
     /**
      * @param list<string> $roots Further directories a document may name a theme in, for
@@ -86,6 +95,8 @@ final class ThemeResolver
      * @param ThemeLoader|null $loader The loader the themes are read through. A loader
      *   given here brings its own scope; the scope of this resolver still holds the
      *   theme's own directory.
+     * @param FileFinder|null $files The source of themes, for a program whose themes are
+     *   not in a directory. The directories of themes on disk remain the fallback.
      */
     public function __construct(
         private readonly string $workingDirectory = '.',
@@ -93,19 +104,21 @@ final class ThemeResolver
         ?ThemeLoader $loader = null,
         array $roots = [],
         private readonly ?string $documentDirectory = null,
+        ?FileFinder $files = null,
     ) {
         $this->roots = array_values($roots);
 
         // The themes beside `src/`, so a package installed anywhere resolves its own
         // themes without being told where they are.
         $this->builtinDirectory = $builtinDirectory ?? dirname(__DIR__, 2) . self::THEMES_DIRECTORY;
-        $this->files = new PathScope([
+        $this->scope = new PathScope([
             ...($this->documentDirectory === null ? [] : [$this->documentDirectory]),
             $this->workingDirectory,
             $this->builtinDirectory,
             ...$this->roots,
         ]);
-        $this->loader = $loader ?? new ThemeLoader($this->files);
+        $this->loader = $loader ?? new ThemeLoader($this->scope);
+        $this->files = $files;
     }
 
     /**
@@ -129,6 +142,13 @@ final class ThemeResolver
                 : $this->themeIn($this->directory($name, $path), $name);
         }
 
+        // The source the calling program brought, asked for by name.
+        $theme = $this->throughFinder($name);
+
+        if ($theme !== null) {
+            return $theme;
+        }
+
         foreach ($this->themeDirectories() as $themes) {
             if (is_dir($directory = $themes . '/' . $name)) {
                 return $this->themeIn($this->directory($name, $directory), $name);
@@ -136,6 +156,49 @@ final class ThemeResolver
         }
 
         throw ThemeNotFound::named($name, $this->available());
+    }
+
+    /**
+     * A theme in the source the calling program brought, or null when it has none.
+     *
+     * The manifest is asked for by name — `house/theme.yml` — because the library
+     * composes names and a finder answers them. A finder that answers a path has it
+     * held to the scope, exactly as a theme found on disk has; one that answers the
+     * bytes has the caller's word for them.
+     *
+     * Whether the theme is there at all is answered by the listing of its files, and
+     * not by asking for the manifest: a theme whose files are there but whose
+     * manifest is not is a different failure from a theme that is not there, and the
+     * listing tells the two apart without reading anything.
+     */
+    private function throughFinder(string $name): ?LoadedTheme
+    {
+        $finder = $this->finder();
+
+        $manifest = $finder->path($name . '/' . ThemeLoader::THEME_FILE, 'theme');
+
+        if ($manifest !== null) {
+            $real = PathScope::resolve($manifest);
+
+            if ($real === null) {
+                throw ThemeNotFound::noManifest($name);
+            }
+
+            // The theme's own directory is held to the scope, as it is when the theme
+            // was found on disk: a `theme:` is a path a document writes, and what is
+            // allowed is where it lands.
+            if (!$this->scope->holds(dirname($real))) {
+                throw ThemeNotFound::outside($name, $this->scope->roots());
+            }
+
+            return $this->loader->load($name, $name, $finder);
+        }
+
+        if ($finder->files($name) === []) {
+            return null;
+        }
+
+        return $this->loader->load($name, $name, $finder);
     }
 
     /**
@@ -171,12 +234,16 @@ final class ThemeResolver
     }
 
     /**
-     * The finder the themes are listed from: the directories of themes the six steps
-     * name, in the order they are tried.
+     * The finder the themes are read through: the source the calling program brought,
+     * or the disk default.
+     *
+     * The default holds the directories of themes the six steps name, in the order
+     * they are tried, so a theme is resolved by its directory and a theme directory
+     * that holds no manifest still shadows a later one.
      */
     private function finder(): FileFinder
     {
-        return new DiskFinder(theme: $this->themeDirectories());
+        return $this->files ?? new DiskFinder(theme: $this->themeDirectories());
     }
 
     /**
@@ -235,8 +302,8 @@ final class ThemeResolver
 
         $real = PathScope::resolve($found);
 
-        if ($real === null || !$this->files->holds($real)) {
-            throw ThemeNotFound::outside($name, $this->files->roots());
+        if ($real === null || !$this->scope->holds($real)) {
+            throw ThemeNotFound::outside($name, $this->scope->roots());
         }
 
         return $real;
@@ -258,8 +325,8 @@ final class ThemeResolver
     {
         $real = PathScope::resolve($found);
 
-        if ($real === null || !$this->files->holds($real)) {
-            throw ThemeNotFound::outside($name, $this->files->roots());
+        if ($real === null || !$this->scope->holds($real)) {
+            throw ThemeNotFound::outside($name, $this->scope->roots());
         }
 
         return $real;
@@ -271,10 +338,31 @@ final class ThemeResolver
      * the list cannot tell which, so listing one kind ahead of the other would say
      * something untrue.
      *
+     * The source the calling program brought and the directories on disk are listed
+     * together, because a name that resolves is a name that is offered: a program with
+     * themes of its own does not lose the ones that ship with this package.
+     *
      * @return list<string>
      */
     public function available(): array
     {
-        return $this->finder()->themes();
+        $names = [...$this->finder()->themes(), ...$this->diskThemes()];
+
+        $unique = array_values(array_unique($names));
+
+        sort($unique);
+
+        return $unique;
+    }
+
+    /**
+     * The themes in the directories on disk, which are the fallback for a name the
+     * source the calling program brought does not have.
+     *
+     * @return list<string>
+     */
+    private function diskThemes(): array
+    {
+        return (new DiskFinder(theme: $this->themeDirectories()))->themes();
     }
 }

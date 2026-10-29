@@ -8,7 +8,11 @@ use MarkdownWord\Exception\ThemeNotFound;
 use MarkdownWord\Files\DiskFinder;
 use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Filesystem\PathScope;
+use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Parser\CommonMarkParser;
+use MarkdownWord\Tests\Support\MemoryFinder;
 use MarkdownWord\Tests\Support\Scratch;
+use MarkdownWord\Tests\Support\Upstream;
 use MarkdownWord\Theme\ThemeLoader;
 use MarkdownWord\Theme\ThemeResolver;
 
@@ -22,82 +26,8 @@ use MarkdownWord\Theme\ThemeResolver;
  * the library is the one that says no.
  */
 
-/**
- * A finder with the files in memory rather than on disk.
- *
- * The source the finder exists for: a plugin that keeps its themes in a database and
- * never had a directory to hand over. It answers the contents and no path, so the
- * library reads the bytes rather than opening a file — and it remembers what it was
- * asked for, which is how a test says what the library asked for.
- */
-final class MemoryFinder implements FileFinder
-{
-    /** @var array<string, true> */
-    private array $asked = [];
-
-    /**
-     * @param array<string, string> $files The files it holds, by name.
-     */
-    public function __construct(private readonly array $files = [])
-    {
-    }
-
-    public function read(string $name, ?string $role = null): ?string
-    {
-        $this->asked[$name] = true;
-
-        return $this->files[$name] ?? null;
-    }
-
-    public function path(string $name, ?string $role = null): ?string
-    {
-        $this->asked[$name] = true;
-
-        return null;
-    }
-
-    public function themes(): array
-    {
-        $names = [];
-
-        foreach (array_keys($this->files) as $name) {
-            $names[explode('/', $name, 2)[0]] = true;
-        }
-
-        $found = array_keys($names);
-
-        sort($found);
-
-        return $found;
-    }
-
-    public function files(string $theme): array
-    {
-        $names = [];
-
-        foreach (array_keys($this->files) as $name) {
-            if (str_starts_with($name, $theme . '/')) {
-                $names[substr($name, strlen($theme) + 1)] = true;
-            }
-        }
-
-        $found = array_keys($names);
-
-        sort($found);
-
-        return $found;
-    }
-
-    /**
-     * The names it was asked for, in the order they were asked for.
-     *
-     * @return list<string>
-     */
-    public function asked(): array
-    {
-        return array_keys($this->asked);
-    }
-}
+beforeEach(fn () => Upstream::install());
+afterEach(fn () => Upstream::restore());
 
 /** A scratch directory no other test is using. */
 function finderScratch(string $name = 'theme-finder'): string
@@ -312,4 +242,73 @@ it('tells a document that the manifest it named is not there', function () {
 
     expect(fn () => $loader->loadManifest('house', 'house/theme.yml', new MemoryFinder()))
         ->toThrow(ThemeNotFound::class, 'There is no theme directory named "house/theme.yml"');
+});
+
+it('resolves a theme the source holds and no directory has', function () {
+    // The source the finder exists for: a plugin that keeps its themes in a database
+    // and never had a directory to hand over. The name is asked for by name, and the
+    // theme comes back the same way it would from a directory.
+    $finder = new MemoryFinder([
+        'house/theme.yml' => "name: House\n",
+        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+    ]);
+
+    $resolver = new ThemeResolver(workingDirectory: finderScratch('theme-finder-nowhere'), files: $finder);
+    $theme = $resolver->resolve('house');
+
+    expect($theme->theme()->name())->toBe('House')
+        ->and($theme->styles()->get(Styles::HEADING_1)['color'])->toBe('112233')
+        // And the name is offered in the list of the themes that resolve.
+        ->and($resolver->available())->toContain('house');
+});
+
+it('refuses a theme the source answers for outside the roots, in the library\'s words', function () {
+    // The finder answers the path; the library holds it to its own scope and refuses
+    // it. A finder that refused would throw this package's exception, which the other
+    // half of this suite would not catch.
+    $outside = finderScratch('theme-finder-outside-roots');
+    finderTheme($outside, 'secrets');
+
+    $resolver = new ThemeResolver(
+        workingDirectory: finderScratch('theme-finder-inside-roots'),
+        files: new DiskFinder(theme: [$outside]),
+    );
+
+    expect(fn () => $resolver->resolve('secrets'))
+        ->toThrow(ThemeNotFound::class, 'outside the directories a document may name');
+});
+
+it('resolves a theme named in code once', function () {
+    // The name is resolved when it is given, and the document is drawn in the theme
+    // that came back. A source that counts its reads says so: the theme is read once,
+    // not once for the name and once for the document.
+    $finder = new MemoryFinder([
+        'house/theme.yml' => "name: House\n",
+        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+    ]);
+
+    $converter = (new MarkdownToWord('# T', files: $finder))->withTheme('house');
+    $converter->toDocx('# T');
+
+    expect($finder->reads('house/theme.yml'))->toBe(1)
+        ->and($finder->reads('house/styles.yml'))->toBe(1);
+});
+
+it('resolves a theme in a root the calling program allowed', function () {
+    // A shared library of themes beside the project: the roots widen what a document
+    // may read, and a name is looked for in one of them the way it is in the themes
+    // that ship with this package.
+    $library = finderScratch('theme-finder-library');
+    finderTheme($library, 'shared', "heading.1:\n  color: 112233\n");
+
+    $markdown = "---\ntheme: shared\n---\n\n# T\n";
+    $converter = new MarkdownToWord(
+        $markdown,
+        parser: CommonMarkParser::withAllExtensions(),
+        roots: [$library],
+    );
+
+    $config = $converter->configurationFor($converter->parse($markdown), $markdown);
+
+    expect($config->getStyles()->get(Styles::HEADING_1)['color'])->toBe('112233');
 });

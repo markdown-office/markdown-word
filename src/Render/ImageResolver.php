@@ -6,7 +6,9 @@ namespace MarkdownWord\Render;
 
 use League\CommonMark\Extension\CommonMark\Node\Inline\Image;
 use MarkdownWord\Configuration\Options;
+use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\UnsupportedImageFormat;
+use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Format;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\Exception\InvalidImageException;
@@ -27,6 +29,17 @@ use Throwable;
  * points wide — a third too large. The unit is therefore stated on the style
  * rather than left to PHPWord's default, and every size here is converted into it
  * before it is handed over.
+ *
+ * **A picture comes from the finder.** A source that holds a picture as a file
+ * gives a path, and the picture is used where it is; a source that holds the bytes
+ * gives no path, and the bytes are staged into a file of the library's own so that
+ * the picture can be measured and drawn as one. PHPWord is given the bytes rather
+ * than the staged file, so nothing is left on disk and nothing has to survive the
+ * write.
+ *
+ * There is no scope check here, and there never was one: a picture is resolved
+ * against `imageBasePath` or the working directory, and that is what this library
+ * has always allowed a document to reach.
  */
 final class ImageResolver
 {
@@ -42,6 +55,7 @@ final class ImageResolver
         private readonly ImageConversionCollector $conversions = new ImageConversionCollector(),
         private readonly SvgAttachmentCollector $vectors = new SvgAttachmentCollector(),
         private readonly ?Format $format = null,
+        private readonly ?FileFinder $files = null,
     ) {
     }
 
@@ -61,10 +75,10 @@ final class ImageResolver
         $style = $style->isLink() ? new InlineStyle() : $style;
 
         $url = $node->getUrl();
-        $path = $this->resolvePath($url);
+        $picture = $this->resolve($url);
 
-        if ($this->options->images === Options::IMAGE_EMBED && $path !== null) {
-            $this->embed($path, $target, $this->descriptions->countPending());
+        if ($this->options->images === Options::IMAGE_EMBED && $picture !== null) {
+            $this->embed($picture, $target, $this->descriptions->countPending());
             $this->descriptions->add($alt);
             $target->addText(' ');
 
@@ -110,11 +124,11 @@ final class ImageResolver
             return;
         }
 
-        $path = $this->resolvePath($source);
+        $picture = $this->resolve($source);
 
-        if ($this->options->images === Options::IMAGE_EMBED && $path !== null) {
+        if ($this->options->images === Options::IMAGE_EMBED && $picture !== null) {
             $this->embed(
-                $path,
+                $picture,
                 $target,
                 $this->descriptions->countPending(),
                 $width === null ? null : self::PIXELS_PER_CENTIMETRE * $width,
@@ -140,6 +154,8 @@ final class ImageResolver
     /**
      * Add the image, decoding it first when Word will not take the format it is in.
  *
+     * @param array{source: string, bytes: ?string} $picture the picture as
+     *        {@see self::resolve()} found it
      * @param int $position where this image falls among the document's pictures, which is
      *        how {@see SvgAttachmentCollector} finds it again once the file has been written
      * @param float|null $width the width asked for, in pixels, or null for the picture's own
@@ -148,12 +164,53 @@ final class ImageResolver
      * @throws UnsupportedImageFormat when the file is in hand and unusable.
      */
     private function embed(
-        string $path,
+        array $picture,
         AbstractContainer $target,
         int $position,
         ?float $width = null,
         ?float $height = null,
         string $alignment = 'left',
+    ): void {
+        $source = $picture['source'];
+        $bytes = $picture['bytes'];
+        $staged = null;
+
+        if ($bytes !== null) {
+            // The source holds the picture and no file for it. The bytes are staged so
+            // that the picture can be measured and drawn as one, and the staged file
+            // goes when the picture has been drawn: PHPWord is given the bytes, so
+            // nothing has to survive the write.
+            $staged = $this->stage($bytes, $source);
+            $path = $staged;
+        } else {
+            $path = $source;
+        }
+
+        try {
+            $this->draw($picture, $path, $target, $position, $width, $height, $alignment);
+        } finally {
+            if ($staged !== null) {
+                @unlink($staged);
+            }
+        }
+    }
+
+    /**
+     * The picture, drawn into the document.
+     *
+     * @param array{source: string, bytes: ?string} $picture the picture as it was found
+     * @param string $path the file the picture is in, staged or the source's own
+     *
+     * @throws UnsupportedImageFormat when the file is in hand and unusable.
+     */
+    private function draw(
+        array $picture,
+        string $path,
+        AbstractContainer $target,
+        int $position,
+        ?float $width,
+        ?float $height,
+        string $alignment,
     ): void {
         // SVG is not a format Word refuses, which is what the branches below assume.
         // Word holds one happily, but never on its own — see {@see self::embedSvg()} —
@@ -167,32 +224,38 @@ final class ImageResolver
         [$naturalWidth, $format] = self::inspect($path);
 
         try {
-            $target->addImage($path, $this->imageStyle($naturalWidth, $width, $height, $alignment));
+            // The bytes, where there are any: PHPWord reads a source that is neither
+            // a path nor a URL as the image itself, so a picture the source holds as
+            // bytes needs no file to be there when the document is written.
+            $target->addImage(
+                $picture['bytes'] ?? $path,
+                $this->imageStyle($naturalWidth, $width, $height, $alignment),
+            );
 
             return;
         } catch (UnsupportedImageTypeException) {
             // Word knows the file and has no use for it. Whether that is a dead end
             // depends on what this PHP can decode, which is the next question.
         } catch (InvalidImageException) {
-            throw UnsupportedImageFormat::for($path, $format, 'PHPWord could not read it either.');
+            throw UnsupportedImageFormat::for($picture['source'], $format, 'PHPWord could not read it either.');
         } catch (Throwable) {
             // Anything else PHPWord raises about this file is still about this file,
             // and is reported rather than swallowed: the alternative is the picture
             // being absent from a document that looks finished.
-            throw UnsupportedImageFormat::for($path, $format);
+            throw UnsupportedImageFormat::for($picture['source'], $format);
         }
 
         $png = $this->transcode($path, $format);
 
         if ($png === null) {
-            throw UnsupportedImageFormat::for($path, $format);
+            throw UnsupportedImageFormat::for($picture['source'], $format);
         }
 
         // The bytes go straight to `addImage()`. PHPWord reads a source that is
         // neither a path nor a URL as the image itself, so there is nothing in the
         // temporary directory to leak and nothing to clean up.
         $target->addImage($png, $this->imageStyle($naturalWidth, $width, $height, $alignment));
-        $this->conversions->add($path, $format);
+        $this->conversions->add($picture['source'], $format);
     }
 
     /**
@@ -466,10 +529,15 @@ final class ImageResolver
     }
 
     /**
-     * The local path a Markdown image URL refers to, or null when it is remote or
-     * missing.
+     * The picture a document named, or null when there is none.
+     *
+     * The source is what a failure names: the file the picture is in, or the name the
+     * document wrote when the source holds the picture and no file for it. The bytes
+     * are the picture itself, and there are none when the picture is a file.
+     *
+     * @return array{source: string, bytes: ?string}|null
      */
-    private function resolvePath(string $url): ?string
+    private function resolve(string $url): ?array
     {
         if ($url === '' || $url === '/') {
             return null;
@@ -481,13 +549,90 @@ final class ImageResolver
             return null;
         }
 
+        $found = $this->fromFinder($url);
+
+        if ($found !== null) {
+            return $found;
+        }
+
         if ($this->options->imageBasePath === null) {
-            return is_file($url) ? $url : null;
+            return is_file($url) ? ['source' => $url, 'bytes' => null] : null;
         }
 
         $candidate = rtrim($this->options->imageBasePath, '/\\') . DIRECTORY_SEPARATOR . ltrim($url, '/\\');
 
-        return is_file($candidate) ? $candidate : null;
+        return is_file($candidate) ? ['source' => $candidate, 'bytes' => null] : null;
+    }
+
+    /**
+     * The picture in the source the document's files come from.
+     *
+     * A source that holds the picture as a file gives a path, and the picture is used
+     * where it is. A source that holds the bytes gives no path, and the bytes are
+     * what the picture is.
+     *
+     * @return array{source: string, bytes: ?string}|null
+     */
+    private function fromFinder(string $url): ?array
+    {
+        if ($this->files === null) {
+            return null;
+        }
+
+        $path = $this->files->path($url, 'picture');
+
+        if ($path !== null) {
+            return ['source' => $path, 'bytes' => null];
+        }
+
+        $bytes = $this->files->read($url, 'picture');
+
+        if ($bytes === null) {
+            return null;
+        }
+
+        return ['source' => $url, 'bytes' => $bytes];
+    }
+
+    /**
+     * The picture's bytes, in a file of the library's own.
+     *
+     * The file is named after the picture, because the tools that read it — the size
+     * of a drawing, the format of a raster — read the name as well as the bytes, and
+     * a `.svgz` is a gzipped drawing rather than a broken one.
+     *
+     * @throws FileNotWritable when the file cannot be made or written
+     */
+    private function stage(string $bytes, string $name): string
+    {
+        $temporary = tempnam(sys_get_temp_dir(), 'mdword_pic_');
+
+        if ($temporary === false) {
+            throw new FileNotWritable(sprintf(
+                'Unable to create a temporary file for the picture in "%s".',
+                sys_get_temp_dir(),
+            ));
+        }
+
+        $extension = pathinfo($name, PATHINFO_EXTENSION);
+        $path = $extension === '' ? $temporary : $temporary . '.' . $extension;
+
+        // Renamed rather than written under a second name, so that the file keeps
+        // the mode `tempnam()` gave it: a picture in flight through a shared
+        // temporary directory is not readable by every account on the machine.
+        if ($path !== $temporary && !@rename($temporary, $path)) {
+            @unlink($temporary);
+
+            throw new FileNotWritable(sprintf('Unable to stage the picture "%s".', $name));
+        }
+
+        if (file_put_contents($path, $bytes) === false) {
+            @unlink($path);
+
+            throw new FileNotWritable(sprintf('Unable to stage the picture "%s".', $name));
+        }
+
+        return $path;
     }
 
     /**

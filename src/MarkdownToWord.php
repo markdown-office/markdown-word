@@ -10,6 +10,7 @@ use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\InvalidConfiguration;
 use MarkdownWord\Exception\NothingToConvert;
+use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Render\Directive\Caption;
@@ -103,6 +104,15 @@ final class MarkdownToWord implements Converter
     private ?string $theme = null;
 
     /**
+     * The theme {@see self::withTheme()} resolved, kept so that the name is resolved
+     * once.
+     *
+     * A source that counts its reads would say so: the name is asked for when it is
+     * given, and the theme that came back is the one the document is drawn in.
+     */
+    private ?LoadedTheme $resolved = null;
+
+    /**
      * @param string|null $source A path, or the Markdown itself; {@see Input}
      *        says which a string is. Null leaves the subject to
      *        {@see self::toDocx()}.
@@ -128,6 +138,13 @@ final class MarkdownToWord implements Converter
      *        wherever the program happens to be. Null for a document handed in as a
      *        string, which has no directory of its own; the working directory is what a
      *        name resolves against then.
+     * @param FileFinder|null $files Where the document's files come from: its themes
+     *        and its pictures. Null for the disk default, which looks for a theme in
+     *        the directories of themes beside the document and beside the working
+     *        directory.
+     * @param list<string> $roots Further directories a document may name a theme in,
+     *        for a shared library of themes beside the project. As with a theme's this
+     *        is the calling program's decision, made before a document is read.
      */
     public function __construct(
         private readonly ?string $source = null,
@@ -136,6 +153,8 @@ final class MarkdownToWord implements Converter
         private readonly Configuration|array|null $overrides = null,
         private readonly bool $detached = false,
         private readonly ?string $directory = null,
+        private readonly ?FileFinder $files = null,
+        private readonly array $roots = [],
     ) {
     }
 
@@ -161,7 +180,15 @@ final class MarkdownToWord implements Converter
     public function withTheme(?string $name): self
     {
         if ($name !== null) {
-            self::assertStylesAreDrawable($this->themes()->resolve($name)->textStyles());
+            $theme = $this->themes()->resolve($name);
+
+            self::assertStylesAreDrawable($theme->textStyles());
+
+            // Kept, so that the name is resolved once: the document is drawn in the
+            // theme that was found here rather than in one found again later.
+            $this->resolved = $theme;
+        } else {
+            $this->resolved = null;
         }
 
         $this->theme = $name;
@@ -278,7 +305,13 @@ final class MarkdownToWord implements Converter
      */
     private function themeFor(Frontmatter $frontmatter): ?LoadedTheme
     {
-        $name = $this->theme ?? $frontmatter->themeName();
+        if ($this->theme !== null) {
+            // The name in code was resolved when it was given, and it is resolved
+            // once: a source that counts its reads would say so.
+            return $this->resolved;
+        }
+
+        $name = $frontmatter->themeName();
 
         return $name === null ? null : $this->themes()->resolve($name);
     }
@@ -288,6 +321,8 @@ final class MarkdownToWord implements Converter
         return new ThemeResolver(
             workingDirectory: getcwd() ?: '.',
             documentDirectory: $this->directory,
+            roots: $this->roots,
+            files: $this->files,
         );
     }
 
@@ -593,6 +628,7 @@ final class MarkdownToWord implements Converter
             $this->conversions,
             $this->vectors,
             $this->format,
+            $this->files,
         );
 
         // The section handler is the one the renderer asks about as well: a

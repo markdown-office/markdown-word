@@ -76,6 +76,21 @@ All notable changes to this project are documented here. The format follows
   also what lets one adapter serve both halves of this suite: each has its own
   exception classes, and a finder that threw would throw one of them.
 
+  The library asks for what it needs. `MarkdownToWord` takes a finder as a trailing
+  named argument — `files:` — and `Theme\ThemeResolver` and `Template\TemplateFile`
+  take one as well. A theme is resolved through the finder by name, `house/theme.yml`,
+  and a picture is read through it as `logo.png`.
+
+  A source that holds a file gives a path, and the file is used where it is. A source
+  that holds the bytes has them staged into a file of the library's own: a picture is
+  given to PHPWord as bytes, so nothing is left on disk, and a template is staged
+  until the template is done with — the resolver that staged it gives it back, and a
+  caller who lets the resolver go without saying so has it said for them.
+
+  `MarkdownToWord` takes `roots:` as well: the directories of themes a document may
+  name a theme in, for a shared library of themes beside the project. The theme
+  resolver has always honoured them; nothing handed it any.
+
 ### Fixed
 
 - **A `value` on a dropdown is refused rather than written into the file.** Word
