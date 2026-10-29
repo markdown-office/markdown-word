@@ -12,6 +12,7 @@ use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\NoContentControl;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Exception\TemplateNotFound;
+use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Writer\DocxWriter;
@@ -59,6 +60,11 @@ use PhpOffice\PhpWord\TemplateProcessor;
  * succeeds rather than a failure — PHP's `rename()` copies the file across,
  * gives the copy the source's owner and mode, and unlinks the source — so what
  * lands is the staged file, permissions and all.
+ *
+ * **The document's files come from the caller's source.** The template renders a
+ * document of its own, so the converter behind it is handed the finder the caller
+ * brought: the theme the inserted document names is resolved through it, and the
+ * pictures it shows are read through it.
  */
 final class MarkdownTemplate
 {
@@ -99,6 +105,9 @@ final class MarkdownTemplate
      * @param string|null $directory The directory the document being inserted was read
      *        from, which is where a theme beside it is found. Null for a document handed
      *        in as a string, which has no directory of its own.
+     * @param FileFinder|null $files Where the inserted document's files come from: the
+     *        theme it names and the pictures it shows. Null for the disk default, which
+     *        looks for a theme beside the document and beside the working directory.
      * @throws TemplateNotFound when the template is not a file.
      */
     public function __construct(
@@ -109,6 +118,7 @@ final class MarkdownTemplate
         Configuration|array|null $overrides = null,
         ?string $theme = null,
         ?string $directory = null,
+        private readonly ?FileFinder $files = null,
     ) {
         if (!is_file($template)) {
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));
@@ -130,6 +140,7 @@ final class MarkdownTemplate
             $overrides,
             detached: true,
             directory: $directory,
+            files: $files,
         );
 
         // Applied here rather than by the caller, because this converter is built with a

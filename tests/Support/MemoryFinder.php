@@ -22,6 +22,9 @@ final class MemoryFinder implements FileFinder
     /** @var array<string, int> */
     private array $reads = [];
 
+    /** @var array<string, string|null> */
+    private array $roles = [];
+
     /**
      * @param array<string, string> $files The files it holds, by name.
      */
@@ -32,6 +35,7 @@ final class MemoryFinder implements FileFinder
     public function read(string $name, ?string $role = null): ?string
     {
         $this->asked[$name] = true;
+        $this->roles[$name] = $role;
         $this->reads[$name] = ($this->reads[$name] ?? 0) + 1;
 
         return $this->files[$name] ?? null;
@@ -40,6 +44,7 @@ final class MemoryFinder implements FileFinder
     public function path(string $name, ?string $role = null): ?string
     {
         $this->asked[$name] = true;
+        $this->roles[$name] = $role;
 
         return null;
     }
@@ -84,6 +89,17 @@ final class MemoryFinder implements FileFinder
     public function asked(): array
     {
         return array_keys($this->asked);
+    }
+
+    /**
+     * The role a name was asked for in.
+     *
+     * The role says which world the name is resolved in, so it is what tells a
+     * picture asked for as a picture from a theme asked for as a theme.
+     */
+    public function askedFor(string $name): ?string
+    {
+        return $this->roles[$name] ?? null;
     }
 
     /**

@@ -1602,6 +1602,44 @@ one.
 text.** Nothing is wrong with the document in those cases: the library has no HTTP
 client and will not invent a download.
 
+### Where a document's files come from
+
+The theme a document names is looked for on disk — beside the document, beside the
+working directory, and among the themes that ship with the package — and its pictures
+and the template it names are read from disk as well. **The theme's files come from
+somewhere the caller chooses**, so a program that keeps its own files somewhere else
+— in a database, say — says where they are with a **finder** and hands it over
+wherever a document's files are wanted:
+
+```php
+use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Template\MarkdownTemplate;
+
+$finder = new MyFinder();   // a MarkdownWord\Files\FileFinder
+
+(new MarkdownToWord($markdown, files: $finder))->save('report.docx');
+
+(new MarkdownTemplate('report.dotx', files: $finder))
+    ->insert($markdown)
+    ->save('report.docx');
+```
+
+A finder is four methods: `read()` and `path()` answer for one file, `themes()` lists
+the themes that resolve and `files()` the files of one theme. The names it is asked
+for are the library's own — `house/theme.yml` for a theme's manifest, `logo.png` for a
+picture — and the role says which world a name is resolved in: `theme`, `picture` or
+`document`.
+
+**A finder answers; it does not refuse.** A file that is not there is `null`, and a
+file that is out of reach is answered like any other: the question of what a render
+may read belongs to the library, which holds the path a finder answered to its own
+scope and refuses what is out of reach in its own words.
+
+`Files\DiskFinder` is the default and answers out of directories on this machine, one
+list of bases per role, tried in the order they are given. The directories of themes
+on disk remain the fallback, so a program with a finder of its own does not lose the
+themes that ship with the package.
+
 ### Styles
 
 Each slot holds a styleId, an inline style array, or `null`. The default is the

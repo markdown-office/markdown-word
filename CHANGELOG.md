@@ -70,26 +70,51 @@ All notable changes to this project are documented here. The format follows
   of directories on this machine, one list of bases per role — `theme`, `picture` and
   `document` — tried in the order they are given.
 
+  **The theme's files come from somewhere the caller chooses.** A program that keeps its
+  themes, pictures and templates in a database — and never had a directory to hand
+  over — hands the library a finder of its own, and the library asks it for the names
+  it composes:
+
+  ```php
+  use MarkdownWord\MarkdownToWord;
+  use MarkdownWord\Template\MarkdownTemplate;
+
+  $finder = new MyFinder();   // read(), path(), themes(), files()
+
+  (new MarkdownToWord($markdown, files: $finder))->save('report.docx');
+
+  (new MarkdownTemplate('report.dotx', files: $finder))
+      ->insert($markdown)
+      ->save('report.docx');
+  ```
+
+  A theme is resolved through the finder by name — `house/theme.yml` — and a picture is
+  read through it as `logo.png`. The directories of themes on disk remain the fallback
+  rather than the only place a theme is looked for, so a program with a source of its
+  own does not lose the themes that ship with this package.
+
   A finder answers; it does not refuse. A file that is not there is `null`, and a file
   that is out of reach is answered like any other, because the question of what a
   render may read belongs to the library and to the messages it already had. That is
   also what lets one adapter serve both halves of this suite: each has its own
   exception classes, and a finder that threw would throw one of them.
 
-  The library asks for what it needs. `MarkdownToWord` takes a finder as a trailing
-  named argument — `files:` — and `Theme\ThemeResolver` and `Template\TemplateFile`
-  take one as well. A theme is resolved through the finder by name, `house/theme.yml`,
-  and a picture is read through it as `logo.png`.
-
   A source that holds a file gives a path, and the file is used where it is. A source
   that holds the bytes has them staged into a file of the library's own: a picture is
   given to PHPWord as bytes, so nothing is left on disk, and a template is staged
-  until the template is done with — the resolver that staged it gives it back, and a
-  caller who lets the resolver go without saying so has it said for them.
+  until the template is done with — `Template\TemplateFile::release()` gives it back,
+  and a caller who lets the resolver go without saying so has it said for them.
 
   `MarkdownToWord` takes `roots:` as well: the directories of themes a document may
   name a theme in, for a shared library of themes beside the project. The theme
   resolver has always honoured them; nothing handed it any.
+
+  **What did not change.** The error messages: a theme that is not there is still told
+  which themes are, a path out of reach is still refused in the library's own words,
+  and a `template_file:` that is not there says what it always did. The four themes
+  that ship with the package — `default`, `minimal`, `corporate` and `report` — are
+  the same four. The parser's flavours are the same five: `commonMarkOnly()`,
+  `extended()`, `directives()`, `withAllExtensions()` and `withFrontMatter()`.
 
 ### Fixed
 
@@ -175,18 +200,31 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 
 - **`ThemeLoader::load()` and `loadManifest()` take a name and a finder.** The third
-  parameter was the scope a theme's own files were held to and is now the finder they
-  are read through; the first was a directory and is now the name the theme is known
-  by. The scope check stays where it was, with the messages it had, and a loader holds
-  the theme's own files to the scope it was given — so a `styles.yml` that is a
-  symlink out of the scope is still refused. `ThemeResolver` builds a loader with its
-  own scope unless it is given one.
+  parameter took a `?PathScope` — the scope a theme's own files were held to — and now
+  takes a `?FileFinder`, the finder they are read through; the first was a directory
+  and is now the name the theme is known by. The scope check stays where it was, with
+  the messages it had, and a loader holds the theme's own files to the scope it was
+  given — so a `styles.yml` that is a symlink out of the scope is still refused.
+
+- **`ThemeResolver` takes a loader of its own, or none.** Its loader parameter was a
+  `ThemeLoader` and is now a `?ThemeLoader`, so a resolver can be built without one.
+  It builds a loader with its own scope when it is given none.
 
 - **`ThemeResolver` looks in the roots it is given.** They were read into the scope a
   document-written path is held to and never looked in, so a shared library of themes
   beside the project had to be named by its full path. A name is now looked for in each
   of them directly, the way it is in the themes that ship with this package, and they
   are named in the list of the themes that resolve — so a failure names them too.
+
+- **Three constructors take a finder.** `MarkdownToWord::__construct()`,
+  `Template\TemplateFile::__construct()` and `Template\MarkdownTemplate::__construct()`
+  gained trailing named parameters, so every existing call site keeps working as it
+  was: `files:` on all three, and `roots:` on the converter as well.
+
+  `Template\TemplateFile` gained `release()`, which gives back the files it staged. A
+  staged template is the library's own file, and it goes when the template is done with:
+  the caller says so, and a caller who lets the resolver go without saying so has it
+  said for them.
 
 ## [0.2.2] - 2026-10-26
 
