@@ -18,8 +18,8 @@ declare(strict_types=1);
  * is not.
  */
 
-use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Tests\Support\Scratch;
+use MarkdownWord\Tests\Support\Script;
 
 /**
  * The dispatcher's answer, with the environment the test chooses.
@@ -31,32 +31,12 @@ use MarkdownWord\Tests\Support\Scratch;
  */
 function dispatcher(array $environment, array $arguments, ?string $workingDirectory = null): array
 {
-    $root = dirname(__DIR__, 2);
-
-    $descriptors = [
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
-    ];
-
-    $process = proc_open(
-        [PHP_BINARY, $root . '/tools/render-document.php', ...$arguments],
-        $descriptors,
-        $pipes,
+    return Script::run(
+        [PHP_BINARY, dirname(__DIR__, 2) . '/tools/render-document.php'],
+        $arguments,
+        $environment,
         $workingDirectory,
-        array_merge(getenv(), $environment),
     );
-
-    if (! is_resource($process)) {
-        throw new RuntimeException('The dispatcher could not be started.');
-    }
-
-    $out = (string) stream_get_contents($pipes[1]);
-    $err = (string) stream_get_contents($pipes[2]);
-
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-
-    return ['out' => $out, 'err' => $err, 'status' => proc_close($process)];
 }
 
 /**
@@ -209,6 +189,33 @@ function packageAsDocument(string $source, string $target): array
     exec(
         'sh ' . escapeshellarg($root . '/tools/package-as-document.sh') . ' '
             . escapeshellarg($source) . ' ' . escapeshellarg($target) . ' 2>&1',
+        $output,
+        $status,
+    );
+
+    return ['status' => $status, 'out' => implode("\n", $output)];
+}
+
+/**
+ * The answer of the tool that says whether a PDF has been written whole.
+ *
+ * @return array{status: int, out: string}
+ */
+function pdfIsComplete(string $file): array
+{
+    // The tool is a shell script, for the same reason the fake tools are.
+    if (PHP_OS_FAMILY === 'Windows') {
+        test()->markTestSkipped('The tool that says whether a PDF is whole is a shell script.');
+    }
+
+    $root = dirname(__DIR__, 2);
+
+    $status = 0;
+    $output = [];
+
+    exec(
+        'sh ' . escapeshellarg($root . '/tools/pdf-is-complete.sh') . ' '
+            . escapeshellarg($file) . ' 2>&1',
         $output,
         $status,
     );
@@ -411,7 +418,7 @@ it('renders a document through Microsoft Word', function () {
     $document = Scratch::path('render');
     $target = Scratch::path('rendered', '.pdf');
 
-    (new MarkdownToWord("# Quarterly review\n\nA paragraph of text.\n"))->save($document);
+    saveDocument("# Quarterly review\n\nA paragraph of text.\n", $document);
 
     $answer = dispatcher(
         ['MARKDOWN_OFFICE_PLATFORM' => 'darwin'],
@@ -452,4 +459,49 @@ it('renders a template, and names the PDF after the template', function () {
     expect($answer['status'])->toBe(0)
         ->and(file_exists($target))->toBeTrue()
         ->and((string) file_get_contents($target))->toContain('%%EOF');
+});
+
+it('takes the kind of a package from the package and not from its name', function () {
+    // A `.docx` whose declarations say it is a template is a template, and a `.dotx`
+    // whose declarations say it is a document is a document: the declarations are what
+    // a reader goes by. The tool says so, so a test holds it to it.
+    $mislabelled = wordPackage(Scratch::path('mislabelled', '.docx'), true);
+
+    $written = Scratch::path('written', '.docx');
+
+    expect(packageAsDocument($mislabelled, $written)['status'])->toBe(0)
+        ->and(declarationsOf($written))->toContain('wordprocessingml.document.main+xml')
+        ->and(declarationsOf($written))->not->toContain('wordprocessingml.template.main+xml');
+});
+
+it('says a PDF is whole when it carries the marker every PDF ends with', function () {
+    // A PDF is written from its first byte to its last, and the marker is written last
+    // of all, so a file that carries it is a file that has been written whole.
+    $pdf = Scratch::path('whole', '.pdf');
+
+    file_put_contents($pdf, "%PDF-1.4\n1 0 obj\n<< >>\nendobj\ntrailer\n%%EOF\n");
+
+    expect(pdfIsComplete($pdf)['status'])->toBe(0);
+});
+
+it('says a PDF is not whole when it does not carry the marker', function () {
+    // A PDF being written is a file that exists and is not empty, and a copy of that is
+    // a copy of half a PDF.
+    $half = Scratch::path('half', '.pdf');
+
+    file_put_contents($half, "%PDF-1.4\n1 0 obj\n");
+
+    expect(pdfIsComplete($half)['status'])->toBe(1);
+});
+
+it('says a PDF is not whole when there is no file at all', function () {
+    expect(pdfIsComplete(Scratch::path('absent', '.pdf'))['status'])->toBe(1);
+});
+
+it('says a PDF is not whole when the file is empty', function () {
+    $empty = Scratch::path('empty', '.pdf');
+
+    file_put_contents($empty, '');
+
+    expect(pdfIsComplete($empty)['status'])->toBe(1);
 });
