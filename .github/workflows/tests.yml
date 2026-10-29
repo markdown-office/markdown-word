@@ -285,6 +285,10 @@ jobs:
           php-version: '8.5'
           coverage: none
           tools: composer:v2
+          # `gd` and `zip` are separate DLLs on a Windows PHP, and they are not
+          # switched on there without being asked for. The library needs both, and
+          # Composer refuses the lock file without them.
+          extensions: gd, zip
 
       - name: Install
         run: composer install --prefer-dist --no-interaction --no-progress
