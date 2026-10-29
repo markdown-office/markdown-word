@@ -106,11 +106,15 @@ if (-not [string]::IsNullOrWhiteSpace($env:MARKDOWN_OFFICE_WORD_MOCK_LOG)) {
 
 # The shadowing of `New-Object`.
 #
+# An alias rather than a function of the same name: PowerShell resolves an alias before
+# a cmdlet, so `New-Object` reaches the mock, and the mock's own name is not a built-in
+# that anything else could be using.
+#
 # Only the COM call is answered here. Everything else is the real cmdlet, because the
 # tool uses `New-Object` for something else as well — it makes the byte array it reads
 # the end of a PDF into — and a mock that answered that call with an application would
 # break a part of the tool that has nothing to do with Word.
-function New-Object {
+function New-MockObject {
     param(
         [Parameter(Position = 0)]
         [string] $TypeName,
@@ -127,3 +131,5 @@ function New-Object {
 
     return [WordMockApplication]::new()
 }
+
+Set-Alias -Name New-Object -Value New-MockObject
