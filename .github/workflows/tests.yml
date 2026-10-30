@@ -262,6 +262,39 @@ jobs:
           path: build/coverage
           retention-days: 7
 
+  # The documents this library writes, checked against the schema.
+  #
+  # A job of its own because the validator needs the .NET SDK, and the other jobs
+  # do not install it. The test skips itself where the SDK is not, so the jobs
+  # above run it and learn nothing from it; here the SDK is installed, so the
+  # test cannot skip.
+  ooxml:
+    name: ooxml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.5'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      # The version the validator is built for. A machine with a newer runtime
+      # runs it unchanged, so this is the floor and not a ceiling.
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0'
+
+      # This one suite and not the whole of it: the suite runs in the job above,
+      # where this test skips itself. This job is here so that the gate runs
+      # where the SDK is.
+      - name: The documents are valid Office Open XML
+        run: vendor/bin/pest --testsuite=ooxml
+
   # Static analysis on SonarCloud.
   #
   # Its own job rather than a step in the test matrix, so that a finding and a

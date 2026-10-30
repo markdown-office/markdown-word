@@ -15,6 +15,11 @@
 # The documents and previews examples/build.php writes.
 /examples/out/
 
+# What the OOXML validator's build produces. The validator is a .NET program and
+# its compiler writes beside the sources.
+/tools/ooxml-validator/bin/
+/tools/ooxml-validator/obj/
+
 # Scratch space for the tests and the checking scripts.
 /tmp/
 
