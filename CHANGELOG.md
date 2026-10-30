@@ -17,7 +17,8 @@ All notable changes to this project are documented here. The format follows
   `w:rPr` is a sequence in ECMA-376's `wml.xsd` and not a set, so a reader walks
   its children in the order they are written and stops at the first one it did not
   expect. The typeface comes before the weight, and the underline comes after the
-  size, and a document that gets this wrong is one Word refuses to open.
+  size. Word opens a document that gets this wrong, because Word is lenient where
+  the schema is not; a reader that walks the sequence does not.
 
   Microsoft's own validator reported `The element has unexpected child element
   'w:color'` nineteen times across the example documents, every one of them a
