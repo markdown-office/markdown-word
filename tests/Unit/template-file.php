@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use MarkdownWord\Document\Frontmatter;
+use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\TemplateNotFound;
 use MarkdownWord\Files\DiskFinder;
 use MarkdownWord\Filesystem\PathScope;
@@ -146,6 +147,26 @@ describe('resolving a template the source holds', function () {
             ->toThrow(TemplateNotFound::class, 'outside the directories');
     });
 
+    it('keeps a staged template for the conversion that uses it', function () {
+        // The resolver is written inline, as a caller writes it — and it is gone
+        // before the conversion opens the template. A resolver that took its file
+        // with it would leave the conversion with a template that is not there, and
+        // a failure that says nothing about the cause.
+        $finder = new MemoryFinder(['report.dotx' => (string) file_get_contents(TemplateFactory::dotx())]);
+
+        $path = (new TemplateFile(null, files: $finder))->resolve('report.dotx');
+
+        expect(is_file($path))->toBeTrue();
+
+        $output = Scratch::path('staged-template', '.docx');
+
+        $template = new MarkdownTemplate($path);
+        $template->insert("# T\n");
+        saveTemplateDocument($template, $output);
+
+        expect(is_file($output))->toBeTrue();
+    });
+
     it('gives the staged template back when the conversion is over', function () {
         $finder = new MemoryFinder(['report.dotx' => (string) file_get_contents(TemplateFactory::dotx())]);
 
@@ -157,9 +178,7 @@ describe('resolving a template the source holds', function () {
         // The conversion, with the template the source held.
         $template = new MarkdownTemplate($path);
         $template->insert("# T\n");
-        $template->save(Scratch::path('staged-template', '.docx'));
-
-        $file->release();
+        saveTemplateDocument($template, Scratch::path('staged-template', '.docx'));
 
         expect(is_file($path))->toBeFalse();
     });
@@ -169,19 +188,36 @@ describe('resolving a template the source holds', function () {
         // not left behind for something else to find.
         $finder = new MemoryFinder(['report.dotx' => (string) file_get_contents(TemplateFactory::dotx())]);
 
-        $path = null;
+        $path = (new TemplateFile(null, files: $finder))->resolve('report.dotx');
 
-        try {
-            $file = new TemplateFile(null, files: $finder);
-            $path = $file->resolve('report.dotx');
+        expect(is_file($path))->toBeTrue();
 
-            expect(is_file($path))->toBeTrue();
+        // A file where the output's directory should be: the document cannot be
+        // written there, and the write says so.
+        $blocker = Scratch::path('staged-template-blocker', '.txt');
+        file_put_contents($blocker, 'not a directory');
 
-            throw new RuntimeException('the conversion failed');
-        } catch (RuntimeException) {
-            // The resolver goes out of scope with the failure, and the file with it.
-            unset($file);
-        }
+        $template = new MarkdownTemplate($path);
+        $template->insert("# T\n");
+
+        expect(fn () => $template->save($blocker . '/report.docx'))
+            ->toThrow(FileNotWritable::class);
+
+        expect(is_file($path))->toBeFalse();
+    });
+
+    it('gives a staged template back to a caller that did not convert it', function () {
+        // The other half of the ownership: a caller that resolved a template and
+        // then did not use it says so, rather than leaving the file for the end of
+        // the run.
+        $finder = new MemoryFinder(['report.dotx' => (string) file_get_contents(TemplateFactory::dotx())]);
+
+        $file = new TemplateFile(null, files: $finder);
+        $path = $file->resolve('report.dotx');
+
+        expect(is_file($path))->toBeTrue();
+
+        $file->release();
 
         expect(is_file($path))->toBeFalse();
     });

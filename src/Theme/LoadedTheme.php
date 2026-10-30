@@ -30,8 +30,9 @@ final class LoadedTheme
     }
 
     /**
-     * The canonical directory this was read from: the theme's own directory, or the one
-     * that holds the manifest a theme was named by.
+     * The directory this was read from: the theme's own directory, or the one that
+     * holds the manifest a theme was named by. A theme read from a source that holds
+     * the bytes and no path has no directory, and its name stands in.
      */
     public function directory(): string
     {

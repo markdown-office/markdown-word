@@ -27,12 +27,14 @@ use MarkdownWord\Filesystem\PathScope;
  * the bytes answers no path, and the bytes are staged into a file of the library's
  * own — a `.dotx` is a package, and a package is opened as a file.
  *
- * **A staged file belongs to this resolver.** It is there for as long as the template
- * is in use, and it is removed when the resolver gives it back: by
- * {@see self::release()} when the template is done with, and by the destructor for a
- * caller who lets the resolver go without saying so. Nothing is left in the temporary
- * directory either way — not after a conversion that worked and not after one that
- * failed.
+ * **A staged file belongs to the conversion, not to the resolver.** The resolver is
+ * usually written inline — `(new TemplateFile(...))->resolve($name)` — and is gone
+ * before the template renderer opens the file, so a resolver that removed its file on
+ * the way out would take the template with it: the conversion would fail with a
+ * template that is not there, and nothing would say why. The file is given back when
+ * the conversion that used it is written, and a file nobody converted waits for the
+ * end of the run. Nothing is left in the temporary directory either way — not after a
+ * conversion that worked and not after one that failed.
  */
 final class TemplateFile
 {
@@ -52,7 +54,7 @@ final class TemplateFile
      *   calling program's decision, made before a document is read.
      * @param FileFinder|null $files Where the template comes from, for a program whose
      *   templates are not in a directory. The document's own directory and the roots
-     *   remain where a name is looked for when there is no finder.
+     *   remain where a name is looked for whenever the finder has nothing for it.
      */
     public function __construct(
         private readonly ?string $directory = null,
@@ -88,32 +90,23 @@ final class TemplateFile
     }
 
     /**
-     * Give back the files this resolver staged.
+     * Give back the templates this resolver staged.
      *
-     * A staged template is the library's own file, and it goes when the template is
-     * done with. The caller says so here; a caller who lets the resolver go without
-     * saying so has it said for them.
+     * A caller that resolved a template and did not convert it calls this. One that
+     * converted it does not: the conversion gives the file back when it is written.
      */
     public function release(): void
     {
         foreach ($this->staged as $path) {
-            @unlink($path);
+            Staging::release($path);
         }
 
         $this->staged = [];
     }
 
-    public function __destruct()
-    {
-        $this->release();
-    }
-
     /**
      * The template in the source the document's files come from, or null when it has
      * none.
-     *
-     * A source that holds the template as a file answers a path, and one that holds
-     * the bytes answers no path: the bytes are the caller's word for them.
      */
     private function fromFinder(string $written): ?string
     {
@@ -132,9 +125,6 @@ final class TemplateFile
         return $this->fromBytes($written, $files);
     }
 
-    /**
-     * The template's bytes, staged into a file of the library's own.
-     */
     private function fromBytes(string $written, FileFinder $files): ?string
     {
         $bytes = $files->read($written, 'document');
@@ -173,31 +163,11 @@ final class TemplateFile
     }
 
     /**
-     * The template's bytes, in a file of the library's own.
-     *
      * @throws FileNotWritable when the file cannot be made or written
      */
     private function stage(string $bytes, string $written): string
     {
-        $path = tempnam(sys_get_temp_dir(), 'mdword_tpl_');
-
-        if ($path === false) {
-            throw new FileNotWritable(sprintf(
-                'Unable to create a temporary file for the template in "%s".',
-                sys_get_temp_dir(),
-            ));
-        }
-
-        // Written into the file `tempnam()` made rather than over it, so that the
-        // mode it was given stands: a template in flight through a shared temporary
-        // directory is not readable by every account on the machine.
-        if (file_put_contents($path, $bytes) === false) {
-            @unlink($path);
-
-            throw new FileNotWritable(sprintf('Unable to stage the template "%s".', $written));
-        }
-
-        @chmod($path, 0o600);
+        $path = Staging::stage($bytes, $written);
 
         $this->staged[] = $path;
 

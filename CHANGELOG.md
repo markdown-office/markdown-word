@@ -92,9 +92,10 @@ All notable changes to this project are documented here. The format follows
 - **`MarkdownWord\Files\FileFinder`: where a document's files come from.** The library
   composes names and asks; a finder answers for the names it is handed. `read()` and
   `path()` answer for one file, `themes()` lists the themes that resolve and
-  `files()` the files of one theme. `Files\DiskFinder` is the default and answers out
-  of directories on this machine, one list of bases per role — `theme`, `picture` and
-  `document` — tried in the order they are given.
+  `files()` the files of one theme. `Files\DiskFinder` answers out of directories on
+  this machine, one list of bases per role — `theme`, `picture` and `document` —
+  tried in the order they are given. It is what a document's themes are read through
+  when the caller brings no finder of their own.
 
   **The theme's files come from somewhere the caller chooses.** A program that keeps its
   themes, pictures and templates in a database — and never had a directory to hand
@@ -128,8 +129,8 @@ All notable changes to this project are documented here. The format follows
   A source that holds a file gives a path, and the file is used where it is. A source
   that holds the bytes has them staged into a file of the library's own: a picture is
   given to PHPWord as bytes, so nothing is left on disk, and a template is staged
-  until the template is done with — `Template\TemplateFile::release()` gives it back,
-  and a caller who lets the resolver go without saying so has it said for them.
+  until the conversion that used it is written — `Template\TemplateFile::release()`
+  gives it back to a caller that resolved one and did not convert it.
 
   `MarkdownToWord` takes `roots:` as well: the directories of themes a document may
   name a theme in, for a shared library of themes beside the project. The theme
@@ -248,9 +249,9 @@ All notable changes to this project are documented here. The format follows
   was: `files:` on all three, and `roots:` on the converter as well.
 
   `Template\TemplateFile` gained `release()`, which gives back the files it staged. A
-  staged template is the library's own file, and it goes when the template is done with:
-  the caller says so, and a caller who lets the resolver go without saying so has it
-  said for them.
+  staged template is the library's own file, and it belongs to the conversion that uses
+  it: the file is given back when that conversion is written, and a caller who resolved
+  a template and did not convert it says so here.
 
 ## [0.2.2] - 2026-10-26
 

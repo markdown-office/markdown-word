@@ -139,8 +139,9 @@ final class MarkdownToWord implements Converter
      *        string, which has no directory of its own; the working directory is what a
      *        name resolves against then.
      * @param FileFinder|null $files Where the document's files come from: its themes
-     *        and its pictures. Null for the disk default, which looks for a theme in
-     *        the directories of themes beside the document and beside the working
+     *        and its pictures. Null for the disk: a theme is looked for in the
+     *        directories of themes beside the document and beside the working
+     *        directory, and a picture against `imageBasePath` or the working
      *        directory.
      * @param list<string> $roots Further directories a document may name a theme in,
      *        for a shared library of themes beside the project. As with a theme's this
@@ -159,9 +160,11 @@ final class MarkdownToWord implements Converter
     }
 
     /**
-     * A theme to draw this converter's documents in, unless a document names one itself.
+     * A theme to draw this converter's documents in.
      *
-     * The same argument a `theme:` in a `---` block takes and the same thing `--theme`
+     * A theme named in code answers for the document: the frontmatter's `theme:` is
+     * not read, and the name in the code is the one the document is drawn in. The
+     * same argument a `theme:` in a `---` block takes and the same thing `--theme`
      * passes, so all three resolve the same way. Null — the default — reads the
      * frontmatter and nothing else.
      *

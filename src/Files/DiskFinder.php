@@ -9,25 +9,15 @@ use MarkdownWord\Theme\ThemeLoader;
 /**
  * The default finder: the files are in directories on this machine.
  *
- * It holds the bases and nothing else — where to look, not what may be read. The
- * library asks its own scope of the path this answers, and refuses what is out of
- * reach in its own words; a finder that refused would throw this package's
- * exception, which the other half of this suite would not catch.
+ * It holds the bases — the directories a name is looked for in — and nothing else.
+ * What may be read is not its business: the scope belongs to the render rather than to
+ * the storage, so the library holds every path this finder answers to its own roots
+ * before it reads it.
  *
  * The bases are given per role and are tried in the order they are given, so the
- * calling program decides what a document's file is looked for in: the themes beside
- * the document before the ones that ship with this package, a shared library of
- * themes before either.
- *
- * A name that is already a path — one that begins with `/` — is taken as it stands,
- * whatever the role: it names a file, and resolving it against a base would name a
- * file nobody meant.
- *
- * A theme is resolved by its directory first: the first base where `<base>/<theme>`
- * is a directory is the theme's directory, and the theme's files are looked for
- * inside it. So a theme directory that exists but holds no manifest still shadows a
- * later one, and is reported as a theme without a manifest rather than as a theme
- * that is not there.
+ * calling program decides where a document's files come from: the themes beside the
+ * document before the ones that ship with this package, a shared library of themes
+ * before either.
  */
 final class DiskFinder implements FileFinder
 {
@@ -65,9 +55,8 @@ final class DiskFinder implements FileFinder
     /**
      * The path of a file a name identifies, when this finder holds it as a file.
      *
-     * The path as it was written rather than as the file system resolved it: the
-     * library does the resolving and the holding, and a path this machine chose is
-     * a path this machine's own rules should be asked about.
+     * The path as it was written, not as the file system resolved it: the library
+     * resolves what it is given and holds it to its own roots.
      */
     public function path(string $name, ?string $role = null): ?string
     {
@@ -114,9 +103,7 @@ final class DiskFinder implements FileFinder
      * The names of the files of a theme, sorted.
      *
      * A name that begins with a dot is not one of the theme's files: it is a thing
-     * the file system put there rather than something the library reads. A
-     * directory is not one either — the library reads files, and a file inside a
-     * directory of the theme's is not one the theme has.
+     * the file system put there rather than something the library reads.
      *
      * @return list<string>
      */

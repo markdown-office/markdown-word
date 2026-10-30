@@ -412,8 +412,14 @@ $named = Frontmatter::fromDocument(
 
 $namedPath = $docs . '/27-frontmatter-template' . DOCX_EXTENSION;
 
+// The resolver is held rather than written inline: a template the caller's own
+// source holds as bytes is staged into a file of the library's own, and that file
+// belongs to the conversion — the resolver gives it back when the document is
+// written, and not before.
+$resolver = new TemplateFile($root . '/markdown', roots: [$root, getcwd() ?: '.']);
+
 (new MarkdownTemplate(
-    (new TemplateFile($root . '/markdown', roots: [$root, getcwd() ?: '.']))->resolve(
+    $resolver->resolve(
         $named ?? throw new BadPackage('27-frontmatter-template.md names no template_file:.'),
     ),
     houseStyle(),

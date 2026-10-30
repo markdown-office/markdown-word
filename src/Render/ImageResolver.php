@@ -33,13 +33,12 @@ use Throwable;
  * **A picture comes from the finder.** A source that holds a picture as a file
  * gives a path, and the picture is used where it is; a source that holds the bytes
  * gives no path, and the bytes are staged into a file of the library's own so that
- * the picture can be measured and drawn as one. PHPWord is given the bytes rather
- * than the staged file, so nothing is left on disk and nothing has to survive the
- * write.
+ * the picture can be measured and drawn as one.
  *
- * There is no scope check here, and there never was one: a picture is resolved
- * against `imageBasePath` or the working directory, and that is what this library
- * has always allowed a document to reach.
+ * There is no scope check here, and there never was one: a picture comes from the
+ * caller's source if that source has one, and otherwise from `imageBasePath` or the
+ * working directory, and that is what this library has always allowed a document to
+ * reach.
  */
 final class ImageResolver
 {
@@ -570,10 +569,6 @@ final class ImageResolver
     /**
      * The picture in the source the document's files come from.
      *
-     * A source that holds the picture as a file gives a path, and the picture is used
-     * where it is. A source that holds the bytes gives no path, and the bytes are
-     * what the picture is.
-     *
      * @return array{source: string, bytes: ?string}|null
      */
     private function fromFinder(string $url): ?array
@@ -595,9 +590,6 @@ final class ImageResolver
 
     /**
      * The picture the source holds as bytes, or null when it holds none.
-     *
-     * A source that holds the bytes has no file for them, so the name the document
-     * wrote is the source of the picture.
      *
      * @return array{source: string, bytes: ?string}|null
      */
@@ -649,8 +641,12 @@ final class ImageResolver
             ));
         }
 
+        // The extension is kept only when it is a plain suffix: a name with a NUL in
+        // it would put a NUL in the path, and `rename()` refuses a path that has one.
         $extension = pathinfo($name, PATHINFO_EXTENSION);
-        $path = $extension === '' ? $temporary : $temporary . '.' . $extension;
+        $path = preg_match('~^[A-Za-z0-9]+\z~', $extension) === 1
+            ? $temporary . '.' . $extension
+            : $temporary;
 
         // Renamed rather than written under a second name, so that the file keeps
         // the mode `tempnam()` gave it: a picture in flight through a shared

@@ -2,12 +2,17 @@
 
 declare(strict_types=1);
 
+use MarkdownWord\Configuration\Options;
 use MarkdownWord\Files\DiskFinder;
 use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Render\ImageDescriptionCollector;
+use MarkdownWord\Render\ImageResolver;
 use MarkdownWord\Tests\Support\MemoryFinder;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use PhpOffice\PhpWord\Element\Image;
+use PhpOffice\PhpWord\PhpWord;
 
 /*
  * A picture a document names comes from the finder.
@@ -98,4 +103,24 @@ it('still falls back to the alt text when the source has no picture', function (
     expect($finder->asked())->toContain('logo.png')
         ->and(pictureParts($docx))->toBe([])
         ->and(TemplateFactory::textOf($path))->toContain('A logo');
+});
+
+it('draws a picture whose name is not a plain name', function () {
+    // A NUL in a name is not reachable from a document — CommonMark percent-encodes
+    // it — but `drawFile()` is public, and the name used to reach `rename()`, which
+    // refuses a path that carries one and says nothing about the picture.
+    $name = "logo.png\0";
+    $finder = new MemoryFinder([$name => (string) file_get_contents(Scratch::image())]);
+
+    $resolver = new ImageResolver(new Options(), new ImageDescriptionCollector(), files: $finder);
+
+    $phpWord = new PhpWord();
+    $section = $phpWord->addSection();
+
+    $resolver->drawFile($name, $section);
+
+    $elements = $section->getElements();
+
+    expect($elements)->toHaveCount(1)
+        ->and($elements[0])->toBeInstanceOf(Image::class);
 });

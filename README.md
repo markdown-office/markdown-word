@@ -1645,10 +1645,14 @@ file that is out of reach is answered like any other: the question of what a ren
 may read belongs to the library, which holds the path a finder answered to its own
 scope and refuses what is out of reach in its own words.
 
-`Files\DiskFinder` is the default and answers out of directories on this machine, one
-list of bases per role, tried in the order they are given. The directories of themes
-on disk remain the fallback, so a program with a finder of its own does not lose the
-themes that ship with the package.
+`Files\DiskFinder` answers out of directories on this machine, one list of bases per
+role, tried in the order they are given. A program that brings no finder of its own
+gets one for its **themes** — the directories of themes beside the document, beside
+the working directory and the ones that ship with the package. A picture falls back
+to `imageBasePath` or the working directory, and a template to the document's own
+directory and the roots the caller allowed. The directories of themes on disk remain
+the fallback, so a program with a finder of its own does not lose the themes that
+ship with the package.
 
 ### Styles
 

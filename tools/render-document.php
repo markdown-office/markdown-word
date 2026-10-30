@@ -360,10 +360,6 @@ function renderWithLibreOffice(string $document, string $target, string $scratch
     }
 }
 
-//
-// The run.
-//
-
 // `$argv` is defined by the CLI SAPI and by nothing else, so it is read guarded.
 $arguments = \array_slice($argv ?? [], 1);
 $showWhich = \in_array('--which', $arguments, true);

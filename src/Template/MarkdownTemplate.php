@@ -65,6 +65,10 @@ use PhpOffice\PhpWord\TemplateProcessor;
  * document of its own, so the converter behind it is handed the finder the caller
  * brought: the theme the inserted document names is resolved through it, and the
  * pictures it shows are read through it.
+ *
+ * A template the caller's source holds as bytes rather than as a file is staged into
+ * a file of the library's own, and that file is given back here: the template is in
+ * use until the document is written, and not a moment longer.
  */
 final class MarkdownTemplate
 {
@@ -106,12 +110,14 @@ final class MarkdownTemplate
      *        from, which is where a theme beside it is found. Null for a document handed
      *        in as a string, which has no directory of its own.
      * @param FileFinder|null $files Where the inserted document's files come from: the
-     *        theme it names and the pictures it shows. Null for the disk default, which
-     *        looks for a theme beside the document and beside the working directory.
+     *        theme it names and the pictures it shows. Null for the disk: a theme is
+     *        looked for in the directories of themes beside the document and beside
+     *        the working directory, and a picture against `imageBasePath` or the
+     *        working directory.
      * @throws TemplateNotFound when the template is not a file.
      */
     public function __construct(
-        string $template,
+        private readonly string $template,
         private readonly Configuration $config = new Configuration(),
         array $values = [],
         private readonly ?MarkdownParserInterface $parser = null,
@@ -271,6 +277,8 @@ final class MarkdownTemplate
             self::move($temp, $path);
         } finally {
             @unlink($temp);
+
+            Staging::release($this->template);
         }
     }
 
@@ -297,6 +305,8 @@ final class MarkdownTemplate
             return $contents;
         } finally {
             @unlink($temp);
+
+            Staging::release($this->template);
         }
     }
 
