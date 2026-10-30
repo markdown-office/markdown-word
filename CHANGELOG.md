@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A link's run properties are written in the order the schema names them.** The
+  properties of a hyperlink's run were written by hand — PHPWord's `Link` element
+  holds one plain string and cannot carry a label with emphasis in it — and they
+  were written in the order they came to mind: the weight, the slant, the strike,
+  the underline, the colour, the size and the typeface.
+
+  `w:rPr` is a sequence in ECMA-376's `wml.xsd` and not a set, so a reader walks
+  its children in the order they are written and stops at the first one it did not
+  expect. The typeface comes before the weight, and the underline comes after the
+  size, and a document that gets this wrong is one Word refuses to open.
+
+  Microsoft's own validator reported `The element has unexpected child element
+  'w:color'` nineteen times across the example documents, every one of them a
+  link whose label was styled. The order is the schema's now: `w:rFonts`, `w:b`,
+  `w:i`, `w:strike`, `w:color`, `w:sz`, `w:u`.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
