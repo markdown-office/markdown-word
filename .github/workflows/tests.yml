@@ -262,6 +262,58 @@ jobs:
           path: build/coverage
           retention-days: 7
 
+  # The Windows half of the render tool.
+  #
+  # The tool that drives Microsoft Word on Windows had never been run by a build:
+  # every other job here is a Linux one, and a script that drives an application can
+  # be broken in ways nothing notices — a flag the program's own argument binder eats,
+  # and a function called before the line that defines it has been reached. Both of
+  # those broke this tool, and both were invisible until the script was run the way
+  # Windows runs it.
+  #
+  # So there is a Windows job. It needs PowerShell and not Word: the tests stand in
+  # for Word, so the job installs no application and needs no licence, and a run of it
+  # says which PowerShell it was.
+  windows:
+    name: windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.5'
+          coverage: none
+          tools: composer:v2
+          # `gd` and `zip` are separate DLLs on a Windows PHP, and they are not
+          # switched on there without being asked for. The library needs both, and
+          # Composer refuses the lock file without them.
+          extensions: gd, zip
+
+      - name: Install
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      # Which PowerShell is here, and what version of it. The two are not the same
+      # program, and a script that reads its arguments differently in one of them than
+      # in the other is a script that works on one machine and not on another.
+      - name: What PowerShell is here
+        run: |
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+          powershell -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      # The tests skip themselves where PowerShell is not, which is right but quiet: a
+      # runner that lost its PowerShell would skip them and the job would still be
+      # green. Asserted here rather than left to be noticed in the skip count,
+      # because a suite that stopped testing the Windows tool is worse than one that
+      # failed.
+      - name: The runner's PowerShell can read the tool
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests/Support/powershell/check.ps1 -Script tools/render-with-word.ps1 -Check syntax
+          powershell -NoProfile -ExecutionPolicy Bypass -File tests/Support/powershell/check.ps1 -Script tools/render-with-word.ps1 -Check order
+
+      - name: The tools for Windows
+        run: vendor/bin/pest tests/Unit/render-tools-powershell.php
+
   # Static analysis on SonarCloud.
   #
   # Its own job rather than a step in the test matrix, so that a finding and a

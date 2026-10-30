@@ -1902,7 +1902,15 @@ in a renderer that disagrees with Word is a document that has not really been lo
 
 The choice between the three renderers is tested without any of them: the dispatcher takes the
 platform and the renderer from the environment, so the test suite can ask what it would choose
-on a machine that has none of them. The one test that needs Word is skipped where Word is not.
+on a machine that has none of them. The two tests that need Word are skipped where Word is not.
+
+The **Windows** tool is tested without Word too, and on Windows: the tests stand in for Word's
+COM automation, and they run the script the way Windows runs it, because a script started with
+`powershell -File` reads its arguments differently from one started from inside PowerShell.
+Two things are checked that a script can be wrong about before it asks an application for
+anything — a flag the program's own argument binder eats, and a function called before the line
+that defines it has been reached. A Windows job in the build runs them, because every other job
+is a Linux one and a script that drives an application can be broken in ways nothing notices.
 
 A **template** is rendered as well as a document. Word's AppleScript opens a package typed as a
 template by opening nothing at all, and raises no error when it does so, so the template is

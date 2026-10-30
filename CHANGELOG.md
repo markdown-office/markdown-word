@@ -34,6 +34,16 @@ All notable changes to this project are documented here. The format follows
   Word is, and a backend that says "word" where there is no Word fails later, inside Word,
   with a message about the document rather than about Word.
 
+  **The Windows tool is tested, on Windows.** The tests stand in for Word's COM
+  automation, so they need no application installed and no licence, and they run the
+  script the way Windows runs it — a script started with `powershell -File` reads its
+  arguments differently from one started from inside PowerShell. Two things are checked
+  that a script can be wrong about before it asks an application for anything: a flag the
+  program's own argument binder eats, and a function called before the line that defines
+  it has been reached. Both broke this tool, and neither was visible until the script was
+  run the way Windows runs it. A Windows job in the build runs them, because every other
+  job is a Linux one.
+
 - **A word can be written in a style, in the middle of a sentence.** `:brand[Bakery]`
   is the word "Bakery" in the style the theme calls `brand`, and the theme's
   `styles.yml` gains a `textStyles` key for it:

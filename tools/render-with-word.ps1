@@ -26,9 +26,25 @@
 # A validator that cannot run must never report success. Every step here either produces
 # the file it promised or raises, and a raised error exits non-zero.
 
+[CmdletBinding(PositionalBinding = $false)]
 param(
+    # The documents to render.
+    #
+    # Positional binding is off, so that the first document cannot be mistaken for
+    # something else. Everything that is not a named parameter arrives here.
     [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]] $Arguments
+    [string[]] $Arguments,
+
+    # Where the PDFs are written.
+    #
+    # A parameter of its own rather than a flag looked for in the argument list,
+    # because PowerShell reads a leading dash as the beginning of a parameter name:
+    # `--out` is the parameter `out`, which is ambiguous between `-OutBuffer` and
+    # `-OutVariable`, and a script asked for `-out` refuses to start at all before it
+    # has read a single argument. Naming it here makes the match exact, and an exact
+    # match beats a prefix.
+    [Parameter()]
+    [string] $Out
 )
 
 $ErrorActionPreference = 'Stop'
@@ -43,20 +59,31 @@ $WdDoNotSaveChanges = 0
 $SecondsToSettle = 60
 
 $documents = @()
-$outDirectory = $null
-$sawOut = $false
+$outDirectory = $Out
+$expectingDirectory = $false
 
+# The documents are what is left once the flags are taken out.
+#
+# `--out` is looked for here as well as in the parameter above, because the two ways a
+# script can be given its arguments read them differently: a script started with
+# `powershell -File` has `--out` bound to a parameter by PowerShell itself, and a script
+# run from inside PowerShell has it as an ordinary word in the argument list. The
+# parameter is the one that works in both, and this is the one that works when the
+# argument list is read by hand.
 foreach ($argument in $Arguments) {
-    if ($argument -eq '--out') {
-        $sawOut = $true
-        $outDirectory = $null
-    }
-    elseif ($sawOut -and $null -eq $outDirectory) {
+    if ($expectingDirectory) {
         $outDirectory = $argument
+        $expectingDirectory = $false
+        continue
     }
-    else {
-        $documents += $argument
+
+    if ($argument -eq '--out') {
+        $outDirectory = $null
+        $expectingDirectory = $true
+        continue
     }
+
+    $documents += $argument
 }
 
 if ($documents.Count -eq 0) {
@@ -64,7 +91,7 @@ if ($documents.Count -eq 0) {
     exit 1
 }
 
-if ($null -eq $outDirectory) {
+if ([string]::IsNullOrWhiteSpace($outDirectory)) {
     Write-Error 'No output directory. Pass --out <directory>.'
     exit 1
 }
@@ -77,6 +104,44 @@ if (-not (Test-Path -LiteralPath $outDirectory)) {
 
 $word = $null
 $opened = @()
+
+# Whether a PDF has been written whole.
+#
+# The marker is at the end of a PDF, and a PDF is large enough that reading all of it to look
+# at its last few bytes is waste.
+#
+# Defined here rather than at the end of the file because PowerShell runs a script from the
+# top down and a function is not defined until the line that defines it is reached: a
+# function used above its own definition is not a function, it is a name the script does
+# not know, and the run fails with a message about the name rather than about the PDF.
+function Test-PdfComplete {
+    param([string] $Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $false
+    }
+
+    $length = (Get-Item -LiteralPath $Path).Length
+
+    if ($length -eq 0) {
+        return $false
+    }
+
+    $stream = [System.IO.File]::OpenRead($Path)
+
+    try {
+        $read = [Math]::Min(64, $length)
+        $stream.Seek(-$read, [System.IO.SeekOrigin]::End) | Out-Null
+
+        $buffer = New-Object byte[] $read
+        $stream.Read($buffer, 0, $read) | Out-Null
+
+        return [System.Text.Encoding]::ASCII.GetString($buffer).Contains('%%EOF')
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
 
 try {
     $word = New-Object -ComObject Word.Application
@@ -157,36 +222,3 @@ foreach ($path in $documents) {
 }
 
 exit 0
-
-# Whether a PDF has been written whole.
-#
-# The marker is at the end of a PDF, and a PDF is large enough that reading all of it to look
-# at its last few bytes is waste.
-function Test-PdfComplete {
-    param([string] $Path)
-
-    if (-not (Test-Path -LiteralPath $Path)) {
-        return $false
-    }
-
-    $length = (Get-Item -LiteralPath $Path).Length
-
-    if ($length -eq 0) {
-        return $false
-    }
-
-    $stream = [System.IO.File]::OpenRead($Path)
-
-    try {
-        $read = [Math]::Min(64, $length)
-        $stream.Seek(-$read, [System.IO.SeekOrigin]::End) | Out-Null
-
-        $buffer = New-Object byte[] $read
-        $stream.Read($buffer, 0, $read) | Out-Null
-
-        return [System.Text.Encoding]::ASCII.GetString($buffer).Contains('%%EOF')
-    }
-    finally {
-        $stream.Dispose()
-    }
-}
