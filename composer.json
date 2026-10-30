@@ -29,7 +29,7 @@
         "ext-zip": "*",
         "league/commonmark": "^2.10",
         "markdown-office/commonmark-generic-directives": "^0.3.0",
-        "phpoffice/phpword": "^1.4",
+        "phpoffice/phpword": "~1.4.0",
         "symfony/yaml": "^7.4 || ^8.1"
     },
     "require-dev": {
@@ -42,7 +42,7 @@
         "patches": {
             "phpoffice/phpword": [
                 {
-                    "description": "PHPWord 1.4.0 writes the children of `w:rPr`, of `w:pPr`, of `w:tblPr`, of `w:sectPr` and of `w:style` in an order of its own, and writes a few elements the format does not allow there. The patch puts them where ECMA-376 names them.",
+                    "description": "PHPWord 1.4.0 writes the children of `w:rPr`, of `w:pPr`, of `w:tblPr`, of `w:sectPr` and of `w:style` in an order of its own, and writes a few elements the format does not allow there. The patch puts them where ECMA-376 names them. The version is held to the 1.4 line rather than the 1 series: the patch is against 1.4.0, and a later release of the line would carry a different writer.",
                     "url": "https://raw.githubusercontent.com/markdown-office/PHPWord/62f68049d287e5a52575f2ae694c2e76f4a2002a/patches/phpoffice-phpword-1.4.0-ooxml.patch",
                     "sha256": "193163898e7690b6eaf51086d415809616b7e25ec4090b58ce7966f66ae1203a"
                 }
