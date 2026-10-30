@@ -11,20 +11,20 @@ use MarkdownWord\Exception\Exception;
 use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\ThemeNotFound;
 use MarkdownWord\Exception\UnknownStyleSlot;
+use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Filesystem\PathScope;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Reads a theme out of a directory, or out of the `theme.yml` inside one.
+ * Reads a theme out of a finder: the `theme.yml` and the `styles.yml` beside it.
  *
  * Only `theme.yml` is required. `styles.yml` is read when it is there; a theme without
  * one draws in the built-in look, which is a theme rather than a broken one.
  *
- * A theme is a `theme.yml` and the `styles.yml` beside it. The two are usually held in a
- * directory of their own, and a document may name either the directory or the manifest
- * inside it: the manifest is the theme, and the directory around it is where the rest of
- * it is looked for.
+ * The finder is asked by name — `house/theme.yml`, `house/styles.yml` — because the
+ * library composes names and a finder answers them. A theme that never had a
+ * directory is read the same way as one that did.
  *
  * Every slot is checked against {@see Styles::defaults()} — the list
  * {@see \MarkdownWord\Configuration\Validator} checks a `styles:` block against — so a
@@ -37,11 +37,11 @@ use Symfony\Component\Yaml\Yaml;
  * exist, one whose value is not what the attribute takes, one called `style` and two
  * names for one style are all refused here.
  *
- * Each of the two files is resolved and held to the caller's
- * {@see \MarkdownWord\Filesystem\PathScope} before it is read. Checking the directory is
- * not enough: a `styles.yml` that is a symlink pointing out of the scope is read just as
- * readily as one inside it, and its values reach the document as direct formatting, which
- * is a way to put a file outside the roots into the output.
+ * Each of the theme's own files is resolved and held to the scope the loader was given
+ * before it is read, and the scope is asked of the file rather than of the directory it
+ * was found in: a `styles.yml` that is a symlink pointing out of the scope is read just
+ * as readily as one inside it, and its values reach the document as direct formatting,
+ * which is a way to put a file outside the roots into the output.
  */
 final class ThemeLoader
 {
@@ -49,48 +49,55 @@ final class ThemeLoader
     public const STYLES_FILE = 'styles.yml';
 
     /**
-     * @param PathScope|null $files The directories a theme's own files may resolve into.
-     *        Null takes the files inside a resolved directory on trust, which is what a
-     *        theme this library ships is.
+     * @param PathScope|null $scope The directories a theme's own files may resolve into.
+     *        Null takes the files the finder answers on trust, which is what a theme
+     *        this library ships is.
+     */
+    public function __construct(private readonly ?PathScope $scope = null)
+    {
+    }
+
+    /**
+     * A theme read by the name it is known by.
      *
-     * @throws ThemeNotFound  when the directory has no `theme.yml`, so it is not a theme
+     * @param string $name The theme's name, which the finder resolves the theme's files by.
+     * @param string|null $written What the document wrote, which is what a failure names.
+     * @param FileFinder|null $files Where the theme's files come from.
+     *
+     * @throws ThemeNotFound  when the theme has no `theme.yml`, so it is not a theme
      * @throws MalformedTheme  when a file in it does not describe a theme
      * @throws UnknownStyleSlot when `styles.yml` names a slot that does not exist
      * @throws Exception      when a file in it cannot be read or parsed, or resolves out
      *                        of the scope
      */
-    public function load(string $directory, ?string $name = null, ?PathScope $files = null): LoadedTheme
+    public function load(string $name, ?string $written = null, ?FileFinder $files = null): LoadedTheme
     {
-        $written = $name ?? $directory;
-        $manifest = $this->contained($files, $directory . '/' . self::THEME_FILE, $written);
+        $written ??= $name;
 
-        if (!is_file($manifest)) {
+        $manifest = $this->file($files, $name, self::THEME_FILE, $written);
+
+        if ($manifest === null) {
             // What the author wrote, not where it landed — see
             // {@see \MarkdownWord\Exception\ThemeNotFound::outside()}.
             throw ThemeNotFound::noManifest($written);
         }
 
-        $read = $this->styles($directory, $files, $written);
+        $read = $this->styles($files, $name, $written);
 
-        return new LoadedTheme(
-            $directory,
-            Theme::fromArray($this->mapping($manifest, 'a theme'), $manifest),
-            new Styles($read['slots']),
-            new TextStyles($read['text']),
-        );
+        return $this->theme($manifest, $read);
     }
 
     /**
-     * A theme whose manifest is this file, with the rest of it read from the directory
-     * that holds the file.
+     * A theme whose manifest is a file of its own, with the rest of it read from the
+     * directory that holds the file.
      *
      * The file has to be a `theme.yml`. The name is what makes it the manifest of a theme
      * rather than one of the theme's other files: a `styles.yml` named as the theme is a
      * file the theme's own directory holds, not the theme.
      *
-     * @param string      $file  the manifest
-     * @param string|null $name  what the document wrote, which is what a failure names
-     * @param PathScope|null $files The directories the theme's own files may resolve into.
+     * @param string $name The theme's name, which the finder resolves the manifest by.
+     * @param string|null $written What the document wrote, which is what a failure names.
+     * @param FileFinder|null $files Where the theme's files come from.
      *
      * @throws ThemeNotFound  when the file is not there, or is not a `theme.yml` and so
      *                        is not a manifest
@@ -99,56 +106,111 @@ final class ThemeLoader
      * @throws Exception      when a file in it cannot be read or parsed, or resolves out
      *                        of the scope
      */
-    public function loadManifest(string $file, ?string $name = null, ?PathScope $files = null): LoadedTheme
+    public function loadManifest(string $name, ?string $written = null, ?FileFinder $files = null): LoadedTheme
     {
-        $written = $name ?? $file;
+        $written ??= $name;
 
         if (basename($written) !== self::THEME_FILE) {
             throw ThemeNotFound::noDirectory($written);
         }
 
-        $manifest = $this->contained($files, $file, $written);
+        $manifest = $this->file($files, $name, self::THEME_FILE, $written);
 
-        if (!is_file($manifest)) {
+        if ($manifest === null) {
             throw ThemeNotFound::noDirectory($written);
         }
 
-        // The directory the manifest is in, rather than the one the document wrote: a
-        // manifest reached through a symlink sits where its target is, and that is where
-        // the `styles.yml` that belongs to it is.
-        $directory = dirname($manifest);
+        $read = $this->styles($files, $name, $written);
 
-        $read = $this->styles($directory, $files, $written);
+        return $this->theme($manifest, $read);
+    }
 
+    /**
+     * The theme a manifest and a styles file make.
+     *
+     * The directory is the one the manifest is in, which is the theme's own directory:
+     * the styles beside it are read from there, and a manifest reached through a symlink
+     * sits where its target is.
+     *
+     * @param array{contents: string, path: string} $manifest
+     * @param array{slots: array<string, mixed>, text: array<string, array<string, mixed>>} $read
+     *
+     * @throws MalformedTheme
+     * @throws Exception
+     */
+    private function theme(array $manifest, array $read): LoadedTheme
+    {
         return new LoadedTheme(
-            $directory,
-            Theme::fromArray($this->mapping($manifest, 'a theme'), $manifest),
+            dirname($manifest['path']),
+            Theme::fromArray($this->mapping($manifest, 'a theme'), $manifest['path']),
             new Styles($read['slots']),
             new TextStyles($read['text']),
         );
     }
 
     /**
-     * A file of the theme, refused when it resolves outside the scope.
+     * One of the theme's own files, resolved and held to the scope.
      *
-     * The path is returned as it stands when there is nothing to check, so a theme with
-     * no `styles.yml` costs no more than the one `file_exists()` call.
+     * A finder with the bytes and no path is asked for them: the caller vouches for
+     * its own files, and there is no path to hold to the scope. A loader with no
+     * finder has no source at all, and the file is not there.
      *
-     * @throws Exception when the file is there but is somewhere this render may not read
+     * @return array{contents: string, path: string}|null
+     *
+     * @throws Exception when the file resolves outside the directories this render may read
      */
-    private function contained(?PathScope $files, string $path, string $name): string
+    private function file(?FileFinder $files, string $theme, string $file, string $written): ?array
     {
-        if ($files === null || !file_exists($path)) {
-            return $path;
+        $name = $theme . '/' . $file;
+        $path = $files?->path($name, 'theme');
+
+        if ($path === null) {
+            $contents = $files?->read($name, 'theme');
+
+            return $contents === null ? null : ['contents' => $contents, 'path' => $name];
         }
 
+        $real = $this->contained($path, $file, $written);
+
+        if ($real === null) {
+            return null;
+        }
+
+        // `is_readable()` first, so a file that cannot be read is reported as that
+        // rather than as a warning the test runner turns into a failure of its own.
+        $contents = is_readable($real) ? @file_get_contents($real) : false;
+
+        if ($contents === false) {
+            throw new Exception(sprintf('Unable to read "%s".', $real));
+        }
+
+        return ['contents' => $contents, 'path' => $real];
+    }
+
+    /**
+     * A resolved path, held to the scope.
+     *
+     * The path is resolved before it is held, because a prefix is not containment:
+     * `..` and a symlink both defeat one, and a symlink pointing outside the roots is
+     * the ordinary way a path that looks harmless turns into a read of the wrong file.
+     *
+     * @return string|null The canonical path, or null when the file is not there after all.
+     *
+     * @throws Exception when the file is somewhere this render may not read
+     */
+    private function contained(string $path, string $file, string $written): ?string
+    {
         $real = PathScope::resolve($path);
 
-        if ($real === null || !$files->holds($real)) {
+        if ($real === null) {
+            return null;
+        }
+
+        if ($this->scope !== null && !$this->scope->holds($real)) {
             throw new Exception(sprintf(
                 'The theme "%s" has a "%s" that resolves outside the directories this render may read.',
-                $name,
-                basename($path),
+                $written,
+                $file,
             ));
         }
 
@@ -178,11 +240,11 @@ final class ThemeLoader
      * @throws MalformedTheme
      * @throws Exception
      */
-    private function styles(string $directory, ?PathScope $files, string $name): array
+    private function styles(?FileFinder $files, string $theme, string $written): array
     {
-        $file = $this->contained($files, $directory . '/' . self::STYLES_FILE, $name);
+        $file = $this->file($files, $theme, self::STYLES_FILE, $written);
 
-        if (!is_file($file)) {
+        if ($file === null) {
             return ['slots' => [], 'text' => []];
         }
 
@@ -198,7 +260,7 @@ final class ThemeLoader
 
                 if (!is_array($text)) {
                     throw MalformedTheme::notAMapping(
-                        $file,
+                        $file['path'],
                         'a mapping of style names to styles',
                         self::describe($text),
                     );
@@ -208,7 +270,7 @@ final class ThemeLoader
             }
 
             if (!in_array($slot, $known, true)) {
-                throw UnknownStyleSlot::named($file, $slot, $known);
+                throw UnknownStyleSlot::named($file['path'], $slot, $known);
             }
 
             $slots[$slot] = self::normalise($style);
@@ -254,22 +316,20 @@ final class ThemeLoader
     }
 
     /**
+     * @param array{contents: string, path: string} $file
+     *
      * @return array<array-key, mixed>
      *
      * @throws MalformedTheme
      * @throws Exception
      */
-    private function mapping(string $file, string $wanted): array
+    private function mapping(array $file, string $wanted): array
     {
-        if (!is_readable($file)) {
-            throw new Exception(sprintf('Unable to read "%s".', $file));
-        }
-
         try {
-            $parsed = Yaml::parseFile($file);
+            $parsed = Yaml::parse($file['contents']);
         } catch (ParseException $exception) {
             throw new Exception(
-                sprintf('"%s" is not valid YAML: %s', $file, $exception->getMessage()),
+                sprintf('"%s" is not valid YAML: %s', $file['path'], $exception->getMessage()),
                 previous: $exception,
             );
         }
@@ -279,7 +339,7 @@ final class ThemeLoader
         }
 
         if (!is_array($parsed) || ($parsed !== [] && array_is_list($parsed))) {
-            throw MalformedTheme::notAMapping($file, $wanted, self::describe($parsed));
+            throw MalformedTheme::notAMapping($file['path'], $wanted, self::describe($parsed));
         }
 
         return $parsed;

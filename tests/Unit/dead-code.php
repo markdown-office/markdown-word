@@ -275,6 +275,25 @@ it('does not claim again what the code does not do', function (string $claim) {
     // for every document", which is the opposite of what happens: a feature the survey
     // is never asked about is never reported at all.
     'a feature nobody asks about is reported for every document' => 'a feature nobody asks about is reported for every',
+    // The finder interface claimed to be asked for Markdown, which this half never
+    // does, and claimed that every file it answers is staged into a file of its own.
+    // A theme's YAML is parsed from the bytes it was given; only a picture and a
+    // template are staged.
+    'a finder is asked for Markdown as well as for YAML and a picture' => 'What the library wants for YAML, for Markdown and for a picture',
+    'every file a finder answers is staged into a file of its own' => 'the library stages them into a file of their own',
+    // The theme's directory is not canonical for a theme read from a source that
+    // holds the bytes and no path: the theme's name stands in for it.
+    'a theme read from a finder has a canonical directory' => 'The canonical directory this was read from',
+    // A theme named in code answers for the document, and the frontmatter's `theme:`
+    // is not read. The docblock said the opposite, and the other half of this suite
+    // points at this one for the rule.
+    'a document may name a theme of its own over one named in code' => 'unless a document names one itself',
+    // A picture comes from the caller's source before it comes from `imageBasePath`,
+    // and the docblock left the source out of it.
+    'a picture is resolved against the base path before the source' => 'a picture is resolved against `imageBasePath` or the working directory, and that is what this library',
+    // A finder is the default for the themes and for nothing else: a picture falls
+    // back to `imageBasePath` and a template to the document's own directory.
+    'a finder is the default for every file a document names' => '`Files\\DiskFinder` is the default',
 ]);
 
 it('has no decorative dividers in it', function () {

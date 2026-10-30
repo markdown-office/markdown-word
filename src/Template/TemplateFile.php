@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Template;
 
+use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\TemplateNotFound;
+use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Filesystem\PathScope;
 
 /**
@@ -19,11 +21,28 @@ use MarkdownWord\Filesystem\PathScope;
  * `docs/` names the template beside it whether the run started in `docs/` or above
  * it. What neither root covers is a `../` that climbs out, which is the case
  * {@see PathScope} exists for and the reason this is not a bare concatenation.
+ *
+ * **The template comes from the finder.** A source that holds it as a file answers a
+ * path, and the path is held to the roots as any other path is. A source that holds
+ * the bytes answers no path, and the bytes are staged into a file of the library's
+ * own — a `.dotx` is a package, and a package is opened as a file.
+ *
+ * **A staged file belongs to the conversion, not to the resolver.** The resolver is
+ * usually written inline — `(new TemplateFile(...))->resolve($name)` — and is gone
+ * before the template renderer opens the file, so a resolver that removed its file on
+ * the way out would take the template with it: the conversion would fail with a
+ * template that is not there, and nothing would say why. The file is given back when
+ * the conversion that used it is written, and a file nobody converted waits for the
+ * end of the run. Nothing is left in the temporary directory either way — not after a
+ * conversion that worked and not after one that failed.
  */
 final class TemplateFile
 {
     /** @var list<string> */
     private readonly array $roots;
+
+    /** The files this resolver staged and has not given back yet. */
+    private array $staged = [];
 
     /**
      * @param string|null $directory The directory the document was read from, which
@@ -33,11 +52,15 @@ final class TemplateFile
      * @param list<string> $roots Further directories a document may name a template
      *   in, for a shared library beside the project. As with a theme's this is the
      *   calling program's decision, made before a document is read.
+     * @param FileFinder|null $files Where the template comes from, for a program whose
+     *   templates are not in a directory. The document's own directory and the roots
+     *   remain where a name is looked for whenever the finder has nothing for it.
      */
     public function __construct(
         private readonly ?string $directory = null,
         array $roots = [],
         private readonly string $workingDirectory = '.',
+        private readonly ?FileFinder $files = null,
     ) {
         $this->roots = $roots === []
             ? array_values(array_filter([$this->workingDirectory, $directory]))
@@ -55,8 +78,76 @@ final class TemplateFile
             throw TemplateNotFound::aUrl($written);
         }
 
+        $found = $this->fromFinder($written);
+
+        if ($found !== null) {
+            return $found;
+        }
+
         $base = $this->baseFor($written);
-        $canonical = PathScope::canonical($base);
+
+        return $this->held($written, $base);
+    }
+
+    /**
+     * Give back the templates this resolver staged.
+     *
+     * A caller that resolved a template and did not convert it calls this. One that
+     * converted it does not: the conversion gives the file back when it is written.
+     */
+    public function release(): void
+    {
+        foreach ($this->staged as $path) {
+            Staging::release($path);
+        }
+
+        $this->staged = [];
+    }
+
+    /**
+     * The template in the source the document's files come from, or null when it has
+     * none.
+     */
+    private function fromFinder(string $written): ?string
+    {
+        $files = $this->files;
+
+        if ($files === null) {
+            return null;
+        }
+
+        $path = $files->path($written, 'document');
+
+        if ($path !== null) {
+            return $this->held($written, $path);
+        }
+
+        return $this->fromBytes($written, $files);
+    }
+
+    private function fromBytes(string $written, FileFinder $files): ?string
+    {
+        $bytes = $files->read($written, 'document');
+
+        if ($bytes === null) {
+            return null;
+        }
+
+        return $this->stage($bytes, $written);
+    }
+
+    /**
+     * The path a name resolved to, held to the roots.
+     *
+     * One rule for both: a path from the disk and a path from the caller's source are
+     * held to the roots alike, because a `template_file:` is written by the document
+     * either way.
+     *
+     * @throws TemplateNotFound when the path is not a file, or is out of reach
+     */
+    private function held(string $written, string $path): string
+    {
+        $canonical = PathScope::canonical($path);
 
         if ($canonical === null || !is_file($canonical)) {
             throw TemplateNotFound::aMissingFile($written, $this->searchedIn());
@@ -69,6 +160,18 @@ final class TemplateFile
         }
 
         return $canonical;
+    }
+
+    /**
+     * @throws FileNotWritable when the file cannot be made or written
+     */
+    private function stage(string $bytes, string $written): string
+    {
+        $path = Staging::stage($bytes, $written);
+
+        $this->staged[] = $path;
+
+        return $path;
     }
 
     private function baseFor(string $written): string

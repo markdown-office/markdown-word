@@ -94,6 +94,16 @@ the [documentation][command-line].
 See [Requirements](#requirements) for what PHP and which extensions it needs.
 Where to get help: [the issue tracker][issues].
 
+## For an agent
+
+There is a **skill**: a directory an agent reads, holding this library's
+documentation, its examples, and the tools that render a document so that it can
+be looked at. It is built from the documentation site, so it is never out of step
+with it, and it is installed with one line in `opencode.json` or by unpacking it
+where your agent looks for one.
+
+[How to install it][skill].
+
 ## Why it exists
 
 The obvious way to build a Markdown-to-Word converter is to render HTML and hand
@@ -1602,6 +1612,48 @@ one.
 text.** Nothing is wrong with the document in those cases: the library has no HTTP
 client and will not invent a download.
 
+### Where a document's files come from
+
+The theme a document names is looked for on disk — beside the document, beside the
+working directory, and among the themes that ship with the package — and its pictures
+and the template it names are read from disk as well. **The theme's files come from
+somewhere the caller chooses**, so a program that keeps its own files somewhere else
+— in a database, say — says where they are with a **finder** and hands it over
+wherever a document's files are wanted:
+
+```php
+use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Template\MarkdownTemplate;
+
+$finder = new MyFinder();   // a MarkdownWord\Files\FileFinder
+
+(new MarkdownToWord($markdown, files: $finder))->save('report.docx');
+
+(new MarkdownTemplate('report.dotx', files: $finder))
+    ->insert($markdown)
+    ->save('report.docx');
+```
+
+A finder is four methods: `read()` and `path()` answer for one file, `themes()` lists
+the themes that resolve and `files()` the files of one theme. The names it is asked
+for are the library's own — `house/theme.yml` for a theme's manifest, `logo.png` for a
+picture — and the role says which world a name is resolved in: `theme`, `picture` or
+`document`.
+
+**A finder answers; it does not refuse.** A file that is not there is `null`, and a
+file that is out of reach is answered like any other: the question of what a render
+may read belongs to the library, which holds the path a finder answered to its own
+scope and refuses what is out of reach in its own words.
+
+`Files\DiskFinder` answers out of directories on this machine, one list of bases per
+role, tried in the order they are given. A program that brings no finder of its own
+gets one for its **themes** — the directories of themes beside the document, beside
+the working directory and the ones that ship with the package. A picture falls back
+to `imageBasePath` or the working directory, and a template to the document's own
+directory and the roots the caller allowed. The directories of themes on disk remain
+the fallback, so a program with a finder of its own does not lose the themes that
+ship with the package.
+
 ### Styles
 
 Each slot holds a styleId, an inline style array, or `null`. The default is the
@@ -1877,6 +1929,28 @@ there.
   text you want emphasised, and reserve raw HTML for content that brings its own
   markup.
 
+## Tools
+
+A document that has been built has not been looked at, and a document that has been looked at
+in a renderer that disagrees with Word is a document that has not really been looked at.
+
+| Tool | What it is |
+| --- | --- |
+| `tools/render-document.php` | Renders a document with the most truthful renderer the machine has — Microsoft Word where it can be used, WordCraft where Word cannot, LibreOffice last — and says so when it had to fall back, because a renderer that cannot be trusted is worse than none |
+| `tools/render-with-word.applescript` | Opens a document in Microsoft Word on macOS and exports it as PDF. The export is written inside Word's own sandbox container, because Word writes nowhere else |
+| `tools/render-with-word.ps1` | The same on Windows, through Word's COM automation rather than through AppleScript |
+| `tools/package-as-document.sh` | Turns a Word template into a Word document, which is the one rewrite that makes a template a file Word will open |
+| `tools/pdf-is-complete.sh` | Whether a PDF has been written whole, which is what the Word tool waits for before it copies one out. The one part of that tool the test suite can check, because it needs no Word to answer |
+
+The choice between the three renderers is tested without any of them: the dispatcher takes the
+platform and the renderer from the environment, so the test suite can ask what it would choose
+on a machine that has none of them. The one test that needs Word is skipped where Word is not.
+
+A **template** is rendered as well as a document. Word's AppleScript opens a package typed as a
+template by opening nothing at all, and raises no error when it does so, so the template is
+staged as a document first — which is the one rewrite that turns a template into a file Word
+will open.
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE). PHPWord, which this library builds on, is
@@ -1887,6 +1961,7 @@ LGPL-3.0.
 [issues]: https://github.com/markdown-office/markdown-word/issues
 [mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word
+[skill]: https://markdown-office.github.io/skills/
 [sonar-token]: https://sonarcloud.io/account/security
 [pest]: https://pestphp.com
 [phpword]: https://github.com/PHPOffice/PHPWord

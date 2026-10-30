@@ -12,6 +12,7 @@ use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\NoContentControl;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Exception\TemplateNotFound;
+use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Writer\DocxWriter;
@@ -59,6 +60,15 @@ use PhpOffice\PhpWord\TemplateProcessor;
  * succeeds rather than a failure — PHP's `rename()` copies the file across,
  * gives the copy the source's owner and mode, and unlinks the source — so what
  * lands is the staged file, permissions and all.
+ *
+ * **The document's files come from the caller's source.** The template renders a
+ * document of its own, so the converter behind it is handed the finder the caller
+ * brought: the theme the inserted document names is resolved through it, and the
+ * pictures it shows are read through it.
+ *
+ * A template the caller's source holds as bytes rather than as a file is staged into
+ * a file of the library's own, and that file is given back here: the template is in
+ * use until the document is written, and not a moment longer.
  */
 final class MarkdownTemplate
 {
@@ -99,16 +109,22 @@ final class MarkdownTemplate
      * @param string|null $directory The directory the document being inserted was read
      *        from, which is where a theme beside it is found. Null for a document handed
      *        in as a string, which has no directory of its own.
+     * @param FileFinder|null $files Where the inserted document's files come from: the
+     *        theme it names and the pictures it shows. Null for the disk: a theme is
+     *        looked for in the directories of themes beside the document and beside
+     *        the working directory, and a picture against `imageBasePath` or the
+     *        working directory.
      * @throws TemplateNotFound when the template is not a file.
      */
     public function __construct(
-        string $template,
+        private readonly string $template,
         private readonly Configuration $config = new Configuration(),
         array $values = [],
         private readonly ?MarkdownParserInterface $parser = null,
         Configuration|array|null $overrides = null,
         ?string $theme = null,
         ?string $directory = null,
+        ?FileFinder $files = null,
     ) {
         if (!is_file($template)) {
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));
@@ -130,6 +146,7 @@ final class MarkdownTemplate
             $overrides,
             detached: true,
             directory: $directory,
+            files: $files,
         );
 
         // Applied here rather than by the caller, because this converter is built with a
@@ -260,6 +277,8 @@ final class MarkdownTemplate
             self::move($temp, $path);
         } finally {
             @unlink($temp);
+
+            Staging::release($this->template);
         }
     }
 
@@ -286,6 +305,8 @@ final class MarkdownTemplate
             return $contents;
         } finally {
             @unlink($temp);
+
+            Staging::release($this->template);
         }
     }
 

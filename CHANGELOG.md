@@ -8,6 +8,32 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **A document can be rendered, and looked at.** Four tools, in `tools/`:
+  `render-document.php` renders a document with the most truthful renderer the machine has
+  — Microsoft Word where it can be used, WordCraft where Word cannot, LibreOffice last —
+  and says so when it had to fall back, because a renderer that cannot be trusted is worse
+  than none. `render-with-word.applescript` and `render-with-word.ps1` drive Microsoft Word
+  on macOS and on Windows, and `package-as-document.sh` turns a Word template into a Word
+  document.
+
+  **The export is written inside Word's own sandbox container**, because Word writes
+  nowhere else: asked for a path outside it, Word waits for a grant the caller cannot give
+  and writes nothing. And a PDF is written lazily, so the file is copied out only once it
+  has stopped growing and carries the marker every PDF ends with.
+
+  **A template is rendered as well as a document.** Word's AppleScript opens a package
+  typed as a template by opening nothing at all, and raises no error when it does so, so
+  the template is staged as a document first: the one content-type rewrite that turns a
+  template into a file Word will open. The PDF is named after the template rather than
+  after the template's extension.
+
+  The choice between the three renderers is tested without any of them — the dispatcher
+  takes the platform and the renderer from the environment, so the test suite can ask what
+  it would choose on a machine that has none of them. The dispatcher looks for Word itself
+  and not only for the tool that drives it: `osascript` is on every Mac whether or not
+  Word is, and a backend that says "word" where there is no Word fails later, inside Word,
+  with a message about the document rather than about Word.
+
 - **A word can be written in a style, in the middle of a sentence.** `:brand[Bakery]`
   is the word "Bakery" in the style the theme calls `brand`, and the theme's
   `styles.yml` gains a `textStyles` key for it:
@@ -62,6 +88,60 @@ All notable changes to this project are documented here. The format follows
   theme: ./themes/house/theme.yml
   ---
   ```
+
+- **`MarkdownWord\Files\FileFinder`: where a document's files come from.** The library
+  composes names and asks; a finder answers for the names it is handed. `read()` and
+  `path()` answer for one file, `themes()` lists the themes that resolve and
+  `files()` the files of one theme. `Files\DiskFinder` answers out of directories on
+  this machine, one list of bases per role — `theme`, `picture` and `document` —
+  tried in the order they are given. It is what a document's themes are read through
+  when the caller brings no finder of their own.
+
+  **The theme's files come from somewhere the caller chooses.** A program that keeps its
+  themes, pictures and templates in a database — and never had a directory to hand
+  over — hands the library a finder of its own, and the library asks it for the names
+  it composes:
+
+  ```php
+  use MarkdownWord\MarkdownToWord;
+  use MarkdownWord\Template\MarkdownTemplate;
+
+  $finder = new MyFinder();   // read(), path(), themes(), files()
+
+  (new MarkdownToWord($markdown, files: $finder))->save('report.docx');
+
+  (new MarkdownTemplate('report.dotx', files: $finder))
+      ->insert($markdown)
+      ->save('report.docx');
+  ```
+
+  A theme is resolved through the finder by name — `house/theme.yml` — and a picture is
+  read through it as `logo.png`. The directories of themes on disk remain the fallback
+  rather than the only place a theme is looked for, so a program with a source of its
+  own does not lose the themes that ship with this package.
+
+  A finder answers; it does not refuse. A file that is not there is `null`, and a file
+  that is out of reach is answered like any other, because the question of what a
+  render may read belongs to the library and to the messages it already had. That is
+  also what lets one adapter serve both halves of this suite: each has its own
+  exception classes, and a finder that threw would throw one of them.
+
+  A source that holds a file gives a path, and the file is used where it is. A source
+  that holds the bytes has them staged into a file of the library's own: a picture is
+  given to PHPWord as bytes, so nothing is left on disk, and a template is staged
+  until the conversion that used it is written — `Template\TemplateFile::release()`
+  gives it back to a caller that resolved one and did not convert it.
+
+  `MarkdownToWord` takes `roots:` as well: the directories of themes a document may
+  name a theme in, for a shared library of themes beside the project. The theme
+  resolver has always honoured them; nothing handed it any.
+
+  **What did not change.** The error messages: a theme that is not there is still told
+  which themes are, a path out of reach is still refused in the library's own words,
+  and a `template_file:` that is not there says what it always did. The four themes
+  that ship with the package — `default`, `minimal`, `corporate` and `report` — are
+  the same four. The parser's flavours are the same five: `commonMarkOnly()`,
+  `extended()`, `directives()`, `withAllExtensions()` and `withFrontMatter()`.
 
 ### Fixed
 
@@ -146,11 +226,32 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **`ThemeLoader::load()` and `loadManifest()` take a name and a finder.** The third
+  parameter took a `?PathScope` — the scope a theme's own files were held to — and now
+  takes a `?FileFinder`, the finder they are read through; the first was a directory
+  and is now the name the theme is known by. The scope check stays where it was, with
+  the messages it had, and a loader holds the theme's own files to the scope it was
+  given — so a `styles.yml` that is a symlink out of the scope is still refused.
+
+- **`ThemeResolver` takes a loader of its own, or none.** Its loader parameter was a
+  `ThemeLoader` and is now a `?ThemeLoader`, so a resolver can be built without one.
+  It builds a loader with its own scope when it is given none.
+
 - **`ThemeResolver` looks in the roots it is given.** They were read into the scope a
   document-written path is held to and never looked in, so a shared library of themes
   beside the project had to be named by its full path. A name is now looked for in each
   of them directly, the way it is in the themes that ship with this package, and they
   are named in the list of the themes that resolve — so a failure names them too.
+
+- **Three constructors take a finder.** `MarkdownToWord::__construct()`,
+  `Template\TemplateFile::__construct()` and `Template\MarkdownTemplate::__construct()`
+  gained trailing named parameters, so every existing call site keeps working as it
+  was: `files:` on all three, and `roots:` on the converter as well.
+
+  `Template\TemplateFile` gained `release()`, which gives back the files it staged. A
+  staged template is the library's own file, and it belongs to the conversion that uses
+  it: the file is given back when that conversion is written, and a caller who resolved
+  a template and did not convert it says so here.
 
 ## [0.2.2] - 2026-10-26
 
