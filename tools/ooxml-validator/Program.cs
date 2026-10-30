@@ -22,14 +22,18 @@ if (args.Length == 0)
 // suite writes has been checked against every version the SDK knows, and the
 // errors are the same at all of them.
 var version = FileFormatVersions.Office2019;
+var files = new List<string>();
 
+// The files are gathered while the options are read, because the value of
+// `--version` is an option's value and not the name of a file.
 for (var i = 0; i < args.Length; i++)
 {
     if (args[i] == "--version" && i + 1 < args.Length)
     {
-        if (!Enum.TryParse<FileFormatVersions>(args[++i], ignoreCase: true, out version))
+        var value = args[++i];
+        if (!Enum.TryParse<FileFormatVersions>(value, ignoreCase: true, out version))
         {
-            Console.Error.WriteLine($"not a version the SDK knows: {args[i]}");
+            Console.Error.WriteLine($"not a version the SDK knows: {value}");
             return 2;
         }
 
@@ -41,9 +45,9 @@ for (var i = 0; i < args.Length; i++)
         Console.Error.WriteLine($"unknown option: {args[i]}");
         return 2;
     }
-}
 
-var files = args.Where(argument => !argument.StartsWith("--")).ToList();
+    files.Add(args[i]);
+}
 
 if (files.Count == 0)
 {

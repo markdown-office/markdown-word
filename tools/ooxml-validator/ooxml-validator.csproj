@@ -19,7 +19,7 @@
     <!-- The version is pinned rather than ranged, because the validator is the
          oracle the gate is measured against: a different version of it may find
          different errors, and a gate whose oracle moves is not a gate. -->
-    <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="[3.3.0]" />
   </ItemGroup>
 
 </Project>

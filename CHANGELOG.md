@@ -25,11 +25,12 @@ All notable changes to this project are documented here. The format follows
   says what is missing; a job of its own installs the SDK, so the gate cannot be
   skipped there, and the jobs that run the rest of the suite leave it out.
 
-  **The gate is red when it lands.** Over the twenty-nine documents the build
-  writes, Microsoft's validator reported a thousand and two errors; with the four
-  fixes upstream in PHPWord's writer it reported a hundred and fifty-one, of which
-  forty-four belonged to the three committed templates and eighty-eight to PHPWord
-  itself. The rest were this library's own.
+  **The gate lands green.** Over the twenty-nine documents the build writes,
+  Microsoft's validator reported a thousand and two errors. With the fixes upstream
+  in PHPWord's writer it reported a hundred and fifty-one: eighty-eight belonged to
+  PHPWord, forty-four to the three committed templates, and nineteen to this
+  library's own. **With all five upstream pull requests, the templates written by
+  the fixed library, and this library's own fix, it reports zero.**
 
   The gate comes first, so that the fixes are proved to have landed rather than
   believed to have.
@@ -37,6 +38,19 @@ All notable changes to this project are documented here. The format follows
 - **`examples/build.php --no-previews` builds the documents and leaves the pictures
   alone.** Drawing the previews takes longer than everything else the build does,
   and the gate that reads the documents wants the documents.
+
+- **The project that installs this one has to allow
+  [`cweagans/composer-patches`][composer-patches].** The fixes are in five pull
+  requests upstream —
+  [#2964](https://github.com/PHPOffice/PHPWord/pull/2964),
+  [#2965](https://github.com/PHPOffice/PHPWord/pull/2965),
+  [#2966](https://github.com/PHPOffice/PHPWord/pull/2966),
+  [#2968](https://github.com/PHPOffice/PHPWord/pull/2968) and
+  [#2969](https://github.com/PHPOffice/PHPWord/pull/2969), all against
+  [#2963](https://github.com/PHPOffice/PHPWord/issues/2963) — and until they are
+  released they reach this library as a patch applied to the installed package.
+  The plugin applies it, and Composer runs it only when the project allows it.
+  Without that line the documents are invalid Office Open XML again, silently.
 
 ### Fixed
 
@@ -77,6 +91,11 @@ All notable changes to this project are documented here. The format follows
   settings in the wrong order and an inline picture in a header. Every document
   rendered from a template inherited them, which is why forty-four of the errors
   the gate found were in the templates and not in the code that writes them.
+
+  They are written by the fixed library now, and they score 0 errors each. **The
+  header logo of `meridian-qbr.dotx` and `plain-letterhead.dotx` is the picture the
+  examples carry today** — the old templates carried an earlier one, left behind
+  when the asset itself changed.
 
 ## [0.3.0] - 2026-10-30
 
@@ -1251,6 +1270,7 @@ on it:
 configurable.
 
 [0.3.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.3.1
+[composer-patches]: https://github.com/cweagans/composer-patches
 [0.2.2]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.2
 [0.3.0]: https://github.com/markdown-office/markdown-word/releases/tag/v0.3.0
 [0.2.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.1

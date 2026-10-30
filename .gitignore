@@ -49,3 +49,6 @@
 
 # Parallel agent worktrees
 .worktrees/
+
+# The patch lock is this repository's install state, not the package's.
+/patches.lock.json

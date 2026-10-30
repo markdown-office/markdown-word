@@ -12,8 +12,9 @@ use MarkdownWord\Tests\Support\TemplateFactory;
  *
  * `w:rPr` is a sequence in ECMA-376's `wml.xsd` — `EG_RPrBase` — and not a set,
  * so a reader walks the children in the order they are written and stops at the
- * first one it did not expect. A document whose run properties are out of that
- * order is one Word refuses to open.
+ * first one it did not expect. Word opens a document whose run properties are out
+ * of that order, because Word is lenient where the schema is not; a reader that
+ * walks the sequence does not.
  *
  * A link's properties are written by hand, by {@see \MarkdownWord\Writer\HyperlinkPass},
  * because PHPWord's `Link` element holds one plain string and cannot carry a

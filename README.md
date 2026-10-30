@@ -91,6 +91,27 @@ install of this package puts no command in `vendor/bin`. The command line is a
 separate program — [`mdoffice`][mdoffice] — whose commands and options are in
 the [documentation][command-line].
 
+**The project that installs this one has to allow [`cweagans/composer-patches`][composer-patches].**
+The documents this library writes are Word and Open XML, and the released PHPWord writes
+a few of them in an order the schema does not allow — the properties of a run, of a
+paragraph, of a table, of a section and of a style, and a few elements that belong
+somewhere else. The fixes are in pull requests upstream, and until they are released
+they reach this library as a patch applied to the installed package. The plugin applies
+that patch, and Composer runs it only when the project allows it:
+
+```json
+{
+    "config": {
+        "allow-plugins": {
+            "cweagans/composer-patches": true
+        }
+    }
+}
+```
+
+Without that line the install stops with Composer's own message naming
+`cweagans/composer-patches`. The documents are valid Office Open XML only with it.
+
 See [Requirements](#requirements) for what PHP and which extensions it needs.
 Where to get help: [the issue tracker][issues].
 
@@ -1961,6 +1982,7 @@ LGPL-3.0.
 [commonmark]: https://github.com/thephpleague/commonmark
 [command-line]: https://markdown-office.github.io/command-line/basic/
 [issues]: https://github.com/markdown-office/markdown-word/issues
+[composer-patches]: https://github.com/cweagans/composer-patches
 [mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word
 [skill]: https://markdown-office.github.io/skills/
