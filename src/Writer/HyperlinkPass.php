@@ -187,9 +187,11 @@ final class HyperlinkPass
      * `w:rPr` is the sequence `EG_RPrBase` in ECMA-376's `wml.xsd` and not a set,
      * so a reader walks the children in the order they are written and stops at
      * the first one it did not expect: the typeface comes before the weight, and
-     * the underline comes after the size. A label carries a colour and an
-     * underline, so the order is not academic — a document that gets it wrong is
-     * one Word refuses to open.
+     * the underline comes after the size.
+     *
+     * Word opens a document that gets this wrong, because Word is lenient where
+     * the schema is not. A reader that walks the sequence — a validator, a
+     * converter — does not.
      *
      * @param array<string, mixed> $style
      */
