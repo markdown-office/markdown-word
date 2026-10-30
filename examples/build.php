@@ -12,7 +12,7 @@ declare(strict_types=1);
  * LibreOffice is installed, so the result can be checked without Word.
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 use League\CommonMark\Extension\FrontMatter\FrontMatterExtension;
 use MarkdownWord\Configuration;
@@ -70,8 +70,11 @@ const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const DOCUMENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
 const TEMPLATE_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
 
+/** Where the Markdown sources live, relative to this file. */
+const MARKDOWN = '/markdown';
+
 /** The house logo, put in the template's header. */
-const LOGO = __DIR__ . '/markdown/assets/example-logo-meridian.png';
+const LOGO = __DIR__ . MARKDOWN . '/assets/example-logo-meridian.png';
 
 /**
  * A paragraph that stands for the content control until `controlIn()` has put one there.
@@ -89,7 +92,7 @@ $root = __DIR__;
 $out = $root . '/out';
 $docs = $out . '/documents';
 $previews = $out . '/previews';
-$assets = $root . '/markdown/assets';
+$assets = $root . MARKDOWN . '/assets';
 $templates = $root . '/templates';
 
 // Everything in `out/` is produced by this script and nothing else, and it is
@@ -184,7 +187,7 @@ foreach ([
     // Images in the examples are relative to the Markdown file.
     $config = Configuration::create()->withOptions([
         'images' => Options::IMAGE_EMBED,
-        'imageBasePath' => $root . '/markdown',
+        'imageBasePath' => $root . MARKDOWN,
     ]);
 
     $path = $docs . '/' . $name . DOCX_EXTENSION;
@@ -199,7 +202,7 @@ foreach ([
 
 $path = $docs . '/07-no-decoration' . DOCX_EXTENSION;
 (new MarkdownToWord(
-    (string) file_get_contents($root . '/markdown/01-kitchen-sink.md'),
+    (string) file_get_contents($root . MARKDOWN . '/01-kitchen-sink.md'),
     Configuration::create()->withoutDecoration(),
 ))->save($path);
 $built[] = ['07-no-decoration', 'The kitchen sink with every default switched off.', $path];
@@ -208,7 +211,7 @@ $built[] = ['07-no-decoration', 'The kitchen sink with every default switched of
 
 $path = $docs . '/08-house-style' . DOCX_EXTENSION;
 (new MarkdownToWord(
-    (string) file_get_contents($root . '/markdown/01-kitchen-sink.md'),
+    (string) file_get_contents($root . MARKDOWN . '/01-kitchen-sink.md'),
     houseStyle(),
 ))->save($path);
 $built[] = ['08-house-style', 'The kitchen sink in a custom house style.', $path];
@@ -252,7 +255,7 @@ $built[] = ['10-template', 'Markdown rendered into a Word template.', $outputPat
  */
 function markdownOf(string $root, string $name): string
 {
-    return (string) file_get_contents($root . '/markdown/' . $name . '.md');
+    return (string) file_get_contents($root . MARKDOWN . '/' . $name . '.md');
 }
 
 // Frontmatter
@@ -278,7 +281,7 @@ $frontmatterParser = new CommonMarkParser([
 // 11 — the block is read, and it configures the render.
 $path = $docs . '/11-frontmatter' . DOCX_EXTENSION;
 (new MarkdownToWord(
-    (string) file_get_contents($root . '/markdown/11-frontmatter.md'),
+    (string) file_get_contents($root . MARKDOWN . '/11-frontmatter.md'),
     Configuration::create(),
     $frontmatterParser,
 ))->save($path);
@@ -287,7 +290,7 @@ $built[] = ['11-frontmatter', 'Frontmatter configuring the conversion.', $path];
 // 12 — the same Markdown with no block, for the pair.
 $path = $docs . '/12-frontmatter-none' . DOCX_EXTENSION;
 (new MarkdownToWord(
-    (string) file_get_contents($root . '/markdown/12-frontmatter-none.md'),
+    (string) file_get_contents($root . MARKDOWN . '/12-frontmatter-none.md'),
     Configuration::create(),
     $frontmatterParser,
 ))->save($path);
@@ -296,7 +299,7 @@ $built[] = ['12-frontmatter-none', 'The same Markdown with no frontmatter.', $pa
 // 13 — the block is outranked by the configuration passed in code.
 $path = $docs . '/13-frontmatter-override' . DOCX_EXTENSION;
 (new MarkdownToWord(
-    (string) file_get_contents($root . '/markdown/13-frontmatter-override.md'),
+    (string) file_get_contents($root . MARKDOWN . '/13-frontmatter-override.md'),
     // Deliberately the opposite of the block: no borders, no heading cap, a plain
     // grey Arial H1 with no air around it. Where the two disagree, this wins.
     Configuration::create()->withOptions([
@@ -356,7 +359,7 @@ assertPackageType($docxTemplatePath, DOCUMENT_TYPE);
 // whole point of the shape — the document says what its own values are, and the
 // template says what those values look like. A PHP array here would be a second place
 // for the same fact, and changing one would not change the other.
-$corporateMarkdown = (string) file_get_contents($root . '/markdown/22-corporate-report.md');
+$corporateMarkdown = (string) file_get_contents($root . MARKDOWN . '/22-corporate-report.md');
 
 foreach ([
     '22-corporate-report' => $dotxPath,
@@ -416,7 +419,7 @@ $namedPath = $docs . '/27-frontmatter-template' . DOCX_EXTENSION;
 // source holds as bytes is staged into a file of the library's own, and that file
 // belongs to the conversion — the resolver gives it back when the document is
 // written, and not before.
-$resolver = new TemplateFile($root . '/markdown', roots: [$root, getcwd() ?: '.']);
+$resolver = new TemplateFile($root . MARKDOWN, roots: [$root, getcwd() ?: '.']);
 
 (new MarkdownTemplate(
     $resolver->resolve(
@@ -440,7 +443,7 @@ $built[] = ['27-frontmatter-template', 'A quotation that names its own template.
 // it is an absolute directory and the source is committed, so it is passed here and
 // resolves `assets/logo.png` against `examples/markdown`.
 
-$images = (string) file_get_contents($root . '/markdown/15-images.md');
+$images = (string) file_get_contents($root . MARKDOWN . '/15-images.md');
 
 foreach ([
     'embed' => Options::IMAGE_EMBED,
@@ -452,7 +455,7 @@ foreach ([
         $images,
         Configuration::create()->withOptions([
             'images' => $value,
-            'imageBasePath' => $root . '/markdown',
+            'imageBasePath' => $root . MARKDOWN,
         ]),
         $frontmatterParser,
     ))->save($path);
@@ -467,8 +470,8 @@ foreach ([
 // without it the logo comes out as its own alt text where the picture should be.
 $path = $docs . '/' . '24-furniture' . DOCX_EXTENSION;
 (new MarkdownToWord(
-    (string) file_get_contents($root . '/markdown/24-furniture.md'),
-    Configuration::create()->withOptions(['imageBasePath' => $root . '/markdown']),
+    (string) file_get_contents($root . MARKDOWN . '/24-furniture.md'),
+    Configuration::create()->withOptions(['imageBasePath' => $root . MARKDOWN]),
     $frontmatterParser,
 ))->save($path);
 
@@ -521,7 +524,7 @@ foreach (Format::cases() as $format) {
     $path = $docs . '/29-objects' . $format->extension();
     $converter = new MarkdownToWord($objects, Configuration::create()->withOptions([
         'images' => Options::IMAGE_EMBED,
-        'imageBasePath' => $root . '/markdown',
+        'imageBasePath' => $root . MARKDOWN,
     ]), $frontmatterParser);
 
     $converter->convertTo($format, $path);
@@ -564,10 +567,10 @@ if (\extension_loaded('imagick')) {
     // resolves against the working directory and the picture is not found, which
     // falls back to the alt text and produces a document with no picture in it.
     (new MarkdownToWord(
-        (string) file_get_contents($root . '/markdown/19-vector.md'),
+        (string) file_get_contents($root . MARKDOWN . '/19-vector.md'),
         Configuration::create()->withOptions([
             'images' => Options::IMAGE_EMBED,
-            'imageBasePath' => $root . '/markdown',
+            'imageBasePath' => $root . MARKDOWN,
         ]),
         $frontmatterParser,
     ))->save($path);
@@ -598,13 +601,13 @@ $built[] = [
 // `.docx` is built here too, so the three are the same conversion and not three
 // documents that happen to share a heading.
 
-$formats = (string) file_get_contents($root . '/markdown/20-formats.md');
+$formats = (string) file_get_contents($root . MARKDOWN . '/20-formats.md');
 
 foreach (Format::cases() as $format) {
     $path = $docs . '/20-formats' . $format->extension();
     $converter = new MarkdownToWord($formats, Configuration::create()->withOptions([
         'images' => Options::IMAGE_EMBED,
-        'imageBasePath' => $root . '/markdown',
+        'imageBasePath' => $root . MARKDOWN,
     ]), $frontmatterParser);
 
     $converter->convertTo($format, $path);
