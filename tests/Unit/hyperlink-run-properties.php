@@ -58,8 +58,8 @@ function hyperlinkRunPropertyNames(string $markdown, ?Configuration $config = nu
 }
 
 /**
- * A link font carrying every property a run can hold, so the order is the whole
- * of what the document says about the run.
+ * A link font carrying every property the writer puts in a run, so the whole of
+ * what the document says about the run is the order of its properties.
  */
 function hyperlinkRunPropertiesConfig(): Configuration
 {
@@ -96,17 +96,16 @@ it('writes the run properties of a link with emphasis in the order the schema na
 });
 
 it('writes the typeface of a link before the properties that follow it', function () {
-    // `w:rFonts` is the second element the schema names and the last one a
-    // reader that walks the sequence meets, so a run that carries a typeface
-    // says so before anything else.
+    // `w:rFonts` is the second element the schema names, and a run here carries
+    // nothing before it, so the typeface is written first.
     $properties = hyperlinkRunPropertyNames('[label](https://example.com)', hyperlinkRunPropertiesConfig());
 
     expect($properties[0])->toBe('rFonts');
 });
 
 it('writes the underline of a link after the size of its run', function () {
-    // `w:u` is the twenty-seventh element of the sequence and the last of the
-    // ones a link carries, so it is written last.
+    // `w:u` is named after the size and before the effect, and it is the last of
+    // the properties a link carries, so it is written last.
     $properties = hyperlinkRunPropertyNames('[label](https://example.com)', hyperlinkRunPropertiesConfig());
 
     expect($properties[array_key_last($properties)])->toBe('u');
