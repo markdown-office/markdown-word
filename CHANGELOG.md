@@ -22,8 +22,8 @@ All notable changes to this project are documented here. The format follows
   It is a gate and not a report: the test fails on a document the validator
   rejects, and a test that asks the validator about a document with an error in it
   proves that it can fail. The test skips itself where the .NET SDK is not, and
-  says what is missing; the continuous integration job installs the SDK, so the
-  gate cannot be skipped there.
+  says what is missing; a job of its own installs the SDK, so the gate cannot be
+  skipped there, and the jobs that run the rest of the suite leave it out.
 
   **The gate is red when it lands.** Over the twenty-nine documents the build
   writes, Microsoft's validator reported a thousand and two errors; with the four

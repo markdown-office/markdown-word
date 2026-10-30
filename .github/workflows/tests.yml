@@ -231,8 +231,12 @@ jobs:
             }
           '
 
+      # The schema gate is not run here. The runner image ships a .NET SDK, so
+      # the test would not skip itself and would fail this job over a document
+      # that is nobody's business but the gate's — and the analysis job below
+      # needs this one to have passed. The gate has a job of its own.
       - name: Test
-        run: vendor/bin/pest
+        run: vendor/bin/pest --exclude-testsuite=ooxml
 
       # A coverage report on its own says little; this fails if the reported
       # figure is a placeholder, or if the code stops being covered at all.
@@ -250,6 +254,7 @@ jobs:
         if: matrix.php == '8.5'
         run: |
           vendor/bin/pest --coverage --min=91 \
+            --exclude-testsuite=ooxml \
             --coverage-clover=build/coverage/clover.xml \
             --coverage-html=build/coverage/html \
             --log-junit build/coverage/junit.xml
@@ -264,10 +269,11 @@ jobs:
 
   # The documents this library writes, checked against the schema.
   #
-  # A job of its own because the validator needs the .NET SDK, and the other jobs
-  # do not install it. The test skips itself where the SDK is not, so the jobs
-  # above run it and learn nothing from it; here the SDK is installed, so the
-  # test cannot skip.
+  # A job of its own because the gate needs the .NET SDK at a version this
+  # repository chooses. The runner image ships one, so the test would not skip
+  # itself there either; the jobs above leave the suite out rather than run the
+  # gate against whatever the image happens to carry, and this one installs the
+  # version the validator is built for.
   ooxml:
     name: ooxml
     runs-on: ubuntu-latest
@@ -289,9 +295,8 @@ jobs:
         with:
           dotnet-version: '8.0'
 
-      # This one suite and not the whole of it: the suite runs in the job above,
-      # where this test skips itself. This job is here so that the gate runs
-      # where the SDK is.
+      # This one suite and not the whole of it: the other jobs leave it out, and
+      # this is where the gate runs.
       - name: The documents are valid Office Open XML
         run: vendor/bin/pest --testsuite=ooxml
 
@@ -349,9 +354,14 @@ jobs:
       # Both reports the analysis reads, produced in one run rather than the
       # second one being repeated. The HTML report is skipped; Sonar wants the
       # machine-readable one.
+      #
+      # The schema gate is left out for the reason the test job gives: it has a
+      # job of its own, and the analysis is about the code rather than about the
+      # documents it writes.
       - name: Coverage and test results for the analysis
         run: |
           vendor/bin/pest --coverage --min=91 \
+            --exclude-testsuite=ooxml \
             --coverage-clover=build/coverage/clover.xml \
             --log-junit build/coverage/junit.xml
 
@@ -440,7 +450,7 @@ jobs:
         run: git --no-pager diff --stat composer.lock
 
       - name: The suite still passes
-        run: vendor/bin/pest
+        run: vendor/bin/pest --exclude-testsuite=ooxml
 
       # A runtime dependency that stops supporting the version the library claims
       # is the failure worth catching, and the minimum job cannot see it while it
