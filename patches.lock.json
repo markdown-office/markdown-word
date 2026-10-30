@@ -1,12 +1,12 @@
 {
-    "_hash": "3fe6a202aeab049f0d353cc0abdbbbd971f220d32401cd13681d0f3d7befb6e7",
+    "_hash": "3ff8b1cc1cec19e5f2a1ebc90e8c6fd71283f01b6b44c6d535e03d287b114642",
     "patches": {
         "phpoffice/phpword": [
             {
                 "package": "phpoffice/phpword",
                 "description": "PHPWord 1.4.0 writes the children of `w:rPr`, of `w:pPr`, of `w:tblPr`, of `w:sectPr` and of `w:style` in an order of its own, and writes a few elements the format does not allow there. The patch puts them where ECMA-376 names them.",
-                "url": "https://raw.githubusercontent.com/markdown-office/PHPWord/051ec089fd5f90c55d3b2f5075073337706a0bfc/patches/phpoffice-phpword-1.4.0-ooxml.patch",
-                "sha256": "e72862a34778f5c1e6e85ea7b006c0e297a1c178c9fa30afb1a4c27320ef2f3c",
+                "url": "https://raw.githubusercontent.com/markdown-office/PHPWord/62f68049d287e5a52575f2ae694c2e76f4a2002a/patches/phpoffice-phpword-1.4.0-ooxml.patch",
+                "sha256": "193163898e7690b6eaf51086d415809616b7e25ec4090b58ce7966f66ae1203a",
                 "depth": 1,
                 "extra": {
                     "provenance": "root"
