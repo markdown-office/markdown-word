@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- The lowest runtime the tool asks for. A newer runtime runs it unchanged,
+         so the runner's SDK does not have to match the target framework. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- A machine with only a newer runtime can still run this. Without it the
+         runtime refuses the application, and the gate would be a gate on the
+         version of .NET the runner happens to have. -->
+    <RollForward>Major</RollForward>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>OoxmlValidator</RootNamespace>
+    <AssemblyName>ooxml-validator</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The version is pinned rather than ranged, because the validator is the
+         oracle the gate is measured against: a different version of it may find
+         different errors, and a gate whose oracle moves is not a gate. -->
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
+  </ItemGroup>
+
+</Project>

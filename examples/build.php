@@ -151,6 +151,15 @@ if (in_array('--write-templates', $argv ?? [], true)) {
     exit(0);
 }
 
+// The previews are a picture of each document's first page, and drawing them takes
+// longer than everything else this script does. A build that wants only the
+// documents says so.
+//
+// The previews are still emptied with the rest of `out/`: a preview of a document
+// that is no longer built is a picture of nothing, which is the same thing the
+// directory is emptied for.
+$withPreviews = !in_array('--no-previews', $argv ?? [], true);
+
 $missing = array_keys(array_filter($templatePaths, static fn (string $t): bool => !is_file($t)));
 
 if ($missing !== []) {
@@ -640,7 +649,9 @@ if ($losses !== []) {
     echo "\n";
 }
 
-renderPreviews($built, $previews);
+if ($withPreviews) {
+    renderPreviews($built, $previews);
+}
 
 /**
  * The report template's own styles, pointed at by name.

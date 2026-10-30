@@ -111,17 +111,6 @@ function noTools(): string
 }
 
 /**
- * Whether a command is on the path.
- */
-function commandOnPath(string $command): bool
-{
-    $status = 0;
-    exec('command -v ' . escapeshellarg($command) . ' 2>/dev/null', $ignored, $status);
-
-    return $status === 0;
-}
-
-/**
  * A directory that stands for an installed application.
  *
  * The dispatcher looks for Word where Word is installed, and a test cannot install Word.
@@ -404,7 +393,7 @@ it('renders a document through Microsoft Word', function () {
         test()->markTestSkipped('Microsoft Word is only here on macOS, so the render cannot be checked.');
     }
 
-    if (! commandOnPath('osascript')) {
+    if (commandOnPath('osascript') === null) {
         test()->markTestSkipped('AppleScript is not here, so Word cannot be driven.');
     }
 
@@ -437,7 +426,7 @@ it('renders a template, and names the PDF after the template', function () {
         test()->markTestSkipped('Microsoft Word is only here on macOS, so the render cannot be checked.');
     }
 
-    if (! commandOnPath('osascript')) {
+    if (commandOnPath('osascript') === null) {
         test()->markTestSkipped('AppleScript is not here, so Word cannot be driven.');
     }
 

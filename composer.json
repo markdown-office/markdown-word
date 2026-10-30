@@ -72,6 +72,7 @@
         "test:spec": "pest --testsuite=conformance",
         "test:roundtrip": "pest --testsuite=roundtrip",
         "test:readme": "pest --testsuite=readme",
+        "test:ooxml": "pest --testsuite=ooxml",
         "test:coverage": "pest --coverage --min=91 --coverage-clover=build/coverage/clover.xml --coverage-html=build/coverage/html",
         "check": [
             "@composer validate --strict",

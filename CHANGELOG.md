@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **The documents this library writes are checked against the schema.** A `.docx` is
+  Office Open XML, and a document that breaks the schema is a document that is not
+  what it claims to be — Word opens it because Word is lenient where the schema is
+  not, and nothing else in the suite could see it. The check is Microsoft's own
+  validator, the one the Open XML SDK Productivity Tool uses, and it lives in
+  `tools/ooxml-validator`.
+
+  It is run over the examples — the whole corpus of documents this library writes,
+  built by `examples/build.php` — rather than over documents the test writes
+  itself, because a gate over a selection is a gate over the selection.
+
+  It is a gate and not a report: the test fails on a document the validator
+  rejects, and a test that asks the validator about a document with an error in it
+  proves that it can fail. The test skips itself where the .NET SDK is not, and
+  says what is missing; a job of its own installs the SDK, so the gate cannot be
+  skipped there, and the jobs that run the rest of the suite leave it out.
+
+  **The gate is red when it lands.** Over the twenty-nine documents the build
+  writes, Microsoft's validator reported a thousand and two errors; with the four
+  fixes upstream in PHPWord's writer it reported a hundred and fifty-one, of which
+  forty-four belonged to the three committed templates and eighty-eight to PHPWord
+  itself. The rest were this library's own.
+
+  The gate comes first, so that the fixes are proved to have landed rather than
+  believed to have.
+
+- **`examples/build.php --no-previews` builds the documents and leaves the pictures
+  alone.** Drawing the previews takes longer than everything else the build does,
+  and the gate that reads the documents wants the documents.
+
 ### Fixed
 
 - **A link's run properties are written in the order the schema names them.** The
@@ -24,6 +56,27 @@ All notable changes to this project are documented here. The format follows
   'w:color'` nineteen times across the example documents, every one of them a
   link whose label was styled. The order is the schema's now: `w:rFonts`, `w:b`,
   `w:i`, `w:strike`, `w:color`, `w:sz`, `w:u`.
+
+- **The PHPWord that writes the documents is patched.** PHPWord 1.4.0 writes the
+  children of `w:rPr`, of `w:pPr`, of `w:tblPr`, of `w:sectPr` and of `w:style`
+  in an order of its own, writes a page size in twips as a fraction, and writes a
+  few elements the format does not allow where it puts them. A document it writes
+  is therefore not valid OOXML, and every document this library writes is a
+  document it writes.
+
+  The fixes are in five pull requests upstream, and until they are released the
+  library carries them as a patch — the same way it has carried PHPPresentation's
+  fixes until now. The patch touches eighteen files of the Word2007 writer and
+  nothing else: it is a patch against 1.4.0 and not against the branch, so it
+  carries the fixes and not the rest of what upstream has done since.
+
+- **The three templates are written by the fixed library.** `invoice.dotx`,
+  `meridian-qbr.dotx` and `plain-letterhead.dotx` were written by PHPWord before
+  the fixes, so they carried four of its defects inside them — a page size in
+  twips with a fraction, a style whose properties were in the wrong order, the
+  settings in the wrong order and an inline picture in a header. Every document
+  rendered from a template inherited them, which is why forty-four of the errors
+  the gate found were in the templates and not in the code that writes them.
 
 ## [0.3.0] - 2026-10-30
 
