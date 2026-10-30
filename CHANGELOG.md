@@ -4,6 +4,40 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **The documents this library writes are checked against the schema.** A `.docx` is
+  Office Open XML, and a document that breaks the schema is a document that is not
+  what it claims to be — Word opens it because Word is lenient where the schema is
+  not, and nothing else in the suite could see it. The check is Microsoft's own
+  validator, the one the Open XML SDK Productivity Tool uses, and it lives in
+  `tools/ooxml-validator`.
+
+  It is run over the examples — the whole corpus of documents this library writes,
+  built by `examples/build.php` — rather than over documents the test writes
+  itself, because a gate over a selection is a gate over the selection.
+
+  It is a gate and not a report: the test fails on a document the validator
+  rejects, and a test that asks the validator about a document with an error in it
+  proves that it can fail. The test skips itself where the .NET SDK is not, and
+  says what is missing; the continuous integration job installs the SDK, so the
+  gate cannot be skipped there.
+
+  **The gate is red when it lands.** Over the twenty-nine documents the build
+  writes, Microsoft's validator reported a thousand and two errors; with the four
+  fixes upstream in PHPWord's writer it reported a hundred and fifty-one, of which
+  forty-four belonged to the three committed templates and eighty-eight to PHPWord
+  itself. The rest were this library's own.
+
+  The gate comes first, so that the fixes are proved to have landed rather than
+  believed to have.
+
+- **`examples/build.php --no-previews` builds the documents and leaves the pictures
+  alone.** Drawing the previews takes longer than everything else the build does,
+  and the gate that reads the documents wants the documents.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
