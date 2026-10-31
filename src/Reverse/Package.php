@@ -163,11 +163,16 @@ final class Package
         $package = new self($zip, $options);
 
         if ($zip->numFiles > $options->maxEntries) {
+            // The count is read before the archive is closed: closing it resets the
+            // number of files to zero, and a message that says zero sends the
+            // reader looking for the wrong thing.
+            $entries = $zip->numFiles;
+
             $package->close();
 
             throw new UnreadableDocument(sprintf(
                 'The document has %d parts in it, which is more entries than the %d allowed.',
-                $zip->numFiles,
+                $entries,
                 $options->maxEntries,
             ));
         }

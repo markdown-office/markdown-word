@@ -12,6 +12,7 @@ use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\NoContentControl;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Exception\TemplateNotFound;
+use MarkdownWord\Exception\UnreadableTemplate;
 use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
@@ -45,10 +46,11 @@ use PhpOffice\PhpWord\TemplateProcessor;
  * of its body, or says so and refuses, per {@see ContentFallback}. Filling the fields is
  * independent of it: a template can have values and nowhere to put the prose.
  *
- * A template that is not there is a {@see TemplateNotFound}. Every other way this can
- * fail is a {@see FileNotWritable} — the template was fine and the machine was not —
- * except {@see NoContentControl}, which is the template's to fix and is off unless asked
- * for.
+ * A template that is not there is a {@see TemplateNotFound}, and a template that holds
+ * more than this library will read is an {@see UnreadableTemplate}. Every other way
+ * this can fail is a {@see FileNotWritable} — the template was fine and the machine was
+ * not — except {@see NoContentControl}, which is the template's to fix and is off unless
+ * asked for.
  *
  * The staged document is moved into place rather than written there, so the
  * template on disk is never opened for writing: a path that is a hard link to it
@@ -114,7 +116,10 @@ final class MarkdownTemplate
      *        looked for in the directories of themes beside the document and beside
      *        the working directory, and a picture against `imageBasePath` or the
      *        working directory.
+     * @param TemplateOptions|null $limits What the template may hold before it is
+     *        read. Null for the defaults, which are the read path's.
      * @throws TemplateNotFound when the template is not a file.
+     * @throws UnreadableTemplate when the template holds more than the limits allow.
      */
     public function __construct(
         private readonly string $template,
@@ -125,6 +130,7 @@ final class MarkdownTemplate
         ?string $theme = null,
         ?string $directory = null,
         ?FileFinder $files = null,
+        private readonly ?TemplateOptions $limits = null,
     ) {
         if (!is_file($template)) {
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));
@@ -133,7 +139,7 @@ final class MarkdownTemplate
         // Settled before the processor is handed the file: a `.dotx` is normalised to
         // a document's package here, so the processor reads the body of whichever part
         // the declarations name and writes the finished document back out as one.
-        $this->package = TemplatePackage::of($template);
+        $this->package = TemplatePackage::of($template, $this->limits ?? new TemplateOptions());
         $this->processor = new TemplateProcessor($this->package->path());
 
         // The elements rendered below are copied into a different document, so

@@ -1012,6 +1012,35 @@ Normalising the type on the way in answers both at once, so the template on disk
 never opened for writing — the copy the renderer works from is ours, and it is removed
 when the renderer goes.
 
+### What a template may hold
+
+A template is somebody else's file, and a zip says how its contents are laid out and
+nothing about how much room they will take up: forty kilobytes of a part is forty
+megabytes of paragraph, and the entry count is whatever the writer felt like. So the
+template is bounded before a part of it is read — the number of parts it may have, and
+the size of any one of them once it is inflated.
+
+The bounds are the read path's, so a document is as welcome as a template:
+
+| | the bound |
+| --- | --- |
+| the number of parts in the archive | 4096 |
+| the size of one part, inflated | 256 MiB |
+
+A template that is over either is refused with an
+`MarkdownWord\Exception\UnreadableTemplate`, and the message says how far over it
+is. A caller who wants them tighter says so:
+
+```php
+use MarkdownWord\Template\MarkdownTemplate;
+use MarkdownWord\Template\TemplateOptions;
+
+$template = new MarkdownTemplate(
+    'report-template.dotx',
+    limits: (new TemplateOptions())->withMaxPartBytes(8 * 1024 * 1024),
+);
+```
+
 ### The template contract
 
 A template says two things, and both are Word constructs:

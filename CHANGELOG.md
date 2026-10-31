@@ -52,6 +52,25 @@ All notable changes to this project are documented here. The format follows
   The plugin applies it, and Composer runs it only when the project allows it.
   Without that line the documents are invalid Office Open XML again, silently.
 
+- **A template is bounded before a part of it is read.** A template is somebody else's
+  file, and a zip says how its contents are laid out and nothing about how much room
+  they will take up: forty kilobytes of a part is forty megabytes of paragraph, and the
+  entry count is whatever the writer felt like. The write path read a template without
+  any of the limits the read path has, so a template of sixty-five kilobytes could
+  hold a part that inflates to sixty-four megabytes.
+
+  The number of parts and the size of any one of them are bounded now, with the read
+  path's numbers — 4096 parts, 256 MiB each — and a template that is over either is
+  refused with a `MarkdownWord\Exception\UnreadableTemplate` that says how far over
+  it is. A caller who wants them tighter says so, with
+  `MarkdownWord\Template\TemplateOptions`.
+
+### Changed
+
+- **The examples build the way the analyser wants them to.** The build script named
+  the directory the Markdown sources live in twenty times, and loaded the autoloader
+  with `require` rather than `require_once`. Neither changed what the build writes.
+
 ### Fixed
 
 - **A link's run properties are written in the order the schema names them.** The
@@ -96,6 +115,10 @@ All notable changes to this project are documented here. The format follows
   header logo of `meridian-qbr.dotx` and `plain-letterhead.dotx` is the picture the
   examples carry today** — the old templates carried an earlier one, left behind
   when the asset itself changed.
+
+- **The message that says a document has too many parts reports zero parts.** The
+  archive was closed before the number was read, and closing an archive resets the
+  count to zero, so the message said `0` whatever the document held.
 
 ## [0.3.0] - 2026-10-30
 
