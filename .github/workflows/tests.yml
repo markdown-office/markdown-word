@@ -297,8 +297,12 @@ jobs:
 
       # This one suite and not the whole of it: the other jobs leave it out, and
       # this is where the gate runs.
+      #
+      # `--fail-on-skipped` because a skipped test is a green tick for a check that
+      # never ran. The job installs the SDK, so the test cannot skip here — and if
+      # that ever stops being true, the job says so instead of passing.
       - name: The documents are valid Office Open XML
-        run: vendor/bin/pest --testsuite=ooxml
+        run: vendor/bin/pest --testsuite=ooxml --fail-on-skipped
 
   # Static analysis on SonarCloud.
   #
