@@ -8,18 +8,15 @@ use MarkdownWord\Tests\Support\TemplateFactory;
 /*
  * The OOXML gate: the documents this library writes, checked against the schema.
  *
- * A `.docx` is Office Open XML, and a document that breaks the schema is a
- * document that is not what it claims to be. Word opens it anyway, because Word
- * is lenient where the schema is not, and nothing else in the suite could see it.
+ * A `.docx` is Office Open XML, and a document that breaks the schema is a document
+ * that is not what it claims to be. Word opens it anyway, because Word is lenient
+ * where the schema is not, and nothing else in the suite could see it.
  *
- * The validator is Microsoft's own — the one the Open XML SDK Productivity Tool
- * uses — and it is run over the examples rather than over documents the test
- * writes itself: the examples are the whole corpus of what this library writes,
- * and a gate over a selection is a gate over the selection.
+ * The validator is Microsoft's own — the one the Open XML SDK Productivity Tool uses
+ * — and it is run over the examples rather than over documents the test writes
+ * itself: the examples are the whole corpus of what this library writes.
  *
- * The test skips itself where the .NET SDK is not, and says what is missing. A
- * machine without the SDK can still run the rest of the suite; a machine with it
- * cannot pass this test with a document the schema rejects.
+ * The test skips itself where the .NET SDK is not, and says what is missing.
  */
 
 uses()->beforeEach(function (): void {
@@ -44,13 +41,10 @@ it('writes documents the schema accepts', function () {
 });
 
 it('finds an error in a document that has one', function () {
-    // The gate is worth nothing if it cannot fail. A validator that answered "no
-    // errors" about every document would pass the test above, so this one asks it
-    // about a document with an error in it and expects to be told.
-    //
-    // The error is an element no schema names, and the document is otherwise one
-    // this library wrote: it still opens, so what refuses it is the schema and not
-    // a broken archive.
+    // The gate is worth nothing if it cannot fail, so this one asks the validator
+    // about a document with an error in it. The error is an element no schema names;
+    // the document still opens, so what refuses it is the schema and not a broken
+    // archive.
     $document = Scratch::path('broken', '.docx');
 
     file_put_contents($document, toDocx("# Title\n\nA paragraph.\n"));
@@ -72,10 +66,7 @@ it('finds an error in a document that has one', function () {
  *
  * The build is run here rather than the corpus being read off the disk, because a
  * corpus left over from an earlier commit is a corpus of documents the code under
- * test did not write, and a gate over that measures the past.
- *
- * The previews are skipped: drawing them takes longer than everything else the
- * build does, and they are pictures of the documents rather than the documents.
+ * test did not write.
  *
  * @return list<string>
  */
@@ -134,9 +125,8 @@ function runTheValidator(array $files): array
 /**
  * The validator, built and ready.
  *
- * The build restores the package it depends on from the network, so it is done
- * once rather than before every document: a gate that took half a minute to start
- * would be a gate nobody runs.
+ * The build restores the package it depends on from the network, so it is done once
+ * rather than before every document.
  *
  * @return string The path to the project `dotnet run` is given.
  */
@@ -166,9 +156,8 @@ function theBuiltValidator(): string
 /**
  * Why the validator cannot run on this machine, or an empty string when it can.
  *
- * The SDK is not on every machine, and a test that fails where it cannot run says
- * nothing about the code — so the test skips itself and says what is missing
- * instead.
+ * A test that fails where it cannot run says nothing about the code — so the test
+ * skips itself and says what is missing instead.
  */
 function whyTheValidatorCannotRun(): string
 {
@@ -200,9 +189,8 @@ function whyTheValidatorCannotRun(): string
  * How many documents the validator found errors in.
  *
  * Counted from the report rather than from the exit code, which says only that
- * something is wrong: the number is what tells a reader how much of the corpus
- * is affected. The line that names the count in total ends in `error(s)` as
- * well, and it is not a document.
+ * something is wrong. The line that names the count in total ends in `error(s)`
+ * as well, and it is not a document.
  */
 function countDocumentsWithErrors(string $report): int
 {

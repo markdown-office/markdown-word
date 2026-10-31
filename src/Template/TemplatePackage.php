@@ -57,8 +57,7 @@ final class TemplatePackage
         $zip = new ZipArchive();
 
         // `CHECKCONS` refuses an archive whose central directory disagrees with its
-        // own contents, which is a package assembled to be read as something it is
-        // not. The read path opens a document the same way.
+        // own contents. The read path opens a document the same way.
         if ($zip->open($template, ZipArchive::CHECKCONS) !== true) {
             throw new FileNotWritable(sprintf(
                 'The template "%s" could not be opened. A Word template is a .docx or .dotx file, which is a zip archive.',
@@ -104,14 +103,9 @@ final class TemplatePackage
      * What the archive may hold, before a part of it is read.
      *
      * The sizes are the ones the central directory declares, which cost one lookup
-     * each and no decompression. A part that lies about its size downwards does not
-     * get past the check the archive was opened with: `CHECKCONS` reads the
-     * directory against the entries and refuses the archive before a part of it is
-     * read, so what is measured here is what comes back.
-     *
-     * Every entry is measured, and not only the ones this library reads: the
-     * template is opened again by PHPWord's own processor, and a part that is read
-     * there is read whole.
+     * each and no decompression. Every entry is measured, and not only the ones this
+     * library reads: the template is opened again by PHPWord's own processor, and a
+     * part that is read there is read whole.
      *
      * @throws UnreadableTemplate When the archive holds more parts than are allowed,
      *         or a part that declares to be larger than is allowed.
@@ -159,9 +153,7 @@ final class TemplatePackage
             ));
         }
 
-        // Each step that can fail removes the file it made before saying so, rather
-        // than leaving a half-written copy of somebody else's template in the
-        // temporary directory for something to find later.
+        // Each step that can fail removes the file it made before saying so.
         if (!copy($template, $temporary)) {
             @unlink($temporary);
 

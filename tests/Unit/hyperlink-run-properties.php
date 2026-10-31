@@ -8,18 +8,9 @@ use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 
 /*
- * The order of a link's run properties.
- *
- * `w:rPr` is a sequence in ECMA-376's `wml.xsd` — `EG_RPrBase` — and not a set,
- * so a reader walks the children in the order they are written and stops at the
- * first one it did not expect. Word opens a document whose run properties are out
- * of that order, because Word is lenient where the schema is not; a reader that
- * walks the sequence does not.
- *
- * A link's properties are written by hand, by {@see \MarkdownWord\Writer\HyperlinkPass},
- * because PHPWord's `Link` element holds one plain string and cannot carry a
- * label with emphasis in it. So the order is this library's to get right, and the
- * schema's order is `rFonts`, `b`, `i`, `strike`, `color`, `sz`, `u`.
+ * The order of a link's run properties: `rFonts`, `b`, `i`, `strike`, `color`, `sz`,
+ * `u`. {@see \MarkdownWord\Writer\HyperlinkPass} says why the order is the
+ * schema's to get right.
  */
 
 /**

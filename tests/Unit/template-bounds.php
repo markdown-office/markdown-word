@@ -9,14 +9,8 @@ use MarkdownWord\Template\TemplatePackage;
 use MarkdownWord\Tests\Support\Scratch;
 
 /*
- * A template is somebody else's file, and the write path read it without any of the
- * limits the read path has: a zip says how its contents are laid out and nothing about
- * how much room they will take up, so a template of sixty-five kilobytes could hold a
- * part that inflates to sixty-four megabytes, and the archive's entry count was never
- * looked at.
- *
- * Every test here therefore builds an archive that is too much of something, and
- * asserts that it is refused rather than read.
+ * Every test here builds an archive that is too much of something, and asserts that
+ * it is refused rather than read.
  */
 it('refuses a template that holds more parts than are allowed', function () {
     $path = templateWithManyParts(20);
@@ -35,9 +29,8 @@ it('refuses a template that holds a part larger than is allowed', function () {
 it('says how many parts a template holds when it refuses it', function () {
     $path = templateWithManyParts(20);
 
-    // The number the message carries is the archive's own, read from its central
-    // directory: a message that says zero sends the reader looking for the wrong
-    // thing, and the count the reader needs is the one the archive holds.
+    // The number the message carries is the archive's own: a message that says zero
+    // sends the reader looking for the wrong thing.
     $zip = new ZipArchive();
     $zip->open($path);
     $entries = $zip->numFiles;
@@ -49,7 +42,7 @@ it('says how many parts a template holds when it refuses it', function () {
 
 it('reads a template that is within the limits', function () {
     // The other side of the guard: a limit that refuses everything refuses the
-    // templates that are fine, and this one does not.
+    // templates that are fine.
     $path = templateWithManyParts(20);
 
     expect(fn () => TemplatePackage::of($path, new TemplateOptions(maxEntries: 100, maxPartBytes: 1024 * 1024)))

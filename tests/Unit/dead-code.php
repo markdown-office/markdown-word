@@ -422,6 +422,18 @@ it('clamps a heading level to the six there are styles for', function () {
         ->and($styles->heading(0))->toBe($styles->get(Styles::HEADING_1));
 });
 
+it('keeps the install state out of the package', function () {
+    // `patches.lock.json` records the patch composer-patches applied on one
+    // machine, and it wins over the manifest: a file left in the repository
+    // installs that patch rather than the one the manifest names. Every
+    // `composer install` writes it, so it is ignored rather than committed.
+    $root = dirname(__DIR__, 2);
+    $tracked = [];
+    exec(sprintf('git -C %s ls-files -- patches.lock.json 2>&1', escapeshellarg($root)), $tracked);
+
+    expect($tracked)->toBe([]);
+});
+
 it('reports a template that is not there as the caller\'s mistake', function () {
     // A missing template is a file the caller named and can name differently, so
     // it belongs with the other "that is not what the conversion needs" failures

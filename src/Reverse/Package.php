@@ -164,8 +164,7 @@ final class Package
 
         if ($zip->numFiles > $options->maxEntries) {
             // The count is read before the archive is closed: closing it resets the
-            // number of files to zero, and a message that says zero sends the
-            // reader looking for the wrong thing.
+            // number of files to zero.
             $entries = $zip->numFiles;
 
             $package->close();
