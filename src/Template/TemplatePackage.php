@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord\Template;
 
 use MarkdownWord\Exception\FileNotWritable;
+use MarkdownWord\Exception\UnreadableTemplate;
 use MarkdownWord\WordPackage;
 use ZipArchive;
 
@@ -47,13 +48,17 @@ final class TemplatePackage
      * The copy outlives a single render, because {@see MarkdownTemplate} is rendered
      * into repeatedly and every one of those renders needs it.
      *
-     * @throws FileNotWritable when the normalised copy cannot be staged or written.
+     * @throws FileNotWritable when the template cannot be opened or the normalised
+     *         copy cannot be staged or written.
+     * @throws UnreadableTemplate when the template holds more than it may.
      */
-    public static function of(string $template): self
+    public static function of(string $template, TemplateOptions $options = new TemplateOptions()): self
     {
         $zip = new ZipArchive();
 
-        if ($zip->open($template) !== true) {
+        // `CHECKCONS` refuses an archive whose central directory disagrees with its
+        // own contents. The read path opens a document the same way.
+        if ($zip->open($template, ZipArchive::CHECKCONS) !== true) {
             throw new FileNotWritable(sprintf(
                 'The template "%s" could not be opened. A Word template is a .docx or .dotx file, which is a zip archive.',
                 $template,
@@ -61,6 +66,8 @@ final class TemplatePackage
         }
 
         try {
+            self::check($zip, $template, $options);
+
             $isTemplate = WordPackage::isTemplate($zip);
             $declared = WordPackage::contentTypesOf($zip);
         } finally {
@@ -93,6 +100,43 @@ final class TemplatePackage
     }
 
     /**
+     * What the archive may hold, before a part of it is read.
+     *
+     * The sizes are the ones the central directory declares, which cost one lookup
+     * each and no decompression. Every entry is measured, and not only the ones this
+     * library reads: the template is opened again by PHPWord's own processor, and a
+     * part that is read there is read whole.
+     *
+     * @throws UnreadableTemplate When the archive holds more parts than are allowed,
+     *         or a part that declares to be larger than is allowed.
+     */
+    private static function check(ZipArchive $zip, string $template, TemplateOptions $options): void
+    {
+        if ($zip->numFiles > $options->maxEntries) {
+            throw new UnreadableTemplate(sprintf(
+                'The template "%s" has %d parts in it, which is more entries than the %d allowed.',
+                $template,
+                $zip->numFiles,
+                $options->maxEntries,
+            ));
+        }
+
+        for ($index = 0; $index < $zip->numFiles; $index++) {
+            $stat = $zip->statIndex($index);
+            $size = is_array($stat) ? (int) ($stat['size'] ?? 0) : 0;
+
+            if ($size > $options->maxPartBytes) {
+                throw new UnreadableTemplate(sprintf(
+                    'The template "%s" holds a part of %d bytes, which is larger than the %d allowed.',
+                    $template,
+                    $size,
+                    $options->maxPartBytes,
+                ));
+            }
+        }
+    }
+
+    /**
      * Copied rather than edited in place, because the template belongs to whoever
      * handed it over and the caller may hold a hard link to it.
      *
@@ -109,9 +153,7 @@ final class TemplatePackage
             ));
         }
 
-        // Each step that can fail removes the file it made before saying so, rather
-        // than leaving a half-written copy of somebody else's template in the
-        // temporary directory for something to find later.
+        // Each step that can fail removes the file it made before saying so.
         if (!copy($template, $temporary)) {
             @unlink($temporary);
 
@@ -120,7 +162,7 @@ final class TemplatePackage
 
         $zip = new ZipArchive();
 
-        if ($zip->open($temporary) !== true) {
+        if ($zip->open($temporary, ZipArchive::CHECKCONS) !== true) {
             @unlink($temporary);
 
             throw new FileNotWritable(sprintf(

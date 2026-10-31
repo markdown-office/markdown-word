@@ -117,6 +117,7 @@ it('does not claim again what the code does not do', function (string $claim) {
     'code block shading goes through a paragraph style, not a Font' => 'used for code block shading',
     'the round trip loses what Word does not record' => 'the round trip is exact',
     'a link wrapping a bare image is marked by a flag nothing read' => 'imageLabel',
+    'a document with its run properties out of order is one Word refuses to open' => 'run properties are out of that order is one Word refuses to open',
     'the version is written down in only one place' => 'The one place the version is written down',
     'shipping the lock file makes an install reproducible' => 'a reproducible install is worth',
     'one list of style keys covers every slot' => 'The keys a style slot\'s array form understands',
@@ -419,6 +420,18 @@ it('clamps a heading level to the six there are styles for', function () {
 
     expect($styles->heading(9))->toBe($styles->get(Styles::HEADING_6))
         ->and($styles->heading(0))->toBe($styles->get(Styles::HEADING_1));
+});
+
+it('keeps the install state out of the package', function () {
+    // `patches.lock.json` records the patch composer-patches applied on one
+    // machine, and it wins over the manifest: a file left in the repository
+    // installs that patch rather than the one the manifest names. Every
+    // `composer install` writes it, so it is ignored rather than committed.
+    $root = dirname(__DIR__, 2);
+    $tracked = [];
+    exec(sprintf('git -C %s ls-files -- patches.lock.json 2>&1', escapeshellarg($root)), $tracked);
+
+    expect($tracked)->toBe([]);
 });
 
 it('reports a template that is not there as the caller\'s mistake', function () {

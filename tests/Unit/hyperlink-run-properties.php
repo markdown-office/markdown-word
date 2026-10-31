@@ -1,0 +1,104 @@
+<?php
+
+declare(strict_types=1);
+
+use MarkdownWord\Configuration;
+use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Tests\Support\Scratch;
+use MarkdownWord\Tests\Support\TemplateFactory;
+
+/*
+ * The order of a link's run properties: `rFonts`, `b`, `i`, `strike`, `color`, `sz`,
+ * `u`. {@see \MarkdownWord\Writer\HyperlinkPass} says why the order is the
+ * schema's to get right.
+ */
+
+/**
+ * The children of the first link run's `w:rPr`, in the order they are written.
+ *
+ * @return list<string>
+ */
+function hyperlinkRunPropertyNames(string $markdown, ?Configuration $config = null): array
+{
+    $path = Scratch::path('hyperlink-run-properties');
+
+    saveDocument($markdown, $path, $config);
+
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    $dom->loadXML(TemplateFactory::xmlOf($path), LIBXML_NOCDATA);
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+    $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+    $hyperlink = $xpath->query('//w:hyperlink')?->item(0);
+
+    if (!$hyperlink instanceof DOMElement) {
+        throw new RuntimeException('The document has no hyperlink.');
+    }
+
+    $names = [];
+
+    foreach ($xpath->query('./w:r[1]/w:rPr/*', $hyperlink) ?: [] as $child) {
+        if ($child instanceof DOMElement) {
+            $names[] = $child->localName;
+        }
+    }
+
+    return $names;
+}
+
+/**
+ * A link font carrying every property the writer puts in a run, so the whole of
+ * what the document says about the run is the order of its properties.
+ */
+function hyperlinkRunPropertiesConfig(): Configuration
+{
+    return (new Configuration())
+        ->withOptions(['deferredHyperlinks' => true])
+        ->withStyles([
+            Styles::LINK_FONT => [
+                'name' => 'Consolas',
+                'size' => 11,
+                'color' => 'B22222',
+                'bold' => true,
+                'italic' => true,
+                'strikethrough' => true,
+                'underline' => 'single',
+            ],
+        ]);
+}
+
+it('writes the run properties of a link in the order the schema names them', function () {
+    $properties = hyperlinkRunPropertyNames(
+        '[label](https://example.com)',
+        hyperlinkRunPropertiesConfig(),
+    );
+
+    expect($properties)->toBe(['rFonts', 'b', 'i', 'strike', 'color', 'sz', 'u']);
+});
+
+it('writes the run properties of a link with emphasis in the order the schema names them', function () {
+    // The path a label with emphasis takes on its own: the label cannot be one
+    // plain string, so the runs are recorded and written afterwards.
+    $properties = hyperlinkRunPropertyNames('[*label*](https://example.com)');
+
+    expect($properties)->toBe(['i', 'color', 'u']);
+});
+
+it('writes the typeface of a link before the properties that follow it', function () {
+    // `w:rFonts` is the second element the schema names, and a run here carries
+    // nothing before it, so the typeface is written first.
+    $properties = hyperlinkRunPropertyNames('[label](https://example.com)', hyperlinkRunPropertiesConfig());
+
+    expect($properties[0])->toBe('rFonts');
+});
+
+it('writes the underline of a link after the size of its run', function () {
+    // `w:u` is named after the size and before the effect, and it is the last of
+    // the properties a link carries, so it is written last.
+    $properties = hyperlinkRunPropertyNames('[label](https://example.com)', hyperlinkRunPropertiesConfig());
+
+    expect($properties[array_key_last($properties)])->toBe('u');
+});
