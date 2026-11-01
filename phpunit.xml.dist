@@ -32,6 +32,15 @@
         <testsuite name="readme">
             <directory suffix=".php">tests/Readme</directory>
         </testsuite>
+        <!--
+            The documents this library writes, checked against the OOXML schema by
+            Microsoft's own validator. It needs the .NET SDK, so the test skips
+            itself where the SDK is not; the job that installs the SDK runs it
+            where it is.
+        -->
+        <testsuite name="ooxml">
+            <directory suffix=".php">tests/Ooxml</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>

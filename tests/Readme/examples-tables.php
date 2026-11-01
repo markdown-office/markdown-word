@@ -87,7 +87,12 @@ it('repeats the header row, from the row slot', function () {
     // every page the table spills onto. It is the whole of what a row can be told:
     // the slot is handed a `RowStyle`, which has no appearance of its own — an
     // earlier version of this example asked it for a shading and it was dropped.
-    expect(tableExample('16-styled-tables'))->toMatch('#<w:tblHeader w:val="1"/>#');
+    //
+    // The value is `on` and not `1`. Both are legal in the file — ECMA-376's
+    // `ST_OnOff` allows `true`, `false`, `on`, `off`, `0` and `1` — but the Open
+    // XML SDK reads this element with an enumeration of `on` and `off` alone, and
+    // refuses the others.
+    expect(tableExample('16-styled-tables'))->toMatch('#<w:tblHeader w:val="on"/>#');
 });
 
 it('takes the cell typography from the cell slot', function () {

@@ -20,6 +20,10 @@ Previews need LibreOffice; without it the documents still build and the script s
 so rather than failing. Where a stem has more than one format behind it, the format
 goes into the preview's name as well.
 
+`--no-previews` builds the documents and leaves the pictures alone. Drawing them
+takes longer than everything else the build does, and the gate that reads the
+documents wants the documents.
+
 `out/` is emptied at the start of every build. It holds nothing that is not made
 here, and a build that only writes what it still names leaves behind every name it
 has stopped naming — which is how a template written in the `${…}` dialect that has

@@ -182,22 +182,34 @@ final class HyperlinkPass
     }
 
     /**
+     * The properties of a run, in the order the schema names them.
+     *
+     * `w:rPr` is the sequence `EG_RPrBase` in ECMA-376's `wml.xsd` and not a set,
+     * so a reader walks the children in the order they are written and stops at
+     * the first one it did not expect: the typeface comes before the weight, and
+     * the underline comes after the size.
+     *
+     * Word opens a document that gets this wrong, because Word is lenient where
+     * the schema is not. A reader that walks the sequence — a validator, a
+     * converter — does not.
+     *
      * @param array<string, mixed> $style
      */
     private function buildRunProperties(\DOMDocument $dom, array $style): \DOMElement
     {
         $properties = $dom->createElementNS(self::W_NS, 'w:rPr');
 
+        if (!empty($style['name'])) {
+            $fonts = $dom->createElementNS(self::W_NS, 'w:rFonts');
+            $fonts->setAttributeNS(self::W_NS, 'w:ascii', (string) $style['name']);
+            $fonts->setAttributeNS(self::W_NS, 'w:hAnsi', (string) $style['name']);
+            $properties->appendChild($fonts);
+        }
+
         foreach (['bold' => 'b', 'italic' => 'i', 'strikethrough' => 'strike'] as $key => $element) {
             if (!empty($style[$key])) {
                 $properties->appendChild($dom->createElementNS(self::W_NS, 'w:' . $element));
             }
-        }
-
-        if (isset($style['underline']) && $style['underline'] !== 'none') {
-            $underline = $dom->createElementNS(self::W_NS, 'w:u');
-            $underline->setAttributeNS(self::W_NS, 'w:val', (string) $style['underline']);
-            $properties->appendChild($underline);
         }
 
         if (!empty($style['color'])) {
@@ -212,11 +224,10 @@ final class HyperlinkPass
             $properties->appendChild($size);
         }
 
-        if (!empty($style['name'])) {
-            $fonts = $dom->createElementNS(self::W_NS, 'w:rFonts');
-            $fonts->setAttributeNS(self::W_NS, 'w:ascii', (string) $style['name']);
-            $fonts->setAttributeNS(self::W_NS, 'w:hAnsi', (string) $style['name']);
-            $properties->appendChild($fonts);
+        if (isset($style['underline']) && $style['underline'] !== 'none') {
+            $underline = $dom->createElementNS(self::W_NS, 'w:u');
+            $underline->setAttributeNS(self::W_NS, 'w:val', (string) $style['underline']);
+            $properties->appendChild($underline);
         }
 
         return $properties;

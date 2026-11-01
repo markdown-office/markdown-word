@@ -313,6 +313,40 @@ function toDocx(string $markdown, ?Configuration $config = null): string
     );
 }
 
+/**
+ * The command on this machine's PATH, or nothing.
+ *
+ * The PATH is walked rather than the shell asked, because `command -v` is a POSIX
+ * command and a Windows command prompt does not have it. The path is returned
+ * rather than a yes or a no, because a caller that has it wants to run it.
+ */
+function commandOnPath(string $command): ?string
+{
+    $path = getenv('PATH');
+
+    if ($path === false) {
+        return null;
+    }
+
+    foreach (explode(PATH_SEPARATOR, $path) as $directory) {
+        if ($directory === '') {
+            continue;
+        }
+
+        $candidate = rtrim($directory, '/\\') . DIRECTORY_SEPARATOR . $command;
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $candidate .= '.exe';
+        }
+
+        if (is_file($candidate) && is_executable($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
+}
+
 // `tmp/pest` is emptied after every test, failure or not, so a run leaves
 // nothing behind. The hook goes through `pest()`: in Pest 5 a bare `afterEach()`
 // written here binds to this file, which is not a test file, so it would never

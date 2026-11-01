@@ -102,6 +102,13 @@ it('does not ship the lock file, which pins nothing for a consumer', function ()
     expect(distArchiveFiles())->not->toContain('composer.lock');
 });
 
+it('does not ship the patch lock, which records one machine\'s install', function () {
+    // The patch lock says which patch was applied, at which checksum and at what
+    // depth. It is this repository's install state, not the package's, and a
+    // consumer's install never reads it.
+    expect(distArchiveFiles())->not->toContain('patches.lock.json');
+});
+
 it('keeps the lock file in the repository, which this repository\'s installs pin to', function () {
     // Both rules are the reason. No consumer ever reads the lock, which is what the
     // export-ignore is for, but this repository's own installs are meant to be the

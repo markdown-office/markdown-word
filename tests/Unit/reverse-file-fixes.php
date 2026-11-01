@@ -522,6 +522,17 @@ it('refuses an archive with more entries in it than the budget allows', function
     expect(fn () => Package::open($document, ReverseOptions::fromArray(['maxEntries' => 4])))
         ->toThrow(UnreadableDocument::class, 'more entries than');
 
+    // The message says how many parts the archive holds, and the number it says is
+    // the archive's own: closing the archive resets the count to zero, and a
+    // message that says zero sends the reader looking for the wrong thing.
+    $zip = new ZipArchive();
+    $zip->open($document);
+    $entries = $zip->numFiles;
+    $zip->close();
+
+    expect(fn () => Package::open($document, ReverseOptions::fromArray(['maxEntries' => 4])))
+        ->toThrow(UnreadableDocument::class, sprintf('has %d parts in it', $entries));
+
     $package = Package::open($document);
     $root = $package->document()->documentElement?->localName;
     $package->close();

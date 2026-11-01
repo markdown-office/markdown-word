@@ -24,3 +24,8 @@
 # --strict` fails when the two disagree, and a build is meant to be the install
 # the lock describes.
 /composer.lock      export-ignore
+
+# The patch lock is this repository's install state — the patch, its checksum and
+# the depth it applied at. A consumer's install never reads it, and it records
+# one machine's install rather than the package's.
+/patches.lock.json   export-ignore

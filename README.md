@@ -91,6 +91,27 @@ install of this package puts no command in `vendor/bin`. The command line is a
 separate program — [`mdoffice`][mdoffice] — whose commands and options are in
 the [documentation][command-line].
 
+**The project that installs this one has to allow [`cweagans/composer-patches`][composer-patches].**
+The documents this library writes are Word and Open XML, and the released PHPWord writes
+a few of them in an order the schema does not allow — the properties of a run, of a
+paragraph, of a table, of a section and of a style, and a few elements that belong
+somewhere else. The fixes are in pull requests upstream, and until they are released
+they reach this library as a patch applied to the installed package. The plugin applies
+that patch, and Composer runs it only when the project allows it:
+
+```json
+{
+    "config": {
+        "allow-plugins": {
+            "cweagans/composer-patches": true
+        }
+    }
+}
+```
+
+Without that line the install stops with Composer's own message naming
+`cweagans/composer-patches`. The documents are valid Office Open XML only with it.
+
 See [Requirements](#requirements) for what PHP and which extensions it needs.
 Where to get help: [the issue tracker][issues].
 
@@ -138,6 +159,7 @@ composer test:unit         # the unit tests alone
 composer test:spec         # just the conformance suite
 composer test:roundtrip    # just the round-trip suite
 composer test:readme       # just the examples on this page
+composer test:ooxml        # just the schema gate over the documents
 composer test:coverage     # with a report in build/coverage
 php smoke.php              # does the library work on this version of PHP?
 php stress.php             # malformed input across every configuration
@@ -161,6 +183,7 @@ Tests are written with [Pest][pest] 5, against PHPUnit 13.
 | Workflow | What it does |
 | --- | --- |
 | `tests` | `composer validate --strict`, `composer audit`, the README examples, then the suite on PHP 8.4 and 8.5 with a coverage report |
+| `ooxml` (a job in `tests`) | the documents this library writes, checked against the OOXML schema by Microsoft's own validator, which needs the .NET SDK |
 | `sonarcloud` (a job in `tests`) | static analysis on [SonarCloud][sonarcloud], failing the build when the quality gate is red |
 
 PHP 8.2 is in the matrix too, but the test suite cannot run there: **Pest 5
@@ -988,6 +1011,35 @@ at: the content silently lost, with every word of the template's own text in pla
 Normalising the type on the way in answers both at once, so the template on disk is
 never opened for writing — the copy the renderer works from is ours, and it is removed
 when the renderer goes.
+
+### What a template may hold
+
+A template is somebody else's file, and a zip says how its contents are laid out and
+nothing about how much room they will take up: forty kilobytes of a part is forty
+megabytes of paragraph, and the entry count is whatever the writer felt like. So the
+template is bounded before a part of it is read — the number of parts it may have, and
+the size of any one of them once it is inflated.
+
+The bounds are the read path's, so a document is as welcome as a template:
+
+| | the bound |
+| --- | --- |
+| the number of parts in the archive | 4096 |
+| the size of one part, inflated | 256 MiB |
+
+A template that is over either is refused with an
+`MarkdownWord\Exception\UnreadableTemplate`, and the message says how far over it
+is. A caller who wants them tighter says so:
+
+```php
+use MarkdownWord\Template\MarkdownTemplate;
+use MarkdownWord\Template\TemplateOptions;
+
+$template = new MarkdownTemplate(
+    'report-template.dotx',
+    limits: (new TemplateOptions())->withMaxPartBytes(8 * 1024 * 1024),
+);
+```
 
 ### The template contract
 
@@ -1959,6 +2011,7 @@ LGPL-3.0.
 [commonmark]: https://github.com/thephpleague/commonmark
 [command-line]: https://markdown-office.github.io/command-line/basic/
 [issues]: https://github.com/markdown-office/markdown-word/issues
+[composer-patches]: https://github.com/cweagans/composer-patches
 [mdoffice]: https://github.com/markdown-office/mdoffice
 [sonarcloud]: https://sonarcloud.io/summary/new_code?id=markdown-office_markdown-word
 [skill]: https://markdown-office.github.io/skills/

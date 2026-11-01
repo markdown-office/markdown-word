@@ -4,6 +4,122 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-10-31
+
+### Added
+
+- **The documents this library writes are checked against the schema.** A `.docx` is
+  Office Open XML, and a document that breaks the schema is a document that is not
+  what it claims to be — Word opens it because Word is lenient where the schema is
+  not, and nothing else in the suite could see it. The check is Microsoft's own
+  validator, the one the Open XML SDK Productivity Tool uses, and it lives in
+  `tools/ooxml-validator`.
+
+  It is run over the examples — the whole corpus of documents this library writes,
+  built by `examples/build.php` — rather than over documents the test writes
+  itself, because a gate over a selection is a gate over the selection.
+
+  It is a gate and not a report: the test fails on a document the validator
+  rejects, and a test that asks the validator about a document with an error in it
+  proves that it can fail. The test skips itself where the .NET SDK is not, and
+  says what is missing; a job of its own installs the SDK, so the gate cannot be
+  skipped there, and the jobs that run the rest of the suite leave it out.
+
+  **The gate lands green.** Over the twenty-nine documents the build writes,
+  Microsoft's validator reported a thousand and two errors. With the fixes upstream
+  in PHPWord's writer it reported a hundred and fifty-one: eighty-eight belonged to
+  PHPWord, forty-four to the three committed templates, and nineteen to this
+  library's own. **With all five upstream pull requests, the templates written by
+  the fixed library, and this library's own fix, it reports zero.**
+
+  The gate comes first, so that the fixes are proved to have landed rather than
+  believed to have.
+
+- **`examples/build.php --no-previews` builds the documents and leaves the pictures
+  alone.** Drawing the previews takes longer than everything else the build does,
+  and the gate that reads the documents wants the documents.
+
+- **The project that installs this one has to allow
+  [`cweagans/composer-patches`][composer-patches].** The fixes are in five pull
+  requests upstream —
+  [#2964](https://github.com/PHPOffice/PHPWord/pull/2964),
+  [#2965](https://github.com/PHPOffice/PHPWord/pull/2965),
+  [#2966](https://github.com/PHPOffice/PHPWord/pull/2966),
+  [#2968](https://github.com/PHPOffice/PHPWord/pull/2968) and
+  [#2969](https://github.com/PHPOffice/PHPWord/pull/2969), all against
+  [#2963](https://github.com/PHPOffice/PHPWord/issues/2963) — and until they are
+  released they reach this library as a patch applied to the installed package.
+  The plugin applies it, and Composer runs it only when the project allows it.
+  Without that line the documents are invalid Office Open XML again, silently.
+
+- **A template is bounded before a part of it is read.** A template is somebody else's
+  file, and a zip says how its contents are laid out and nothing about how much room
+  they will take up: forty kilobytes of a part is forty megabytes of paragraph, and the
+  entry count is whatever the writer felt like. The write path read a template without
+  any of the limits the read path has, so a template of sixty-five kilobytes could
+  hold a part that inflates to sixty-four megabytes.
+
+  The number of parts and the size of any one of them are bounded now, with the read
+  path's numbers — 4096 parts, 256 MiB each — and a template that is over either is
+  refused with a `MarkdownWord\Exception\UnreadableTemplate` that says how far over
+  it is. A caller who wants them tighter says so, with
+  `MarkdownWord\Template\TemplateOptions`.
+
+### Changed
+
+- **The examples build the way the analyser wants them to.** The build script named
+  the directory the Markdown sources live in twenty times, and loaded the autoloader
+  with `require` rather than `require_once`. Neither changed what the build writes.
+
+### Fixed
+
+- **A link's run properties are written in the order the schema names them.** The
+  properties of a hyperlink's run were written by hand — PHPWord's `Link` element
+  holds one plain string and cannot carry a label with emphasis in it — and they
+  were written in the order they came to mind: the weight, the slant, the strike,
+  the underline, the colour, the size and the typeface.
+
+  `w:rPr` is a sequence in ECMA-376's `wml.xsd` and not a set, so a reader walks
+  its children in the order they are written and stops at the first one it did not
+  expect. The typeface comes before the weight, and the underline comes after the
+  size. Word opens a document that gets this wrong, because Word is lenient where
+  the schema is not; a reader that walks the sequence does not.
+
+  Microsoft's own validator reported `The element has unexpected child element
+  'w:color'` nineteen times across the example documents, every one of them a
+  link whose label was styled. The order is the schema's now: `w:rFonts`, `w:b`,
+  `w:i`, `w:strike`, `w:color`, `w:sz`, `w:u`.
+
+- **The PHPWord that writes the documents is patched.** PHPWord 1.4.0 writes the
+  children of `w:rPr`, of `w:pPr`, of `w:tblPr`, of `w:sectPr` and of `w:style`
+  in an order of its own, writes a page size in twips as a fraction, and writes a
+  few elements the format does not allow where it puts them. A document it writes
+  is therefore not valid OOXML, and every document this library writes is a
+  document it writes.
+
+  The fixes are in five pull requests upstream, and until they are released the
+  library carries them as a patch — the same way it has carried PHPPresentation's
+  fixes until now. The patch touches eighteen files of the Word2007 writer and
+  nothing else: it is a patch against 1.4.0 and not against the branch, so it
+  carries the fixes and not the rest of what upstream has done since.
+
+- **The three templates are written by the fixed library.** `invoice.dotx`,
+  `meridian-qbr.dotx` and `plain-letterhead.dotx` were written by PHPWord before
+  the fixes, so they carried four of its defects inside them — a page size in
+  twips with a fraction, a style whose properties were in the wrong order, the
+  settings in the wrong order and an inline picture in a header. Every document
+  rendered from a template inherited them, which is why forty-four of the errors
+  the gate found were in the templates and not in the code that writes them.
+
+  They are written by the fixed library now, and they score 0 errors each. **The
+  header logo of `meridian-qbr.dotx` and `plain-letterhead.dotx` is the picture the
+  examples carry today** — the old templates carried an earlier one, left behind
+  when the asset itself changed.
+
+- **The message that says a document has too many parts reports zero parts.** The
+  archive was closed before the number was read, and closing an archive resets the
+  count to zero, so the message said `0` whatever the document held.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
@@ -1176,6 +1292,8 @@ on it:
 `README.md` has the full list, and `Reverse\Options` is where each one is
 configurable.
 
+[0.3.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.3.1
+[composer-patches]: https://github.com/cweagans/composer-patches
 [0.2.2]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.2
 [0.3.0]: https://github.com/markdown-office/markdown-word/releases/tag/v0.3.0
 [0.2.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.1

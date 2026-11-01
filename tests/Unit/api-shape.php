@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use MarkdownWord\Converter;
+use MarkdownWord\Input;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\WordToMarkdown;
 use MarkdownWord\Tests\Support\Scratch;
@@ -66,8 +67,18 @@ it('converts either direction through the interface alone', function () {
 
         expect($bytes)->toBeString();
         expect(is_file($target))->toBeTrue();
-        // Whatever it produced is the same whether returned or written.
-        expect((string) file_get_contents($target))->toBe($bytes);
+        // Whatever it produced is the same whether returned or written. A document
+        // is compared by its parts and not by its bytes: a zip carries the time it
+        // was written and `docProps/core.xml` carries the time the document was
+        // made, so two correct conversions of the same input differ most of the
+        // time.
+        $written = (string) file_get_contents($target);
+
+        if (Input::looksLikeDocument($written)) {
+            expect(documentParts($written))->toBe(documentParts($bytes));
+        } else {
+            expect($written)->toBe($bytes);
+        }
     }
 });
 
