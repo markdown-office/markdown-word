@@ -515,8 +515,16 @@ final class Validator
      */
     private static function propertyValue(string $slot, string $property, mixed $given): ?string
     {
+        // The table's own properties are PHPWord's and have their own shapes, but the
+        // colours among them are colours in the same way the font's are. A border
+        // colour that is not a colour reaches the writer as nothing at all, and the
+        // document it writes is not what it claims to be.
         if ($slot === Styles::TABLE) {
-            return null;
+            return match ($property) {
+                'bgColor', 'borderColor', 'borderInsideHColor', 'borderInsideVColor' => ValueShape::colour($given),
+                'shading' => ValueShape::colourMap($given, 'fill:'),
+                default => null,
+            };
         }
 
         return match ($property) {

@@ -78,7 +78,7 @@ linkFont:
   underline: single
 
 table:
-  borderColor: 2E5395
+  borderColor: "2E5395"
 
 # Every cell is shaded rather than only the header: PHPWord's `Row` takes no shading, so
 # a `tableHeaderRow` naming one would be a property nothing reads, and `tableCell` is the
