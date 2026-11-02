@@ -1,6 +1,6 @@
 # Opens each document in Microsoft Word and exports it to PDF.
 #
-#   powershell -File tools/render-with-word.ps1 <document.docx> [...] --out <directory>
+#   powershell -File render-with-word.ps1 <document.docx> [...] --out <directory>
 #
 # Word rather than LibreOffice because Word is the only application that will tell the truth
 # about whether a document opens. LibreOffice is a different implementation of the same
@@ -9,7 +9,7 @@
 # cannot be trusted, and a layout that cannot be trusted is no use to a caller who is
 # checking whether the text fits.
 #
-# This is the Windows half of a pair. The macOS half is `tools/render-with-word.applescript`
+# This is the Windows half of a pair. The macOS half is `render-with-word.applescript`
 # and the two are the same tool on two platforms: the same arguments, the same output
 # names, and the same promise — a run that produced no file says so and exits non-zero, so
 # a caller reading only the exit status learns the render did not happen.

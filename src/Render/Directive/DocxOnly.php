@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Render\Directive;
 
+use MarkdownOffice\CommonMark\Directive\Directive\DirectiveAttributes;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Exception\BleedingBox;
 use MarkdownWord\Exception\InvalidInput;
 use MarkdownWord\Format;
 use MarkdownWord\Render\StyleResolver;
@@ -111,8 +113,8 @@ final class DocxOnly
         $box = $target->addTextBox([
             'width' => self::POINTS_PER_CENTIMETRE * $width,
             'height' => self::POINTS_PER_CENTIMETRE * $height,
-            'left' => self::POINTS_PER_CENTIMETRE * ($attributes->getFloat('left') ?? 0.0),
-            'top' => self::POINTS_PER_CENTIMETRE * ($attributes->getFloat('top') ?? 0.0),
+            'left' => self::POINTS_PER_CENTIMETRE * $this->offset($node, $attributes, 'left'),
+            'top' => self::POINTS_PER_CENTIMETRE * $this->offset($node, $attributes, 'top'),
             'positioning' => 'absolute',
             'hPos' => 'left',
             'vPos' => 'top',
@@ -124,6 +126,59 @@ final class DocxOnly
         ]);
 
         $box->addText($node->getLabel() ?? '');
+    }
+
+    /**
+     * Where a box sits, in centimetres.
+     *
+     * A box hangs off the edge of the page only when the author says so, and `bleed=true`
+     * is how they say it — the same word the slides half uses for the same thing, so that a
+     * document and a deck are written the same way.
+     *
+     * @throws BleedingBox When the box is off the edge of the page and does not say so.
+     */
+    private function offset(DirectiveBlock $node, DirectiveAttributes $attributes, string $attribute): float
+    {
+        $given = $attributes->getFloat($attribute) ?? 0.0;
+
+        if ($given >= 0 || $this->bleeds($attributes)) {
+            return $given;
+        }
+
+        throw BleedingBox::offThePage($attribute, $given);
+    }
+
+    /**
+     * Whether the box is written to bleed off the edge of the page.
+     *
+     * A flag, and read as one: a word it does not know is a mistake rather than a `false`,
+     * because a box that bleeds because `bleed=maybe` was read as one is a box nobody asked
+     * to bleed.
+     *
+     * @throws InvalidInput When the flag is neither true nor false.
+     */
+    private function bleeds(DirectiveAttributes $attributes): bool
+    {
+        $written = $attributes->get('bleed');
+
+        if ($written === null) {
+            return false;
+        }
+
+        if ($written === true) {
+            return true;
+        }
+
+        $lower = strtolower(trim($written));
+
+        if ($lower === 'true' || $lower === 'false') {
+            return $lower === 'true';
+        }
+
+        throw new InvalidInput(sprintf(
+            'The text box is written with "bleed" set to "%s". A flag is true or false: bleed=true, bleed=false.',
+            $written,
+        ));
     }
 
     /**

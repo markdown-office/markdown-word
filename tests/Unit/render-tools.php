@@ -111,6 +111,34 @@ function noTools(): string
 }
 
 /**
+ * A directory holding the tools a test wants the machine to have, each answering in its
+ * own way.
+ *
+ * @param array<string, string> $commands The command and the body it answers with.
+ */
+function toolsHoldingEach(array $commands): string
+{
+    if (PHP_OS_FAMILY === 'Windows') {
+        test()->markTestSkipped('The tools these tests fake are shell scripts, and Windows does not run them.');
+    }
+
+    $directory = Scratch::directory() . '/tools-' . bin2hex(random_bytes(6));
+
+    if (! mkdir($directory, 0o777, true) && ! is_dir($directory)) {
+        throw new RuntimeException(sprintf('Unable to create the directory "%s".', $directory));
+    }
+
+    foreach ($commands as $command => $body) {
+        $path = $directory . '/' . $command;
+
+        file_put_contents($path, $body);
+        chmod($path, 0o755);
+    }
+
+    return $directory;
+}
+
+/**
  * A directory that stands for an installed application.
  *
  * The dispatcher looks for Word where Word is installed, and a test cannot install Word.
@@ -282,6 +310,69 @@ it('refuses rather than falling back to nothing it can trust', function () {
     );
 
     expect($answer['out'])->toBe("none\n");
+});
+
+it('draws a deck through DeckCraft and a document through LibreOffice when only DeckCraft is there', function () {
+    // WordCraft draws a Word document and DeckCraft draws a deck, and they are two
+    // programs. A machine that has one of them has not got the other, and a check that
+    // says the craft backend is there because one of the two is there is a check that
+    // announces a renderer the run then cannot use.
+    $directory = toolsHoldingEach([
+        'deckcraft-cli' => "#!/bin/sh\nprintf '%%PDF' > \"\$3\"\n",
+        // The invocation is `soffice --headless --convert-to pdf --outdir <dir> <document>`,
+        // so the directory is the fifth argument and the document the sixth.
+        'soffice' => "#!/bin/sh\nname=\"\$6\"\nname=\"\${name##*/}\"\nname=\"\${name%.docx}\"\nprintf '%%PDF' > \"\$5/\$name.pdf\"\n",
+    ]);
+
+    $deck = Scratch::path('deck', '.pptx');
+    $document = Scratch::path('document', '.docx');
+
+    file_put_contents($deck, 'not a deck');
+    file_put_contents($document, 'not a document');
+
+    $forDeck = dispatcher(
+        ['MARKDOWN_OFFICE_PLATFORM' => 'linux', 'PATH' => $directory],
+        [$deck, '--out', Scratch::path('deck', '.pdf')],
+    );
+
+    expect($forDeck['status'])->toBe(0)
+        ->and($forDeck['err'])->not->toContain('wordcraft-cli');
+
+    $forDocument = dispatcher(
+        ['MARKDOWN_OFFICE_PLATFORM' => 'linux', 'PATH' => $directory],
+        [$document, '--out', Scratch::path('document', '.pdf')],
+    );
+
+    expect($forDocument['status'])->toBe(0)
+        ->and($forDocument['err'])->toContain('libreoffice');
+});
+
+it('falls through to the next backend when one fails', function () {
+    // A renderer that is installed and does not work is a commoner thing than a renderer
+    // that is not installed at all, and a run that gave up at the first failure produced
+    // nothing where a run that tried the next one produced a PDF.
+    $directory = toolsHoldingEach([
+        'wordcraft-cli' => "#!/bin/sh\nexit 1\n",
+        // The invocation is `soffice --headless --convert-to pdf --outdir <dir> <document>`,
+        // so the directory is the fifth argument and the document the sixth.
+        'soffice' => "#!/bin/sh\nname=\"\$6\"\nname=\"\${name##*/}\"\nname=\"\${name%.docx}\"\nprintf '%%PDF' > \"\$5/\$name.pdf\"\n",
+    ]);
+
+    $document = Scratch::path('document', '.docx');
+    $target = Scratch::path('document', '.pdf');
+
+    file_put_contents($document, 'not a document');
+
+    $answer = dispatcher(
+        ['MARKDOWN_OFFICE_PLATFORM' => 'linux', 'PATH' => $directory],
+        [$document, '--out', $target],
+    );
+
+    expect($answer['status'])->toBe(0)
+        ->and(file_exists($target))->toBeTrue()
+        // The note names the backend that drew it, and the failure names the one that could not.
+        ->and($answer['err'])->toContain('Rendered with libreoffice')
+        ->and($answer['err'])->toContain('wordcraft');
 });
 
 it('turns a template into a document, and leaves a document alone', function () {

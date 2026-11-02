@@ -5,9 +5,9 @@ declare(strict_types=1);
 /**
  * Renders a document with the most truthful tool the machine has.
  *
- *   php tools/render-document.php <document.docx> [--out <file.pdf>]
- *   php tools/render-document.php --which
- *   php tools/render-document.php --platform-backend
+ *   php render-document.php <document.docx> [--out <file.pdf>]
+ *   php render-document.php --which [<document>]
+ *   php render-document.php --platform-backend
  *
  * The point of a dispatcher is that the caller does not have to know what is installed.
  * Three backends can draw a document, and they are not equally good:
@@ -27,6 +27,9 @@ declare(strict_types=1);
  * So the backends are tried in that order, and **a run that falls back says so**: a
  * renderer that cannot be trusted is worse than no renderer, because a caller who does not
  * know is told a layout is right when it is not.
+ *
+ * A backend that fails is not the end of the run: the next one is tried, and the run says
+ * which one drew the document and why the one before it did not.
  *
  * The platform and the backend can both be overridden, which is what makes the choice
  * testable without Word and without a Windows machine:
@@ -101,8 +104,11 @@ function preferred(string $platform): string
  * itself is the second: `osascript` is on every Mac whether or not Word is, and a backend
  * that answers "word" where there is no Word fails later, inside Word, with a message
  * about the document rather than about Word.
+ *
+ * The command asked about is the one that will be run, which for the craft backends
+ * depends on the document: {@see craftFor()} is the same answer the invocation gives.
  */
-function installed(string $backend, string $platform): bool
+function installed(string $backend, string $platform, string $document): bool
 {
     return match ($backend) {
         'word' => $platform === 'darwin'
@@ -110,10 +116,26 @@ function installed(string $backend, string $platform): bool
             : ($platform === 'windows'
                 ? \command_exists('powershell') && word_is_installed('windows')
                 : false),
-        'wordcraft' => \command_exists('wordcraft-cli') || \command_exists('deckcraft-cli'),
+        'wordcraft' => \command_exists(craftFor($document)),
         'libreoffice' => \command_exists('soffice') || \command_exists('libreoffice'),
         default => false,
     };
+}
+
+/**
+ * The command that draws a document.
+ *
+ * WordCraft draws a Word document and DeckCraft draws a deck, and they are two programs:
+ * a machine may have one without the other, and a backend asked for a document it cannot
+ * draw fails with a message about the document rather than about itself.
+ *
+ * The check and the invocation ask the same question, because a check that says a backend
+ * is there and an invocation that runs a different program is a run that announces a
+ * renderer it then cannot run.
+ */
+function craftFor(string $document): string
+{
+    return \str_ends_with(\strtolower($document), '.pptx') ? 'deckcraft-cli' : 'wordcraft-cli';
 }
 
 /**
@@ -185,20 +207,21 @@ function command_exists(string $command): bool
 }
 
 /**
- * The backend that would be used on this machine.
+ * The backends that would be used on this machine, in the order they would be tried.
  *
  * The platform's preference when it is installed, then the next backend that is, then
  * nothing. The order is the order of how much each can be trusted, so the first one that
- * is installed is the one that is used.
+ * is installed is the one that is used — and the ones after it are the ones a backend that
+ * fails falls back to.
  *
- * @return array{backend: string, faithful: bool}
+ * @return list<string>
  */
-function chosen(string $platform): array
+function chosen(string $platform, string $document): array
 {
     $forced = \getenv('MARKDOWN_OFFICE_RENDERER');
 
     if (\is_string($forced) && $forced !== '') {
-        return ['backend' => $forced, 'faithful' => $forced === TRUTH];
+        return [$forced];
     }
 
     $order = BACKENDS;
@@ -209,21 +232,59 @@ function chosen(string $platform): array
         $order = \array_values(\array_unique(\array_merge([$preferredBackend], BACKENDS)));
     }
 
-    foreach ($order as $backend) {
-        if (installed($backend, $platform)) {
-            return ['backend' => $backend, 'faithful' => $backend === TRUTH];
-        }
-    }
-
-    return ['backend' => 'none', 'faithful' => false];
+    return \array_values(\array_filter(
+        $order,
+        static fn (string $backend): bool => installed($backend, $platform, $document),
+    ));
 }
 
 /**
- * Renders a document.
+ * Renders a document with the first backend that can, and says which one that was.
  *
- * @throws RuntimeException when the render did not produce the file it promised.
+ * A backend that fails is not the end of the run: the next one is tried. A renderer that
+ * is installed and does not work is a commoner thing than a renderer that is not installed
+ * at all, and a run that gave up at the first failure produced nothing where a run that
+ * tried the next one produced a PDF.
+ *
+ * @param list<string> $backends The backends to try, in the order of how much each can be
+ *        trusted.
+ *
+ * @return array{backend: string, failures: list<string>} The backend that drew the document
+ *         and the ones that could not, each with the reason.
+ *
+ * @throws RuntimeException when no backend produced the file it promised.
  */
-function render(string $document, string $target, string $backend, string $platform): void
+function render(string $document, string $target, array $backends, string $platform): array
+{
+    $failures = [];
+
+    foreach ($backends as $backend) {
+        try {
+            draw($backend, $document, $target, $platform);
+
+            if (! \is_file($target) || \filesize($target) === 0) {
+                throw new RuntimeException(\sprintf('The render produced no file at %s.', $target));
+            }
+
+            return ['backend' => $backend, 'failures' => $failures];
+        } catch (RuntimeException $failure) {
+            $failures[] = \sprintf('%s: %s', $backend, $failure->getMessage());
+        }
+    }
+
+    throw new RuntimeException(
+        $failures === []
+            ? 'No backend can render a document on this machine.'
+            : \implode("\n", $failures),
+    );
+}
+
+/**
+ * Draws a document with one backend.
+ *
+ * @throws RuntimeException when the backend did not produce the file it promised.
+ */
+function draw(string $backend, string $document, string $target, string $platform): void
 {
     $scratch = \sys_get_temp_dir() . '/markdown-word-render-' . \bin2hex(\random_bytes(6));
 
@@ -254,10 +315,6 @@ function render(string $document, string $target, string $backend, string $platf
         }
 
         @\rmdir($scratch);
-    }
-
-    if (! \is_file($target) || \filesize($target) === 0) {
-        throw new RuntimeException(\sprintf('The render produced no file at %s.', $target));
     }
 }
 
@@ -308,9 +365,7 @@ function renderWithWord(string $document, string $target, string $scratch, strin
  */
 function renderWithCraft(string $document, string $target): void
 {
-    $command = \str_ends_with(\strtolower($document), '.pptx')
-        ? 'deckcraft-cli'
-        : 'wordcraft-cli';
+    $command = craftFor($document);
 
     $status = 0;
     \exec(
@@ -359,33 +414,10 @@ function renderWithLibreOffice(string $document, string $target, string $scratch
         }
     }
 }
-
 // `$argv` is defined by the CLI SAPI and by nothing else, so it is read guarded.
 $arguments = \array_slice($argv ?? [], 1);
 $showWhich = \in_array('--which', $arguments, true);
 $showPlatform = \in_array('--platform-backend', $arguments, true);
-
-if ($showWhich || $showPlatform) {
-    $machine = platform();
-
-    if ($showPlatform) {
-        \printf("%s\n", preferred($machine));
-        exit(0);
-    }
-
-    $choice = chosen($machine);
-
-    \printf("%s\n", $choice['backend']);
-
-    if ($choice['backend'] !== 'none' && ! $choice['faithful']) {
-        \fwrite(\STDERR, \sprintf(
-            "%s is not Word, and it does not always agree with Word about where a line falls.\n",
-            $choice['backend'],
-        ));
-    }
-
-    exit(0);
-}
 
 $document = null;
 $target = null;
@@ -397,11 +429,39 @@ for ($at = 0; $at < \count($arguments); $at++) {
         continue;
     }
 
+    if ($arguments[$at] === '--which' || $arguments[$at] === '--platform-backend') {
+        continue;
+    }
+
     $document ??= $arguments[$at];
 }
 
+if ($showPlatform) {
+    \printf("%s\n", preferred(platform()));
+    exit(0);
+}
+
+if ($showWhich) {
+    // A document the caller did not name is a Word document: the craft backend for a
+    // document that is not a deck is WordCraft, and that is what a bare `--which` asks
+    // about.
+    $backends = chosen(platform(), $document ?? 'document.docx');
+    $backend = $backends[0] ?? 'none';
+
+    \printf("%s\n", $backend);
+
+    if ($backend !== 'none' && $backend !== TRUTH) {
+        \fwrite(\STDERR, \sprintf(
+            "%s is not Word, and it does not always agree with Word about where a line falls.\n",
+            $backend,
+        ));
+    }
+
+    exit(0);
+}
+
 if ($document === null) {
-    \fwrite(STDERR, "Usage: php tools/render-document.php <document> [--out <file.pdf>]\n");
+    \fwrite(\STDERR, "Usage: php render-document.php <document> [--out <file.pdf>]\n");
     exit(1);
 }
 
@@ -410,27 +470,34 @@ if ($target === null) {
 }
 
 $machine = platform();
-$choice = chosen($machine);
+$backends = chosen($machine, $document);
 
-if ($choice['backend'] === 'none') {
-    \fwrite(STDERR, \sprintf(
+if ($backends === []) {
+    \fwrite(\STDERR, \sprintf(
         "Nothing on this machine can render a document: no Microsoft Word, no WordCraft and no LibreOffice.\n",
     ));
     exit(1);
 }
 
-if (! $choice['faithful']) {
-    \fwrite(STDERR, \sprintf(
+try {
+    $rendered = render($document, $target, $backends, $machine);
+} catch (Throwable $problem) {
+    \fwrite(\STDERR, $problem->getMessage() . "\n");
+    exit(1);
+}
+
+// The note is printed after the render rather than before it, because the backend that
+// ran is the one that drew the document and not the one that was chosen: a backend that
+// failed falls through to the next, and a run that announced the first would be wrong.
+if ($rendered['backend'] !== TRUTH) {
+    \fwrite(\STDERR, \sprintf(
         "Rendered with %s, which is not Word. LibreOffice does not always agree with Word about where a line falls, and an inline picture is laid out in a different place often enough that a page that fits here may not fit in Word.\n",
-        $choice['backend'],
+        $rendered['backend'],
     ));
 }
 
-try {
-    render($document, $target, $choice['backend'], $machine);
-} catch (Throwable $problem) {
-    \fwrite(STDERR, $problem->getMessage() . "\n");
-    exit(1);
+foreach ($rendered['failures'] as $failure) {
+    \fwrite(\STDERR, \sprintf("%s\n", $failure));
 }
 
 \printf("%s\n", $target);
