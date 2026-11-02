@@ -96,6 +96,35 @@ function writeTheme(string $themes, string $name, string $theme = "name: Test\n"
     return $directory;
 }
 
+/**
+ * Every colour a style names, by the path it is at.
+ *
+ * @param array<string, mixed>|string|null $style
+ * @return array<string, mixed>
+ */
+function coloursIn(array|string|null $style, string $where = ''): array
+{
+    if (!is_array($style)) {
+        return [];
+    }
+
+    $colours = [];
+
+    foreach ($style as $property => $value) {
+        $path = $where === '' ? (string) $property : $where . '.' . $property;
+
+        if (in_array($property, ['color', 'borderColor', 'fill'], true)) {
+            $colours[$path] = $value;
+        }
+
+        if (is_array($value)) {
+            $colours += coloursIn($value, $path);
+        }
+    }
+
+    return $colours;
+}
+
 it('ships themes that all load, and the default one changes nothing', function () {
     $resolver = new ThemeResolver(workingDirectory: scratchThemes()[0]);
     $baseline = (new Styles())->toArray();
@@ -162,6 +191,29 @@ it('reads a colour written as six digits and unquoted back as the string it is',
 
     expect($styles->get(Styles::HEADING_1)['color'])->toBe('404040')
         ->and($styles->get(Styles::BLOCK_QUOTE)['color'])->toBe('000000');
+});
+
+it('writes every colour a theme names as a string of six hexadecimal digits', function () {
+    $resolver = new ThemeResolver(workingDirectory: scratchThemes()[0]);
+
+    // YAML reads `2E5395` as a number and not as the colour it is — it is
+    // `2 × 10^5395` — and the digits are gone with it. The loader can put back a
+    // colour YAML read as an integer, because `404040` is the number it read; one
+    // it read as a float cannot be put back at all, and the colour reaches the
+    // writer as nothing at all.
+    $unusable = [];
+
+    foreach ($resolver->available() as $name) {
+        foreach ($resolver->resolve($name)->styles()->toArray() as $slot => $style) {
+            foreach (coloursIn($style) as $property => $colour) {
+                if (!is_string($colour) || preg_match('/\A[0-9A-Fa-f]{6}\z/', $colour) !== 1) {
+                    $unusable[] = sprintf('%s: %s.%s', $name, $slot, $property);
+                }
+            }
+        }
+    }
+
+    expect($unusable)->toBe([], 'A theme writes a colour that is not a colour.');
 });
 
 it('reports a slot a theme does not have, and names the ones it does', function () {
@@ -883,5 +935,19 @@ it('refuses a colour YAML read as something other than a string', function () {
     $resolver = new ThemeResolver($root);
 
     expect($resolver->resolve('quoted')->styles()->get(Styles::HEADING_1)['color'])->toBe('2E5395')
+        ->and(fn () => $resolver->resolve('bare'))->toThrow(InvalidConfiguration::class);
+});
+
+it('refuses a border colour YAML read as something other than a string', function () {
+    // The table's colours are colours in the same way the font's are, and they were not
+    // checked: a border colour YAML read as a number reached the writer, and the
+    // document it wrote had an empty colour in it rather than the one that was named.
+    [$root, $themes] = scratchThemes();
+    writeTheme($themes, 'quoted', styles: "table:\n  borderColor: \"2E5395\"\n");
+    writeTheme($themes, 'bare', styles: "table:\n  borderColor: 2E5395\n");
+
+    $resolver = new ThemeResolver($root);
+
+    expect($resolver->resolve('quoted')->styles()->get(Styles::TABLE)['borderColor'])->toBe('2E5395')
         ->and(fn () => $resolver->resolve('bare'))->toThrow(InvalidConfiguration::class);
 });

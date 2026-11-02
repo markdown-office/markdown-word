@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The border colour of a theme's table is a colour.** The `corporate` theme wrote its
+  table's border colour unquoted, and `2E5395` is scientific notation as well as a hex
+  colour: YAML resolved it to infinity before anything in this library saw it, and the
+  number that came out was not a colour at all.
+
+  The colour the theme named never reached the document. The writer was handed a value
+  that was not a colour and wrote an empty one, so the table's borders were drawn with
+  `w:color=""` — which is outside the schema, and a document that breaks the schema is a
+  document that is not what it claims to be. Word opens it, because Word is lenient where
+  the schema is not.
+
+  The theme writes the colour quoted now, like every other colour in it.
+
+- **A theme's border colour is checked, the way its other colours are.** The font slots
+  have their colours checked, and a colour YAML read as a number was refused with a
+  sentence that said so. The table slot was not checked at all, so the border colour of a
+  table reached the writer unchecked, and a theme that named one YAML read as a number
+  drew a document with an empty colour in it rather than saying that the colour was not
+  a colour.
+
 ## [0.3.1] - 2026-11-01
 
 ### Added
