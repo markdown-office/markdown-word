@@ -91,6 +91,11 @@ it('lets a text box hang off the edge of the page only when it says so', functio
 
     expect($xml)->toContain('position:absolute')
         ->and($xml)->toContain('margin-left:-56.692913385827pt');
+
+    // A bare attribute asks for the attribute rather than for its value, so it means true.
+    $bare = TemplateFactory::xmlOf(wordObjectDocument('::textbox[Hello there]{width=6 height=3 left=-2 bleed}'));
+
+    expect($bare)->toContain('margin-left:-56.692913385827pt');
 });
 
 it('refuses a bleed that is not a flag', function () {
