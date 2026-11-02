@@ -141,6 +141,13 @@ final class Staging
         $to = self::followLink($to);
         $directory = dirname($to);
 
+        // A path that names something that is not a file is refused here rather than by the
+        // writer, which would open it and report a document written rather than a sentence
+        // that says what was wrong.
+        if (file_exists($to) && !is_file($to)) {
+            throw FileNotWritable::notAFile($to);
+        }
+
         // A path given to a converter rarely has its directory made for it, and
         // `rename()` does not create one.
         if (!is_dir($directory) && !@mkdir($directory, 0o777, true) && !is_dir($directory)) {

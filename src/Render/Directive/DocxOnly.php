@@ -109,12 +109,13 @@ final class DocxOnly
         }
 
         $border = $attributes->getString('border') ?? self::BORDER;
+        $placement = $this->placement($node, $attributes);
 
         $box = $target->addTextBox([
             'width' => self::POINTS_PER_CENTIMETRE * $width,
             'height' => self::POINTS_PER_CENTIMETRE * $height,
-            'left' => self::POINTS_PER_CENTIMETRE * $this->offset($node, $attributes, 'left'),
-            'top' => self::POINTS_PER_CENTIMETRE * $this->offset($node, $attributes, 'top'),
+            'left' => self::POINTS_PER_CENTIMETRE * $placement['left'],
+            'top' => self::POINTS_PER_CENTIMETRE * $placement['top'],
             'positioning' => 'absolute',
             'hPos' => 'left',
             'vPos' => 'top',
@@ -135,17 +136,24 @@ final class DocxOnly
      * is how they say it — the same word the slides half uses for the same thing, so that a
      * document and a deck are written the same way.
      *
+     * @return array{left: float, top: float}
+     *
      * @throws BleedingBox When the box is off the edge of the page and does not say so.
      */
-    private function offset(DirectiveBlock $node, DirectiveAttributes $attributes, string $attribute): float
+    private function placement(DirectiveBlock $node, DirectiveAttributes $attributes): array
     {
-        $given = $attributes->getFloat($attribute) ?? 0.0;
+        $left = $attributes->getFloat('left') ?? 0.0;
+        $top = $attributes->getFloat('top') ?? 0.0;
 
-        if ($given >= 0 || $this->bleeds($attributes)) {
-            return $given;
+        if (!$this->bleeds($attributes)) {
+            foreach (['left' => $left, 'top' => $top] as $attribute => $given) {
+                if ($given < 0) {
+                    throw BleedingBox::offThePage($attribute, $given);
+                }
+            }
         }
 
-        throw BleedingBox::offThePage($attribute, $given);
+        return ['left' => $left, 'top' => $top];
     }
 
     /**
