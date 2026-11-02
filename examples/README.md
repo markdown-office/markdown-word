@@ -82,6 +82,7 @@ past.
 | `29-objects.docx` | The seven names that place the furniture of a document in it: a picture, a caption, a page break, a section with columns, a floating box, a shape and a form field. |
 | `29-objects.odt` | The same page as an OpenDocument Text. The picture, the caption, the page break and the columns are carried; the text box, the shape and the form field are written as the author's own characters. |
 | `29-objects.rtf` | The same page as Rich Text. The picture, the caption and the page break are carried; the columns of the section are not, and the text box, the shape and the form field are written as the author's own characters. |
+| `30-bleeding-box.docx` | A text box that hangs off the left margin, on `bleed=true` — the one word that says the author meant it. The slides half has the same rule for a free shape that runs off the edge of the slide, so a document and a deck are written the same way. |
 
 Numbering is one sequence and nothing shares a number. `markdown/14-rejected.md` is
 not in this table because `build.php` does not build it — converting it is the failure

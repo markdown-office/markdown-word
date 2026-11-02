@@ -549,6 +549,23 @@ foreach (Format::cases() as $format) {
     }
 }
 
+// A box that hangs off the edge of the page
+//
+// The one thing the Word half and the slides half agree on: a shape that runs off the edge
+// is a thing a document may want, and `bleed=true` is how the author says so. The box is
+// written here rather than in the objects page because the objects page is about what a
+// document may place in it, and this is about where it may be placed.
+
+$path = $docs . '/30-bleeding-box' . DOCX_EXTENSION;
+
+(new MarkdownToWord(
+    markdownOf($root, '30-bleeding-box'),
+    Configuration::create(),
+    $frontmatterParser,
+))->save($path);
+
+$built[] = ['30-bleeding-box', 'A text box that hangs off the left margin.', $path];
+
 // Tables
 
 foreach ([
