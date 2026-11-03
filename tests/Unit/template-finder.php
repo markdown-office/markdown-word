@@ -26,8 +26,7 @@ afterEach(fn () => Upstream::restore());
 function templateFinderTheme(): MemoryFinder
 {
     return new MemoryFinder([
-        'house/theme.yml' => "name: House\n",
-        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+        'house/theme.yml' => "name: House\nstyles:\n  heading.1:\n    color: 112233\n",
     ]);
 }
 
@@ -98,8 +97,10 @@ it('still finds a theme on disk when the caller brought a source of its own', fu
     // themes that ship with this package.
     $directory = Scratch::directory() . '/beside';
     mkdir($directory . '/themes/house', 0o777, true);
-    file_put_contents($directory . '/themes/house/theme.yml', "name: House\n");
-    file_put_contents($directory . '/themes/house/styles.yml', "heading.1:\n  color: 445566\n");
+    file_put_contents(
+        $directory . '/themes/house/theme.yml',
+        "name: House\nstyles:\n  heading.1:\n    color: 445566\n",
+    );
 
     $finder = new MemoryFinder(['other/theme.yml' => "name: Other\n"]);
 

@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Theme;
 
-use MarkdownWord\Configuration\Styles;
-use MarkdownWord\Configuration\TextStyles;
-use MarkdownWord\Configuration\Validator;
 use MarkdownWord\Exception\Exception;
 use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\ThemeNotFound;
@@ -17,35 +14,28 @@ use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Reads a theme out of a finder: the `theme.yml` and the `styles.yml` beside it.
+ * Reads a theme out of a finder: the `theme.yml` that says everything about it.
  *
- * Only `theme.yml` is required. `styles.yml` is read when it is there; a theme without
- * one draws in the built-in look, which is a theme rather than a broken one.
+ * A theme is one file. Its identity and its look are sections of the same `theme.yml`,
+ * so there is nothing beside it to read — and a `styles.yml` left over from the format
+ * this library used to have is refused rather than ignored, because a file that is
+ * quietly not read is a theme that looks like the one its author wrote and is not.
  *
- * The finder is asked by name — `house/theme.yml`, `house/styles.yml` — because the
- * library composes names and a finder answers them. A theme that never had a
- * directory is read the same way as one that did.
+ * The finder is asked by name — `house/theme.yml` — because the library composes names
+ * and a finder answers them. A theme that never had a directory is read the same way as
+ * one that did.
  *
- * Every slot is checked against {@see Styles::defaults()} — the list
- * {@see \MarkdownWord\Configuration\Validator} checks a `styles:` block against — so a
- * typo in a theme fails here rather than reaching a document that comes out looking as
- * though the line had never been written.
- *
- * The `textStyles` key beside them is not a slot but a set of named styles, and it is
- * checked by {@see \MarkdownWord\Configuration\TextStyles}: a style that is not a set
- * of properties, one that styles nothing, one that names an attribute that does not
- * exist, one whose value is not what the attribute takes, one called `style` and two
- * names for one style are all refused here.
- *
- * Each of the theme's own files is resolved and held to the scope the loader was given
- * before it is read, and the scope is asked of the file rather than of the directory it
- * was found in: a `styles.yml` that is a symlink pointing out of the scope is read just
- * as readily as one inside it, and its values reach the document as direct formatting,
+ * The theme's own file is resolved and held to the scope the loader was given before
+ * it is read, and the scope is asked of the file rather than of the directory it was
+ * found in: a `theme.yml` that is a symlink pointing out of the scope is read just as
+ * readily as one inside it, and its values reach the document as direct formatting,
  * which is a way to put a file outside the roots into the output.
  */
 final class ThemeLoader
 {
     public const THEME_FILE = 'theme.yml';
+
+    /** The file this library used to read a theme's look from, and refuses now. */
     public const STYLES_FILE = 'styles.yml';
 
     /**
@@ -65,10 +55,10 @@ final class ThemeLoader
      * @param FileFinder|null $files Where the theme's files come from.
      *
      * @throws ThemeNotFound  when the theme has no `theme.yml`, so it is not a theme
-     * @throws MalformedTheme  when a file in it does not describe a theme
-     * @throws UnknownStyleSlot when `styles.yml` names a slot that does not exist
-     * @throws Exception      when a file in it cannot be read or parsed, or resolves out
-     *                        of the scope
+     * @throws MalformedTheme  when the file does not describe a theme
+     * @throws UnknownStyleSlot when the theme names a slot that does not exist
+     * @throws Exception      when the file cannot be read or parsed, or resolves out of
+     *                        the scope
      */
     public function load(string $name, ?string $written = null, ?FileFinder $files = null): LoadedTheme
     {
@@ -82,9 +72,7 @@ final class ThemeLoader
             throw ThemeNotFound::noManifest($written);
         }
 
-        $read = $this->styles($files, $name, $written);
-
-        return $this->theme($manifest, $read);
+        return $this->theme($manifest, $files, $name);
     }
 
     /**
@@ -102,9 +90,9 @@ final class ThemeLoader
      * @throws ThemeNotFound  when the file is not there, or is not a `theme.yml` and so
      *                        is not a manifest
      * @throws MalformedTheme  when the file does not describe a theme
-     * @throws UnknownStyleSlot when `styles.yml` names a slot that does not exist
-     * @throws Exception      when a file in it cannot be read or parsed, or resolves out
-     *                        of the scope
+     * @throws UnknownStyleSlot when the theme names a slot that does not exist
+     * @throws Exception      when the file cannot be read or parsed, or resolves out of
+     *                        the scope
      */
     public function loadManifest(string $name, ?string $written = null, ?FileFinder $files = null): LoadedTheme
     {
@@ -120,31 +108,28 @@ final class ThemeLoader
             throw ThemeNotFound::noDirectory($written);
         }
 
-        $read = $this->styles($files, $name, $written);
-
-        return $this->theme($manifest, $read);
+        return $this->theme($manifest, $files, $name);
     }
 
     /**
-     * The theme a manifest and a styles file make.
+     * The theme a manifest describes.
      *
-     * The directory is the one the manifest is in, which is the theme's own directory:
-     * the styles beside it are read from there, and a manifest reached through a symlink
-     * sits where its target is.
+     * The directory is the one the manifest is in, which is the theme's own directory.
+     * A manifest reached through a symlink sits where its target is.
      *
      * @param array{contents: string, path: string} $manifest
-     * @param array{slots: array<string, mixed>, text: array<string, array<string, mixed>>} $read
      *
      * @throws MalformedTheme
+     * @throws UnknownStyleSlot
      * @throws Exception
      */
-    private function theme(array $manifest, array $read): LoadedTheme
+    private function theme(array $manifest, ?FileFinder $files, string $name): LoadedTheme
     {
+        $this->refuseStylesFile($files, $name);
+
         return new LoadedTheme(
             dirname($manifest['path']),
             Theme::fromArray($this->mapping($manifest, 'a theme'), $manifest['path']),
-            new Styles($read['slots']),
-            new TextStyles($read['text']),
         );
     }
 
@@ -218,101 +203,34 @@ final class ThemeLoader
     }
 
     /**
-     * The slots and the text styles a theme's `styles.yml` carries.
+     * A `styles.yml` beside the theme, refused.
      *
-     * Checked twice, on purpose. The slot *names* are checked here so an unknown one can
-     * be reported as {@see UnknownStyleSlot} next to the file that has it — the type a
-     * caller is already catching. Everything inside them — property names, value shapes,
-     * a `color:` written with a leading `#`, a `size:` holding a word — goes through
-     * {@see \MarkdownWord\Configuration\Validator}, which is the same check a `styles:`
-     * block gets. Without it a theme is the one place a typo can reach PHPWord as if it
-     * were a value, and it arrives in a document with nothing to say it was never read.
+     * The look is in the `styles:` section of the `theme.yml` beside it, and the file
+     * beside that is not read: a theme that carried one is a theme whose styles have
+     * gone missing, and the sentence that says where they went is the only thing the
+     * author has to act on.
      *
-     * The text styles are a key of their own rather than a slot: `textStyles` is not a
-     * style of the document but the named styles a document may write a word in, and
-     * the loader would otherwise refuse it as a slot that does not exist. They are
-     * checked by {@see \MarkdownWord\Configuration\TextStyles}, which knows the eight
-     * attributes they may carry.
+     * Asked of the finder rather than of the file system, because the finder is where
+     * the theme's files are — a source that holds the bytes and no path has it too.
+     * The scope is never asked of it: the file is not read, and the finder is asked only
+     * whether it is there.
      *
-     * @return array{slots: array<string, mixed>, text: array<string, array<string, mixed>>}
-     *
-     * @throws UnknownStyleSlot
      * @throws MalformedTheme
-     * @throws Exception
      */
-    private function styles(?FileFinder $files, string $theme, string $written): array
+    private function refuseStylesFile(?FileFinder $files, string $theme): void
     {
-        $file = $this->file($files, $theme, self::STYLES_FILE, $written);
+        $name = $theme . '/' . self::STYLES_FILE;
+        $path = $files?->path($name, 'theme');
 
-        if ($file === null) {
-            return ['slots' => [], 'text' => []];
-        }
-
-        $known = array_keys(Styles::defaults());
-        $slots = [];
-        $text = [];
-
-        foreach ($this->mapping($file, 'a mapping of style slots to styles') as $slot => $style) {
-            $slot = (string) $slot;
-
-            if ($slot === TextStyles::KEY) {
-                $text = self::normalise($style);
-
-                if (!is_array($text)) {
-                    throw MalformedTheme::notAMapping(
-                        $file['path'],
-                        'a mapping of style names to styles',
-                        self::describe($text),
-                    );
-                }
-
-                continue;
+        if ($path === null) {
+            if ($files?->read($name, 'theme') === null) {
+                return;
             }
 
-            if (!in_array($slot, $known, true)) {
-                throw UnknownStyleSlot::named($file['path'], $slot, $known);
-            }
-
-            $slots[$slot] = self::normalise($style);
+            $path = $name;
         }
 
-        // After `normalise()`, so a colour read as an integer is checked as the string it
-        // is about to become rather than refused for being the wrong type.
-        Validator::assertValid(['styles' => $slots]);
-
-        return ['slots' => $slots, 'text' => $text];
-    }
-
-    /**
-     * A colour written as six digits and left unquoted, turned back into the string it was.
-     *
-     * YAML reads `404040` as the integer it is, and a colour is the one value in this
-     * vocabulary that is legitimately written as nothing but digits — so `color: 404040`
-     * arrives as an integer and reaches PHPWord where a string was meant.
-     * {@see \MarkdownWord\Configuration\ValueShape::colour()} accepts the integer,
-     * deliberately, because the digits are the colour; this is the other half of that
-     * decision, which is where the string comes back.
-     *
-     * Only an integer, and only one whose digits are all digits. The second half matters:
-     * YAML also reads a scalar as a *float* when it looks like scientific notation, and a
-     * hex colour is exactly that shape — `2E5395` is `2e5395` in a mantissa, and parses as
-     * infinity. Casting that would write the literal text `"INF"` into the document where
-     * the colour was meant, which is why a theme file that names such a colour has to
-     * quote it.
-     *
-     * {@see \MarkdownWord\Configuration\Validator} then refuses whatever does not survive
-     * this, so a colour that only *looks* like one is a load-time error rather than a
-     * document drawn in the wrong ink.
-     */
-    private static function normalise(mixed $value): mixed
-    {
-        if (is_array($value)) {
-            return array_map(self::normalise(...), $value);
-        }
-
-        return is_int($value) && preg_match('/\A\d{6}\z/', (string) $value) === 1
-            ? (string) $value
-            : $value;
+        throw MalformedTheme::stylesFileBeside($path);
     }
 
     /**
@@ -339,15 +257,9 @@ final class ThemeLoader
         }
 
         if (!is_array($parsed) || ($parsed !== [] && array_is_list($parsed))) {
-            throw MalformedTheme::notAMapping($file['path'], $wanted, self::describe($parsed));
+            throw MalformedTheme::notAMapping($file['path'], $wanted, MalformedTheme::describe($parsed));
         }
 
         return $parsed;
-    }
-
-    /** What a YAML document turned out to be, in the words the failure uses. */
-    private static function describe(mixed $parsed): string
-    {
-        return is_array($parsed) ? 'a list' : 'a ' . get_debug_type($parsed);
     }
 }

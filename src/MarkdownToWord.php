@@ -175,7 +175,7 @@ final class MarkdownToWord implements Converter
      *         here so a typo is reported before the document is read rather than partway
      *         through writing it.
      * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
-     * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception\UnknownStyleSlot when the theme names a slot that does not exist
      * @throws Exception\InvalidConfiguration when the theme names a text style after a
      *         directive this library draws
      * @throws Exception\Exception when one of the theme's files cannot be read or parsed
@@ -229,7 +229,7 @@ final class MarkdownToWord implements Converter
      * @throws Exception\ThemeNotFound when the document's or the caller's `theme:` does
      *         not resolve. Deliberately not swallowed: see {@see self::themeFor()}.
      * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
-     * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception\UnknownStyleSlot when the theme names a slot that does not exist
      * @throws Exception\Exception when one of the theme's files cannot be read or parsed
      */
     public function configurationFor(Document $document, ?string $markdown = null): Configuration
@@ -303,7 +303,7 @@ final class MarkdownToWord implements Converter
      *
      * @throws Exception\ThemeNotFound when the theme in play is not one that resolves
      * @throws Exception\MalformedTheme when the theme's own files do not describe a theme
-     * @throws Exception\UnknownStyleSlot when `styles.yml` names a slot that does not exist
+     * @throws Exception\UnknownStyleSlot when the theme names a slot that does not exist
      * @throws Exception\Exception when one of the theme's files cannot be read or parsed
      */
     private function themeFor(Frontmatter $frontmatter): ?LoadedTheme

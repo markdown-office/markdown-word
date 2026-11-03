@@ -13,6 +13,10 @@ namespace MarkdownWord\Exception;
  * and there is no file to name then. It is an {@see InvalidConfiguration} rather than a
  * parse error because the YAML is usually *valid* — it is the description of the theme
  * that is wrong, and the file that says so is the configuration.
+ *
+ * A file left beside a theme from an older format belongs here too: it is refused
+ * rather than ignored, because a file that is quietly not read is a theme that looks
+ * like the one its author wrote and is not.
  */
 final class MalformedTheme extends InvalidConfiguration
 {
@@ -59,5 +63,28 @@ final class MalformedTheme extends InvalidConfiguration
             $style,
             $other,
         ));
+    }
+
+    /**
+     * A `styles.yml` beside a theme, from the format this library used to have.
+     *
+     * The file is not read, and a file that is quietly not read is a theme that looks
+     * like the one its author wrote and is not — so it is refused, and the sentence
+     * says where the content goes rather than only that the file is wrong. The author
+     * of a theme has one thing to do about it, and the message is the only place that
+     * says what it is.
+     */
+    public static function stylesFileBeside(string $file): self
+    {
+        return new self(sprintf(
+            '"%s" is not read any more. A theme\'s styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.',
+            $file,
+        ));
+    }
+
+    /** What a YAML document turned out to be, in the words the failure uses. */
+    public static function describe(mixed $parsed): string
+    {
+        return is_array($parsed) ? 'a list' : 'a ' . get_debug_type($parsed);
     }
 }

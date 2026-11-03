@@ -25,8 +25,7 @@ afterEach(fn () => Upstream::restore());
 
 it('takes a finder for the converter and for the template', function () {
     $finder = new MemoryFinder([
-        'house/theme.yml' => "name: House\n",
-        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+        'house/theme.yml' => "name: House\nstyles:\n  heading.1:\n    color: 112233\n",
     ]);
 
     $markdown = "---\ntheme: house\n---\n\n# Title\n";

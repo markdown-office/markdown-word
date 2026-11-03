@@ -25,6 +25,29 @@ use PhpOffice\PhpWord\Style\Paragraph;
  */
 
 /**
+ * A YAML section: the key, and the body written beneath it.
+ *
+ * The body is the YAML a test wrote, and it is written as it was — a colour left
+ * unquoted stays unquoted, because how YAML reads it is part of what the loader
+ * has to cope with. A body written out as data would be quoted on the way in and
+ * the tests that are about YAML would be about nothing.
+ */
+function yamlSection(string $key, string $body): string
+{
+    if (trim($body) === '') {
+        return '';
+    }
+
+    $lines = [];
+
+    foreach (preg_split('/\R/', rtrim($body)) ?: [] as $line) {
+        $lines[] = trim($line) === '' ? '' : '  ' . $line;
+    }
+
+    return $key . ":\n" . implode("\n", $lines) . "\n";
+}
+
+/**
  * Render Markdown into a `PhpWord` document.
  */
 function convertTo(string $markdown, ?Configuration $config = null, ?PhpWord $phpWord = null): PhpWord

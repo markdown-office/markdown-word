@@ -1424,8 +1424,8 @@ Validator::assertValid($config->toArray()); // throws, listing all of them
 
 ### Themes
 
-A theme is a `theme.yml` and, usually, a `styles.yml` beside it. Four ship with the
-library, in `themes/`, each in a directory of its own:
+A theme is a `theme.yml`, and it is one file. Four ship with the library, in
+`themes/`, each in a directory of its own:
 
 | Theme | What it is for |
 | --- | --- |
@@ -1472,17 +1472,24 @@ the built-in themes, because `theme:` is a path a document writes.
 
 **A path may name the manifest rather than the directory around it.** A theme is its
 `theme.yml`, so `theme: ./themes/house/theme.yml` is the same theme as
-`theme: ./themes/house` — the file is the manifest, and the `styles.yml` is read from
-the directory that holds it either way. A path is looked for in the same place and held
-to the same scope whether it names a directory or a file; only what is read from it
-differs. Only a `theme.yml` is a manifest, so a `styles.yml` named as the theme is one
-of a theme's own files rather than the theme itself.
+`theme: ./themes/house` — the file is the manifest, and the look is in the file either
+way. A path is looked for in the same place and held to the same scope whether it names
+a directory or a file; only what is read from it differs. Only a `theme.yml` is a
+manifest, so a `styles.yml` named as the theme is a file of its own rather than the
+theme itself.
 
 ```yaml
 ---
 theme: ./themes/house/theme.yml
 ---
 ```
+
+**A `styles.yml` beside a theme is refused.** The look is in the `styles:` section of
+the theme's own file, and a file that is quietly not read is a theme that looks like the
+one its author wrote and is not — so the file beside the theme is refused, and the
+sentence says where its content goes:
+
+> "styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.
 
 **A theme is found beside the document.** The library is told where the document is,
 because a document handed over as a string has no directory of its own:
@@ -1495,8 +1502,8 @@ A theme beside the document is the one that travels with it, so it is looked for
 before the working directory's own `themes/`. Without the directory, the working
 directory is what a name is looked for in.
 
-`styles.yml` takes the slot names from `Styles::defaults()` and nothing else, and is
-checked the way a `styles:` block is: an unknown slot, an unknown property inside one, a
+The `styles:` section takes the slot names from `Styles::defaults()` and nothing else,
+and is checked the way a `styles:` block is: an unknown slot, an unknown property inside one, a
 colour written with a leading `#` and a size holding a word are all errors at load time,
 next to the file that has them. A slot written as a mapping merges over the built-in look
 exactly as a `styles:` block does, so a theme that names one property leaves the rest
@@ -1509,9 +1516,9 @@ and also scientific notation, and YAML resolves it to infinity before the theme 
 Quoted, it is a colour; unquoted, it is a load-time error rather than a document drawn in
 the wrong ink.
 
-**A theme may bring named text styles.** `styles.yml` takes one key beside the slots, and
-the key is not a slot — it is the styles a document may write a word in, under
-[Inline styles](#inline-styles):
+**A theme may bring named text styles.** The `theme.yml` takes a `textStyles:` key
+beside the slots, and the key is not a slot — it is the styles a document may write a
+word in, under [Inline styles](#inline-styles):
 
 ```yaml
 textStyles:

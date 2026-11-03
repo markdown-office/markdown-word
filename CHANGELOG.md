@@ -21,6 +21,42 @@ All notable changes to this project are documented here. The format follows
   > within the page unless it is written to bleed, so write left=0 rather than a negative
   > one — or write bleed=true if the box is meant to hang off the edge.
 
+### Changed
+
+- **A theme is one file.** A theme was a directory of two files: a `theme.yml` that said
+  what the theme called itself, and a `styles.yml` beside it that said what it looked
+  like. The two are one file now, and the look is two sections of it:
+
+  ```yaml
+  name: House
+  description: ...
+  author: ...
+  styles:
+    heading.1:
+      color: "112233"
+  textStyles:
+    brand:
+      color: "0B5CAB"
+      bold: true
+  ```
+
+  The four themes that ship with the library are one file each, and the `styles.yml`
+  beside each of them is gone.
+
+  **A `styles.yml` beside a theme is refused rather than ignored**, because a file that
+  is quietly not read is a theme that looks like the one its author wrote and is not —
+  and the sentence that says where the content goes is the only thing the author has to
+  act on:
+
+  > "styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.
+
+  The two halves of the suite keep separate vocabularies: a `theme.yml` that carries
+  the slides half's `colors:` is refused by this half, as it was before, and a key
+  nobody wrote down is still refused rather than left out.
+
+  A document's own `styles:` in its frontmatter still overrides its theme's, slot by
+  slot, and a document that names one property of one slot still keeps the rest.
+
 ### Fixed
 
 - **The render dispatcher asks about the renderer it is going to run.** WordCraft draws a

@@ -8,6 +8,7 @@ use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Document\Frontmatter;
 use MarkdownWord\Exception\Exception;
 use MarkdownWord\Exception\InvalidConfiguration;
+use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\ThemeNotFound;
 use MarkdownWord\Exception\UnknownStyleSlot;
 use MarkdownWord\Filesystem\PathScope;
@@ -85,13 +86,18 @@ function removeTree(string $directory): void
     rmdir($directory);
 }
 
-/** Write a theme directory, so a test can say what a theme file says. */
+/**
+ * Write a theme directory, so a test can say what a theme file says.
+ *
+ * The slots are the body of the theme's `styles:` section, written as the YAML the
+ * test means: a colour left unquoted stays unquoted, because how YAML reads it is
+ * part of what the loader has to cope with.
+ */
 function writeTheme(string $themes, string $name, string $theme = "name: Test\n", string $styles = ''): string
 {
     $directory = $themes . '/' . $name;
     mkdir($directory, 0o777, true);
-    file_put_contents($directory . '/theme.yml', $theme);
-    file_put_contents($directory . '/styles.yml', $styles);
+    file_put_contents($directory . '/theme.yml', $theme . yamlSection('styles', $styles));
 
     return $directory;
 }
@@ -366,9 +372,9 @@ it('refuses a theme path that walks out of the document\'s own directory', funct
 });
 
 it('reads a theme named as the manifest file that is it', function () {
-    // A theme is a `theme.yml` and the `styles.yml` beside it, so a document may name
-    // the manifest rather than the directory around it. The file is the theme; what
-    // matters is that the styles are read from the directory that holds it.
+    // A theme is its `theme.yml`, so a document may name the manifest rather than the
+    // directory around it. The file is the theme, and the directory it sits in is
+    // where the theme was found.
     [$document, $documentThemes] = scratchThemes();
     writeTheme($documentThemes, 'house', styles: "heading.1:\n  color: 112233\n");
 
@@ -386,10 +392,12 @@ it('reads a theme named as the manifest file that is it', function () {
 
 it('draws a document in the theme whose manifest it names', function () {
     // The form the feature is for: a document names the file, the file is the theme,
-    // and the styles are read from the directory it sits in.
+    // and the look comes from the file itself rather than from a file beside it.
     [$document] = scratchThemes();
-    file_put_contents($document . '/theme.yml', "name: House\n");
-    file_put_contents($document . '/styles.yml', "heading.1:\n  color: 112233\n");
+    file_put_contents(
+        $document . '/theme.yml',
+        "name: House\nstyles:\n  heading.1:\n    color: 112233\n",
+    );
 
     $markdown = "---\ntheme: ./theme.yml\n---\n\n# T\n";
     $converter = new MarkdownToWord(
@@ -476,10 +484,9 @@ it('refuses a manifest file outside the roots', function () {
         ->toThrow(ThemeNotFound::class, 'outside the directories a document may name');
 });
 
-it('refuses a styles file beside a manifest that is a symlink out of the scope', function () {
-    // The manifest is held to the scope, and so is the file beside it: a `styles.yml`
-    // that points out of the roots is read as readily as one inside them, and its
-    // values reach the document as direct formatting.
+it('refuses a styles file beside a manifest, whatever it is a link to', function () {
+    // The scope is never asked of the file: it is refused for being the format this
+    // library used to have, and not for where it resolves to.
     [$document] = scratchThemes();
     file_put_contents($document . '/theme.yml', "name: Evil\n");
 
@@ -493,7 +500,7 @@ it('refuses a styles file beside a manifest that is a symlink out of the scope',
     );
 
     expect(fn () => $resolver->resolve('./theme.yml'))
-        ->toThrow(Exception::class, 'resolves outside the directories this render may read');
+        ->toThrow(MalformedTheme::class, 'is not read any more');
 });
 
 it('still reads a bare name as a theme in a directory', function () {
@@ -559,6 +566,30 @@ it('lets the document styles block override the theme it named', function () {
         // Still the report's heading: its size, its typeface, its spacing.
         ->and($heading['size'])->toBe(18)
         ->and($heading['name'])->toBe('Calibri');
+});
+
+it('lets the document styles block override a theme of its own, slot by slot', function () {
+    // The same contract, over a theme the test writes rather than over one that ships:
+    // the document's own `styles:` wins for the slot it names, and the rest of what the
+    // theme said about that slot is still there. A theme that is a starting point is
+    // the half's own promise, and it does not depend on the file's shape.
+    [$root, $themes] = scratchThemes();
+    writeTheme($themes, 'house', styles: "heading.1:\n  color: 112233\n  size: 20\nparagraph:\n  color: 445566\n");
+
+    $markdown = "---\ntheme: house\nstyles:\n  heading.1:\n    color: FF00FF\n---\n\n# T\n";
+    $converter = new MarkdownToWord(
+        $markdown,
+        parser: CommonMarkParser::withAllExtensions(),
+        directory: $root,
+    );
+
+    $styles = $converter->configurationFor($converter->parse($markdown), $markdown)->getStyles();
+
+    expect($styles->get(Styles::HEADING_1)['color'])->toBe('FF00FF')
+        // The theme's own size is still there: one property changed, the slot did not.
+        ->and($styles->get(Styles::HEADING_1)['size'])->toBe(20)
+        // And the slot the document said nothing about is the theme's own.
+        ->and($styles->get(Styles::PARAGRAPH)['color'])->toBe('445566');
 });
 
 it('lets the configuration passed to the converter override the theme', function () {
@@ -731,7 +762,7 @@ it('keeps a theme out of the configuration array', function () {
     expect($frontmatter->toConfigurationArray())->toBe(['styles' => ['heading.1' => 'Title']]);
 });
 
-it('reads a theme file of its own accord, without a styles file', function () {
+it('reads a theme file of its own accord, without a styles section', function () {
     [$root, $themes] = scratchThemes();
     writeTheme($themes, 'bare', theme: "name: Bare\ndescription: Nothing else.\nauthor: fabi\n");
 
@@ -740,33 +771,89 @@ it('reads a theme file of its own accord, without a styles file', function () {
     expect($loaded->theme()->name())->toBe('Bare')
         ->and($loaded->theme()->description())->toBe('Nothing else.')
         ->and($loaded->theme()->author())->toBe('fabi')
-        // No styles.yml is a theme drawn in the built-in look, which is a theme rather
-        // than a broken one.
+        // No `styles:` section is a theme drawn in the built-in look, which is a theme
+        // rather than a broken one.
         ->and($loaded->styles()->toArray())->toBe((new Styles())->toArray());
+});
+
+it('refuses a styles file beside a theme, and says where the styles go', function () {
+    // A theme that carried one is a theme whose styles have gone missing, and a file
+    // that is quietly not read is a theme that looks like the one its author wrote and
+    // is not. The message says where the content goes, because that is the one thing
+    // the author has to do about it.
+    [$root, $themes] = scratchThemes();
+    $directory = $themes . '/one';
+    mkdir($directory, 0o777, true);
+    file_put_contents($directory . '/theme.yml', "name: Test\n");
+    file_put_contents($directory . '/styles.yml', "heading.1:\n  color: 112233\n");
+
+    expect(fn () => (new ThemeResolver($root))->resolve('one'))
+        ->toThrow(MalformedTheme::class, 'is not read any more');
+
+    // And where the content goes, because that is the one thing the author has to do
+    // about it.
+    expect(fn () => (new ThemeResolver($root))->resolve('one'))
+        ->toThrow(MalformedTheme::class, '"styles:" section of its "theme.yml"');
 });
 
 it('refuses a theme file with a key it does not know', function () {
     [$root, $themes] = scratchThemes();
-    writeTheme($themes, 'one', theme: "name: Test\ncolours:\n  dk1: \"#000000\"\n");
+    writeTheme($themes, 'one', theme: "name: Test\nstyels:\n  heading.1: Title\n");
 
     expect(fn () => (new ThemeResolver($root))->resolve('one'))
-        ->toThrow(InvalidConfiguration::class, 'Unknown key "colours"');
+        ->toThrow(InvalidConfiguration::class, 'Unknown key "styels"');
 
-    // The presentation half's palette is not this half's vocabulary, and a theme that
-    // carried one would look like it worked and change nothing.
+    // The keys this half has, and the two sections it keeps its look in.
     expect(fn () => (new ThemeResolver($root))->resolve('one'))
-        ->toThrow(InvalidConfiguration::class, 'A theme may have: name, description, author.');
+        ->toThrow(InvalidConfiguration::class, 'A theme may have: name, description, author, styles, textStyles.');
+});
+
+it('refuses the slides half\'s palette, because the two halves keep separate vocabularies', function () {
+    // A theme file serves one half, and a key this half does not know is a mistake
+    // worth saying so about: a theme carrying the other half's palette would look
+    // like it worked and change nothing.
+    [$root, $themes] = scratchThemes();
+    writeTheme($themes, 'one', theme: "name: Test\ncolors:\n  dk1: \"#000000\"\n");
+
+    expect(fn () => (new ThemeResolver($root))->resolve('one'))
+        ->toThrow(InvalidConfiguration::class, 'Unknown key "colors"');
+
+    // And the keys this half has: its own two sections and nothing of the other
+    // half's.
+    expect(fn () => (new ThemeResolver($root))->resolve('one'))
+        ->toThrow(InvalidConfiguration::class, 'A theme may have: name, description, author, styles, textStyles.');
 });
 
 it('refuses a theme file that does not name itself', function () {
+    // The two ways of not naming itself: a file that says something else, and a file
+    // that says nothing at all. Both are told what is missing rather than what the
+    // file is.
     [$root, $themes] = scratchThemes();
     writeTheme($themes, 'one', theme: "description: Nameless.\n");
 
+    $empty = $themes . '/empty';
+    mkdir($empty, 0o777, true);
+    file_put_contents($empty . '/theme.yml', '');
+
     expect(fn () => (new ThemeResolver($root))->resolve('one'))
+        ->toThrow(InvalidConfiguration::class, 'has no "name"');
+
+    expect(fn () => (new ThemeResolver($root))->resolve('empty'))
         ->toThrow(InvalidConfiguration::class, 'has no "name"');
 });
 
-it('refuses a styles file that is a list rather than a mapping', function () {
+it('refuses a theme file that is not a mapping', function () {
+    // A theme file is a mapping of keys to values, and a list of them is not one.
+    [$root, $themes] = scratchThemes();
+    $directory = $themes . '/one';
+    mkdir($directory, 0o777, true);
+    file_put_contents($directory . '/theme.yml', "- House\n- Report\n");
+
+    expect(fn () => (new ThemeResolver($root))->resolve('one'))
+        ->toThrow(InvalidConfiguration::class, 'is a list');
+});
+
+it('refuses a styles section that is a list rather than a mapping', function () {
     [$root, $themes] = scratchThemes();
     writeTheme($themes, 'one', styles: "- heading.1\n- paragraph\n");
 
@@ -812,22 +899,21 @@ it('will not walk out of the archive a theme name sits in', function () {
 });
 
 it('refuses a theme file that is a symlink out of the scope', function () {
-    // The directory is checked; the files inside it were not. A `styles.yml` that points
-    // outside is read just as readily as one inside, and its values reach the document as
-    // direct formatting — a way to put a file outside the roots into the output.
+    // The theme's directory is inside the roots and the file in it is not: a
+    // `theme.yml` that points outside is a way to put a file outside the roots into
+    // the document.
     [$root, $themes] = scratchThemes();
 
-    // A second working directory, so the target is outside the *scope* rather than merely
-    // outside the theme: a sibling directory under the same root is still inside it.
+    // A second working directory, so the file the theme names resolves outside the
+    // roots: the theme's own directory is inside them, and the file in it is not.
     [, $outside] = scratchThemes();
-    file_put_contents($outside . '/styles.yml', "heading.1:\n  color: DEADBEEF\n");
+    file_put_contents($outside . '/theme.yml', "name: Evil\nstyles:\n  heading.1:\n    color: DEADBEEF\n");
 
     mkdir($themes . '/evil', 0o777, true);
-    file_put_contents($themes . '/evil/theme.yml', "name: Evil\n");
-    symlink($outside . '/styles.yml', $themes . '/evil/styles.yml');
+    symlink($outside . '/theme.yml', $themes . '/evil/theme.yml');
 
     expect(fn () => (new ThemeResolver($root))->resolve('evil'))
-        ->toThrow(Exception::class, 'resolves outside the directories this render may read');
+        ->toThrow(ThemeNotFound::class, 'outside the directories a document may name');
 });
 
 it('reads a theme whose own file is a symlink that stays inside the scope', function () {
@@ -835,10 +921,9 @@ it('reads a theme whose own file is a symlink that stays inside the scope', func
     // like any other and must still load.
     [$root, $themes] = scratchThemes();
     mkdir($themes . '/shared', 0o777, true);
-    file_put_contents($themes . '/shared/styles.yml', "heading.1:\n  color: 112233\n");
+    file_put_contents($themes . '/shared/theme.yml', "name: Shared\nstyles:\n  heading.1:\n    color: 112233\n");
     mkdir($themes . '/user', 0o777, true);
-    file_put_contents($themes . '/user/theme.yml', "name: User\n");
-    symlink($themes . '/shared/styles.yml', $themes . '/user/styles.yml');
+    symlink($themes . '/shared/theme.yml', $themes . '/user/theme.yml');
 
     expect((new ThemeResolver($root))->resolve('user')->styles()->get(Styles::HEADING_1)['color'])
         ->toBe('112233');
@@ -880,8 +965,26 @@ it('takes a cell colour as a string and a table colour as a mapping', function (
         ->toThrow(InvalidConfiguration::class, 'six hexadecimal digits');
 });
 
-it('names only the three keys a theme.yml may carry', function () {
-    expect(Theme::KEYS)->toBe(['name', 'description', 'author']);
+it('names only the five keys a theme.yml may carry', function () {
+    expect(Theme::KEYS)->toBe(['name', 'description', 'author', 'styles', 'textStyles']);
+});
+
+it('gives a theme back as it was written, sections and all', function () {
+    // The theme as it was written rather than as it is drawn: the slots the theme
+    // named, not the whole merged look underneath them.
+    $theme = Theme::fromArray([
+        'name' => 'House',
+        'styles' => ['heading.1' => ['color' => '112233']],
+        'textStyles' => ['brand' => ['color' => '0B5CAB']],
+    ]);
+
+    expect($theme->toArray())->toBe([
+        'name' => 'House',
+        'description' => null,
+        'author' => null,
+        'styles' => ['heading.1' => ['color' => '112233']],
+        'textStyles' => ['brand' => ['color' => '0B5CAB']],
+    ]);
 });
 
 it('names every slot a theme may write, and takes them from the built-in look', function () {

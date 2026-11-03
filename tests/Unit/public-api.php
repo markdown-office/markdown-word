@@ -112,8 +112,10 @@ it('takes the directory a document was read from, and finds a theme beside it', 
     // and the working directory is where the program happens to be.
     $directory = Scratch::directory() . '/beside';
     mkdir($directory . '/themes/house', 0o777, true);
-    file_put_contents($directory . '/themes/house/theme.yml', "name: House\n");
-    file_put_contents($directory . '/themes/house/styles.yml', "heading.1:\n  color: 112233\n");
+    file_put_contents(
+        $directory . '/themes/house/theme.yml',
+        "name: House\nstyles:\n  heading.1:\n    color: 112233\n",
+    );
 
     $markdown = "---\ntheme: house\n---\n\n# T\n";
     $converter = new MarkdownToWord(

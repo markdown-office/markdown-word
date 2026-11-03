@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Exception\Exception;
+use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\ThemeNotFound;
 use MarkdownWord\Files\DiskFinder;
 use MarkdownWord\Files\FileFinder;
@@ -59,12 +60,13 @@ function finderWork(string $name = 'theme-finder-work'): array
 }
 
 /**
- * A theme directory, with a manifest and a styles file.
+ * A theme directory, with a manifest that says everything about it.
  *
- * A null styles file is a theme with none, which is what the tests that put a
- * symlink in its place need.
+ * The slots are the body of the theme's `styles:` section, written as the YAML the
+ * test means: a colour left unquoted stays unquoted, because how YAML reads it is
+ * part of what the loader has to cope with.
  */
-function finderTheme(string $themes, string $name, ?string $styles = ''): string
+function finderTheme(string $themes, string $name, string $styles = ''): string
 {
     $directory = $themes . '/' . $name;
 
@@ -72,11 +74,7 @@ function finderTheme(string $themes, string $name, ?string $styles = ''): string
         throw new RuntimeException(sprintf('Unable to create "%s".', $directory));
     }
 
-    file_put_contents($directory . '/theme.yml', "name: House\n");
-
-    if ($styles !== null) {
-        file_put_contents($directory . '/styles.yml', $styles);
-    }
+    file_put_contents($directory . '/theme.yml', "name: House\n" . yamlSection('styles', $styles));
 
     return $directory;
 }
@@ -94,17 +92,18 @@ it('reads a theme through the finder', function () {
 });
 
 it('asks the finder for the theme\'s files by name', function () {
-    // The names are the library's own: a theme's manifest is `<theme>/theme.yml` and
-    // the slots beside it are `<theme>/styles.yml`.
+    // The names are the library's own: a theme's file is `<theme>/theme.yml`. The file
+    // the format this library used to have is asked for by name as well, so that it can
+    // be refused rather than quietly not read.
     $finder = new MemoryFinder([
-        'house/theme.yml' => "name: House\n",
-        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+        'house/theme.yml' => "name: House\nstyles:\n  heading.1:\n    color: 112233\n",
     ]);
 
     $loader = new ThemeLoader();
     $loader->load('house', 'house', $finder);
 
-    expect($finder->asked())->toBe(['house/theme.yml', 'house/styles.yml']);
+    expect($finder->asked())->toBe(['house/theme.yml', 'house/styles.yml'])
+        ->and($finder->askedFor('house/theme.yml'))->toBe('theme');
 });
 
 it('reads a theme through a finder that has the bytes and no path', function () {
@@ -112,8 +111,7 @@ it('reads a theme through a finder that has the bytes and no path', function () 
     // and never had a directory to hand over. The library reads the bytes rather
     // than opening a file.
     $finder = new MemoryFinder([
-        'house/theme.yml' => "name: House\n",
-        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+        'house/theme.yml' => "name: House\nstyles:\n  heading.1:\n    color: 112233\n",
     ]);
 
     $loader = new ThemeLoader();
@@ -125,17 +123,33 @@ it('reads a theme through a finder that has the bytes and no path', function () 
         ->and($theme->directory())->toBe('house');
 });
 
+it('refuses a styles file the source holds and has no path to', function () {
+    // The same source, with a file from the format this library used to have: it is
+    // refused there as well, or a theme in a database would keep a styles file nobody
+    // reads.
+    $finder = new MemoryFinder([
+        'house/theme.yml' => "name: House\n",
+        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+    ]);
+
+    $loader = new ThemeLoader();
+
+    expect(fn () => $loader->load('house', 'house', $finder))
+        ->toThrow(MalformedTheme::class, 'is not read any more');
+});
+
 it('refuses a theme file that resolves outside the scope, in the library\'s words', function () {
     // The finder answers the path; the library holds it to its scope and refuses it.
     // The message is the library's, because the library is what knows what this
     // render may read.
     $themes = finderScratch('theme-finder-outside');
-    finderTheme($themes, 'evil', null);
+    $directory = $themes . '/evil';
+    mkdir($directory, 0o777, true);
 
     $outside = finderScratch('theme-finder-secret');
-    file_put_contents($outside . '/styles.yml', "heading.1:\n  color: DEADBEEF\n");
+    file_put_contents($outside . '/theme.yml', "name: Evil\nstyles:\n  heading.1:\n    color: DEADBEEF\n");
 
-    if (!@symlink($outside . '/styles.yml', $themes . '/evil/styles.yml')) {
+    if (!@symlink($outside . '/theme.yml', $directory . '/theme.yml')) {
         test()->markTestSkipped('symlinks are not available here');
     }
 
@@ -150,13 +164,13 @@ it('a loader with a scope of its own refuses a theme file out of it', function (
     // loader the caller brings brings its own. The resolver's scope holds the theme's
     // directory, which is a different question.
     [$work, $themes] = finderWork('theme-finder-scope');
-    finderTheme($themes, 'user', null);
+    mkdir($themes . '/user', 0o777, true);
 
-    // A styles file that resolves inside the resolver's scope and outside the
+    // A theme file that resolves inside the resolver's scope and outside the
     // loader's: the working directory is a root, the `themes/` directory is not.
-    file_put_contents($work . '/shared.yml', "heading.1:\n  color: 112233\n");
+    file_put_contents($work . '/shared.yml', "name: Shared\nstyles:\n  heading.1:\n    color: 112233\n");
 
-    if (!@symlink($work . '/shared.yml', $themes . '/user/styles.yml')) {
+    if (!@symlink($work . '/shared.yml', $themes . '/user/theme.yml')) {
         test()->markTestSkipped('symlinks are not available here');
     }
 
@@ -206,7 +220,7 @@ it('reports a theme file it cannot read', function () {
     $themes = finderScratch('theme-finder-unreadable');
     finderTheme($themes, 'house', "heading.1:\n  color: 112233\n");
 
-    chmod($themes . '/house/styles.yml', 0o000);
+    chmod($themes . '/house/theme.yml', 0o000);
 
     $loader = new ThemeLoader(new PathScope([$themes]));
 
@@ -218,7 +232,9 @@ it('refuses a text styles block that is not a mapping', function () {
     // The named text styles are a mapping of names to styles; one that is not is a
     // theme that does not describe a theme.
     $themes = finderScratch('theme-finder-textstyles');
-    finderTheme($themes, 'house', "textStyles: not a mapping\n");
+    $directory = $themes . '/house';
+    mkdir($directory, 0o777, true);
+    file_put_contents($directory . '/theme.yml', "name: House\ntextStyles: not a mapping\n");
 
     $loader = new ThemeLoader(new PathScope([$themes]));
 
@@ -249,8 +265,7 @@ it('resolves a theme the source holds and no directory has', function () {
     // and never had a directory to hand over. The name is asked for by name, and the
     // theme comes back the same way it would from a directory.
     $finder = new MemoryFinder([
-        'house/theme.yml' => "name: House\n",
-        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+        'house/theme.yml' => "name: House\nstyles:\n  heading.1:\n    color: 112233\n",
     ]);
 
     $resolver = new ThemeResolver(workingDirectory: finderScratch('theme-finder-nowhere'), files: $finder);
@@ -283,15 +298,13 @@ it('resolves a theme named in code once', function () {
     // that came back. A source that counts its reads says so: the theme is read once,
     // not once for the name and once for the document.
     $finder = new MemoryFinder([
-        'house/theme.yml' => "name: House\n",
-        'house/styles.yml' => "heading.1:\n  color: 112233\n",
+        'house/theme.yml' => "name: House\nstyles:\n  heading.1:\n    color: 112233\n",
     ]);
 
     $converter = (new MarkdownToWord('# T', files: $finder))->withTheme('house');
     $converter->toDocx('# T');
 
-    expect($finder->reads('house/theme.yml'))->toBe(1)
-        ->and($finder->reads('house/styles.yml'))->toBe(1);
+    expect($finder->reads('house/theme.yml'))->toBe(1);
 });
 
 it('resolves a theme in a root the calling program allowed', function () {

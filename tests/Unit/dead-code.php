@@ -251,6 +251,11 @@ it('does not claim again what the code does not do', function (string $claim) {
     // file rather than by the directory around it. Two messages said a theme is a
     // directory, the page said the same in a longer sentence, and three docblocks said
     // it in their own words.
+    //
+    // The last of the six is the page's own sentence, and it is wrong a second time
+    // now: a theme is one file, so a `styles.yml` beside it is not a file of the
+    // theme's but a file of the format this half used to have. The phrase stays banned
+    // — it is exactly the claim that could come back.
     'a theme is a directory and nothing else' => 'A theme is a directory holding that file',
     'a theme is a directory and nothing else, on this machine' => 'A theme is a directory on this machine, not something to fetch',
     'a theme is a directory and nothing else, on the page' => 'A theme is a directory holding a `theme.yml` and, usually, a `styles.yml`',
