@@ -6,7 +6,51 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **A text box may hang off the edge of the page.** `bleed=true` on the box is the
+  permission, and it is the same word the slides half uses for the same thing, so that a
+  document and a deck are written the same way.
+
+  A box that hangs off the side of the page is a thing a document may want: the rule that
+  runs past the margin, the shape that is cut off by the edge of the paper. It is also a
+  thing a document may get wrong, and the two are told apart by whether the author said
+  so. The refusal names what would have worked, which it did not before:
+
+  > The text box is placed at a left of -2, which is off the edge of the page. A box lies
+  > within the page unless it is written to bleed, so write left=0 rather than a negative
+  > one — or write bleed=true if the box is meant to hang off the edge.
+
 ### Fixed
+
+- **The render dispatcher asks about the renderer it is going to run.** WordCraft draws a
+  Word document and DeckCraft draws a deck, and they are two programs: a machine may have
+  one without the other. The dispatcher asked whether *either* was there and then ran the
+  one the document needed, so a machine with only DeckCraft on it was told it was using
+  WordCraft, was run against a program that was not there, and produced nothing — while
+  LibreOffice, which was installed and would have done the job, was never asked.
+
+  The check and the invocation now ask the same question.
+
+- **A renderer that fails falls through to the next one.** A backend that is installed and
+  does not work is a commoner thing than a backend that is not installed at all, and a run
+  that gave up at the first failure produced nothing where a run that tried the next one
+  produced a PDF.
+
+  The run says which backend drew the document and which one could not, and the note about
+  a backend that is not Word is printed *after* the render rather than before it: the
+  backend that ran is the one that drew the document and not the one that was chosen.
+
+- **The usage of the bundled tools names the script and not the directory it is in.** The
+  tools are carried into the skill's bundle, where they live in `scripts/` rather than in
+  `tools/`, and a usage that named `tools/` was wrong in one of the two homes.
+
+- **The examples' README says what the build script needs.** The build is the library's own
+  example build: it drives the library's API directly rather than through the command line,
+  because what it shows is the API. A copy of the directory on its own — the one the
+  `mdword` skill carries — has the sources and the templates but not the library that
+  builds them, and the README said `php examples/build.php` and nothing about what that
+  needed.
 
 - **The border colour of a theme's table is a colour.** The `corporate` theme wrote its
   table's border colour unquoted, and `2E5395` is scientific notation as well as a hex

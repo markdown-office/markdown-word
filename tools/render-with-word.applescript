@@ -1,6 +1,6 @@
 -- Opens each document in Microsoft Word and exports it to PDF.
 --
---   osascript tools/render-with-word.applescript <document.docx> [...] --out <directory>
+--   osascript render-with-word.applescript <document.docx> [...] --out <directory>
 --
 -- Word rather than LibreOffice because Word is the only application that will tell the truth
 -- about whether a document opens. LibreOffice is a different implementation of the same

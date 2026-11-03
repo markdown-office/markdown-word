@@ -12,8 +12,6 @@ declare(strict_types=1);
  * LibreOffice is installed, so the result can be checked without Word.
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
-
 use League\CommonMark\Extension\FrontMatter\FrontMatterExtension;
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Options;
@@ -32,6 +30,24 @@ use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\Style\Font;
 use PhpOffice\PhpWord\Style\Paragraph;
+
+$autoload = __DIR__ . '/../vendor/autoload.php';
+
+// The build drives the library's own API, so it needs the library. A copy of this
+// directory on its own — the one the `mdword` skill carries — has the sources and the
+// templates but not the library that builds them, and a missing `require` would say
+// nothing about that.
+if (!is_file($autoload)) {
+    fwrite(
+        STDERR,
+        "This build needs the library itself: put a `vendor/autoload.php` in this directory's parent,"
+        . " or run `composer install` in the checkout it came from.\n",
+    );
+
+    exit(1);
+}
+
+require_once $autoload;
 
 /**
  * A package that is not what its name says is a mistake in *this* file, so it stops
@@ -548,6 +564,23 @@ foreach (Format::cases() as $format) {
         $losses[$format->value][] = $loss->message;
     }
 }
+
+// A box that hangs off the edge of the page
+//
+// The one thing the Word half and the slides half agree on: a shape that runs off the edge
+// is a thing a document may want, and `bleed=true` is how the author says so. The box is
+// written here rather than in the objects page because the objects page is about what a
+// document may place in it, and this is about where it may be placed.
+
+$path = $docs . '/30-bleeding-box' . DOCX_EXTENSION;
+
+(new MarkdownToWord(
+    markdownOf($root, '30-bleeding-box'),
+    Configuration::create(),
+    $frontmatterParser,
+))->save($path);
+
+$built[] = ['30-bleeding-box', 'A text box that hangs off the left margin.', $path];
 
 // Tables
 

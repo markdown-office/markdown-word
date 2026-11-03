@@ -2,7 +2,7 @@
 #
 # Writes a Word document package: a template's own kind rewritten to a document's.
 #
-#   sh tools/package-as-document.sh <source> <target>
+#   sh package-as-document.sh <source> <target>
 #
 # A `.dotx` and a `.docx` are the same archive with one content type different, and that
 # one line decides what a reader does with the file. Word opens a package whose body is

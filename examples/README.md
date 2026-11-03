@@ -4,8 +4,24 @@ Generated documents, so you can see what the library produces without writing
 any code.
 
 ```
-php examples/build.php
+php build.php
 ```
+
+**The build needs the library itself, so it needs a checkout of it.** The script
+is the library's own example build: it drives the library's API directly rather
+than through the command line, because what it shows is the API. A copy of this
+directory on its own — the one the `mdword` skill carries — has the sources and
+the templates but not the library that builds them, and the script says so
+rather than failing with a missing file.
+
+```
+composer install
+php build.php
+```
+
+In a checkout of the library, `composer install` is what puts the library where
+the script looks for it. Anywhere else, the script wants the same thing: a
+`vendor/autoload.php` in this directory's parent.
 
 The Markdown sources are in `markdown/`, the Word templates in `templates/`, and
 everything the build generates in `out/`:
@@ -58,7 +74,7 @@ past.
 | `22-corporate-report.docx` | A quarterly review rendered into a Word **template** — a `.dotx` — whose own styles the body inherits. See [the templates](#the-templates). |
 | `22-corporate-report.docx-template.docx` | The same Markdown through an identical `.docx` template. Open the two together: identical in every way a reader sees, and both documents. |
 | `23-plain-letterhead.docx` | The same report into a template that is a logo and **nothing else** — no styles, and no content control either. The content is appended because the template names no place for it. Compare with `22`. |
-| `24-furniture.docx` | A running head and foot a document describes about itself, under `header:` and `footer:`. The head carries a logo and a wordmark stacked and right-aligned over a rule; the foot a centred `Page 1 of 1` written as Word fields rather than numbers. See [Headers and footers](../README.md#headers-and-footers). |
+| `24-furniture.docx` | A running head and foot a document describes about itself, under `header:` and `footer:`. The head carries a logo and a wordmark stacked and right-aligned over a rule; the foot a centred `Page 1 of 1` written as Word fields rather than numbers. See [Headers and footers](https://github.com/markdown-office/markdown-word#headers-and-footers). |
 | `25-toc.docx` | A `::toc` drawn as a real Word field, so the contents are built by Word on F9 rather than written down here. Three footnotes on the page, for the mark and the note beside each other. |
 | `26-directives.docx` | What a directive becomes in each place: a table of contents and a footnote, and three names this library does not draw — an inline one keeps its braces, a leaf one its whole source form, a container its body without its fence. |
 | `27-frontmatter-template.docx` | A quotation that names its own `template_file:`, so the Markdown beside it is the whole input and nothing has to be supplied from PHP to reproduce it. Contrast with `10` and `22`, which pass the template to the class in code. |
@@ -66,6 +82,7 @@ past.
 | `29-objects.docx` | The seven names that place the furniture of a document in it: a picture, a caption, a page break, a section with columns, a floating box, a shape and a form field. |
 | `29-objects.odt` | The same page as an OpenDocument Text. The picture, the caption, the page break and the columns are carried; the text box, the shape and the form field are written as the author's own characters. |
 | `29-objects.rtf` | The same page as Rich Text. The picture, the caption and the page break are carried; the columns of the section are not, and the text box, the shape and the form field are written as the author's own characters. |
+| `30-bleeding-box.docx` | A text box that hangs off the left margin, on `bleed=true` — the one word that says the author meant it. The slides half has the same rule for a free shape that runs off the edge of the slide, so a document and a deck are written the same way. |
 
 Numbering is one sequence and nothing shares a number. `markdown/14-rejected.md` is
 not in this table because `build.php` does not build it — converting it is the failure
@@ -310,7 +327,7 @@ the structure are all still there.
 ## Directives
 
 `25-toc` and `26-directives` are the two pages about the
-[directive syntax](../README.md#directives), and they are worth opening in
+[directive syntax](https://github.com/markdown-office/markdown-word#directives), and they are worth opening in
 Word rather than reading here.
 
 **The table of contents in `25` is a field, and it is empty on purpose.** Word
@@ -452,7 +469,7 @@ result next to each other.
 Rebuilding them is a separate step:
 
 ```sh
-php examples/build.php --write-templates
+php build.php --write-templates
 ```
 
 It is separate because it is not repeatable. `docProps/core.xml` carries the time a
@@ -490,7 +507,7 @@ frequently not the operator's.
 
 ## One template, two types
 
-`php examples/build.php` renders the same Markdown through `meridian-qbr.dotx` and
+`php build.php` renders the same Markdown through `meridian-qbr.dotx` and
 through an identical copy of it typed as a `.docx`:
 
 | | |

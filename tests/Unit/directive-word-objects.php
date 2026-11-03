@@ -80,6 +80,29 @@ it('places a text box where the directive says', function () {
         ->and($xml)->toContain('margin-top:28.346456692913pt');
 });
 
+it('lets a text box hang off the edge of the page only when it says so', function () {
+    // A box that hangs off the side of the page is a thing a document may want, and it is
+    // also a thing a document may get wrong. The two are told apart by whether the author
+    // said so, and the refusal names what would have worked.
+    expect(fn () => wordObjectDocument('::textbox[Hello there]{width=6 height=3 left=-2}'))
+        ->toThrow(InvalidInput::class, 'or write bleed=true if the box is meant to hang off the edge');
+
+    $xml = TemplateFactory::xmlOf(wordObjectDocument('::textbox[Hello there]{width=6 height=3 left=-2 bleed=true}'));
+
+    expect($xml)->toContain('position:absolute')
+        ->and($xml)->toContain('margin-left:-56.692913385827pt');
+
+    // A bare attribute asks for the attribute rather than for its value, so it means true.
+    $bare = TemplateFactory::xmlOf(wordObjectDocument('::textbox[Hello there]{width=6 height=3 left=-2 bleed}'));
+
+    expect($bare)->toContain('margin-left:-56.692913385827pt');
+});
+
+it('refuses a bleed that is not a flag', function () {
+    expect(fn () => wordObjectDocument('::textbox[Hello there]{width=6 height=3 left=-2 bleed=maybe}'))
+        ->toThrow(InvalidInput::class, 'A flag is true or false: bleed=true, bleed=false.');
+});
+
 it('draws a shape', function () {
     $document = wordObjectDocument('::shape{type=rect width=6 height=3 fill=FF0000}');
 
