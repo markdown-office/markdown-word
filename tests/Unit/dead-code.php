@@ -262,6 +262,22 @@ it('does not claim again what the code does not do', function (string $claim) {
     'a theme is a directory and nothing else, in the loader' => 'Reads a theme out of a directory.',
     'a theme is a directory and nothing else, in the theme' => 'A theme as a directory holds it',
     'a theme is a directory and nothing else, in the failure' => 'A theme directory does not describe a theme',
+    // Two more sentences this change made false, both about the file a theme's look
+    // used to live in. The loader's said a `styles.yml` beside a theme was read when
+    // it was there, and the theme's said the look of a theme was that file. A theme is
+    // one file now, and the file beside it is refused rather than read.
+    'a theme without a styles file is still a theme' => '`styles.yml` is read when it is there',
+    'the look of a theme is in a file of its own' => 'The look of a theme is `styles.yml`',
+    // The loader's own docblock said a theme file out of the scope was read as readily
+    // as one inside it. It is refused, and the sentence contradicted the clause above
+    // it — the file is resolved and held to the scope before it is read — so a reader
+    // who trusted it could have "simplified" the check away. The wording that turned
+    // the reason back into a fact is banned.
+    'a theme file out of the scope is read as readily as one inside it' => 'is read just as readily as one inside it',
+    // The refusal names the file it refuses, and the two documents quoted it with a
+    // bare file name rather than with the path it prints — so a reader looking for
+    // the sentence in the output would not find it.
+    'the refusal is quoted with a bare file name' => '"styles.yml" is not read any more',
     // PHPWord measures an image in pixels, and its RTF and ODF writers read the
     // number back as pixels. Only its Word writer labels the number `pt`, so a
     // picture of 96 pixels came to be laid out 96 points wide — a third too large.

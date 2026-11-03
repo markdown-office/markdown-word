@@ -27,9 +27,10 @@ use Symfony\Component\Yaml\Yaml;
  *
  * The theme's own file is resolved and held to the scope the loader was given before
  * it is read, and the scope is asked of the file rather than of the directory it was
- * found in: a `theme.yml` that is a symlink pointing out of the scope is read just as
- * readily as one inside it, and its values reach the document as direct formatting,
- * which is a way to put a file outside the roots into the output.
+ * found in: checking the directory is not enough, because a `theme.yml` that is a
+ * symlink pointing out of the scope would be read just as readily as one inside it,
+ * and its values would reach the document as direct formatting, which is a way to
+ * put a file outside the roots into the output.
  */
 final class ThemeLoader
 {
@@ -39,7 +40,7 @@ final class ThemeLoader
     public const STYLES_FILE = 'styles.yml';
 
     /**
-     * @param PathScope|null $scope The directories a theme's own files may resolve into.
+     * @param PathScope|null $scope The directories a theme's own file may resolve into.
      *        Null takes the files the finder answers on trust, which is what a theme
      *        this library ships is.
      */
@@ -134,7 +135,7 @@ final class ThemeLoader
     }
 
     /**
-     * One of the theme's own files, resolved and held to the scope.
+     * The theme's own file, resolved and held to the scope.
      *
      * A finder with the bytes and no path is asked for them: the caller vouches for
      * its own files, and there is no path to hold to the scope. A loader with no

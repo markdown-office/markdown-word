@@ -1489,7 +1489,7 @@ the theme's own file, and a file that is quietly not read is a theme that looks 
 one its author wrote and is not — so the file beside the theme is refused, and the
 sentence says where its content goes:
 
-> "styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.
+> "…/styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.
 
 **A theme is found beside the document.** The library is told where the document is,
 because a document handed over as a string has no directory of its own:

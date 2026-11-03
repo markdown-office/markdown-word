@@ -43,12 +43,17 @@ All notable changes to this project are documented here. The format follows
   The four themes that ship with the library are one file each, and the `styles.yml`
   beside each of them is gone.
 
+  **`LoadedTheme` takes the theme rather than the theme's parts.** Its constructor takes
+  a directory and a `Theme` now, and the `Styles` and `TextStyles` arguments are gone:
+  the slots and the named text styles come from the theme it holds. The class is public
+  and a caller may hold one, so a caller that built one by hand has to change with it.
+
   **A `styles.yml` beside a theme is refused rather than ignored**, because a file that
   is quietly not read is a theme that looks like the one its author wrote and is not —
   and the sentence that says where the content goes is the only thing the author has to
   act on:
 
-  > "styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.
+  > "…/styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.
 
   The two halves of the suite keep separate vocabularies: a `theme.yml` that carries
   the slides half's `colors:` is refused by this half, as it was before, and a key

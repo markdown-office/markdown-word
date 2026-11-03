@@ -78,7 +78,7 @@ past.
 | `25-toc.docx` | A `::toc` drawn as a real Word field, so the contents are built by Word on F9 rather than written down here. Three footnotes on the page, for the mark and the note beside each other. |
 | `26-directives.docx` | What a directive becomes in each place: a table of contents and a footnote, and three names this library does not draw — an inline one keeps its braces, a leaf one its whole source form, a container its body without its fence. |
 | `27-frontmatter-template.docx` | A quotation that names its own `template_file:`, so the Markdown beside it is the whole input and nothing has to be supplied from PHP to reproduce it. Contrast with `10` and `22`, which pass the template to the class in code. |
-| `28-inline-styles.docx` | A word in one of a theme's named styles, and the four other forms of the same grammar: the raw one, an attribute over a named style, a name nothing draws, and a label holding Markdown. |
+| `28-inline-styles.docx` | A word in one of a theme's named styles, and the four other forms of the same grammar: the raw one, an attribute over a named style, a name nothing draws, and a label holding Markdown. The theme it draws from is [the corporate one](#the-theme). |
 | `29-objects.docx` | The seven names that place the furniture of a document in it: a picture, a caption, a page break, a section with columns, a floating box, a shape and a form field. |
 | `29-objects.odt` | The same page as an OpenDocument Text. The picture, the caption, the page break and the columns are carried; the text box, the shape and the form field are written as the author's own characters. |
 | `29-objects.rtf` | The same page as Rich Text. The picture, the caption and the page break are carried; the columns of the section are not, and the text box, the shape and the form field are written as the author's own characters. |
@@ -576,3 +576,26 @@ Configuration::create()
 The character half of a style slot — `size`, `bold`, `color`, `italic` — is
 applied to the runs inside the paragraph, because a Word paragraph has no
 character formatting of its own. The rest is applied to the paragraph.
+
+## The theme
+
+The house style above is the look written in code. A theme is the look written in
+a file, and `28-inline-styles` draws from one: its front matter names
+`corporate`, which ships with the library, and the file behind that name is
+`themes/corporate/theme.yml`.
+
+The file is the whole of the theme. It says what it calls itself, and it carries
+its look:
+
+| Key | What it holds |
+| --- | --- |
+| `name` | what the theme calls itself: `Corporate` |
+| `description` | the sentence a reader picks the theme by |
+| `author` | who wrote it |
+| `styles:` | the slots a document is drawn from — `heading.1`, `paragraph`, `codeFont` and the rest |
+| `textStyles:` | the named styles a document may write a word in: `brand` and `muted` here |
+
+The `28` document writes its two words in those two names, and it gets the
+theme's own colours for them. The other three themes that ship with the
+library — `themes/default`, `themes/minimal` and `themes/report` — are one file
+each as well, and they bring no named styles.
