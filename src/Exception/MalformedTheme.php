@@ -70,14 +70,18 @@ final class MalformedTheme extends InvalidConfiguration
      *
      * The file is not read, and a file that is quietly not read is a theme that looks
      * like the one its author wrote and is not — so it is refused, and the sentence
-     * says where the content goes rather than only that the file is wrong. The author
-     * of a theme has one thing to do about it, and the message is the only place that
-     * says what it is.
+     * says where the content goes rather than only that the file is wrong.
+     *
+     * It says that the file has to be deleted as well, because the file is refused for
+     * being there and not for what it holds: an author who moved the styles into the
+     * `theme.yml` and left the file beside it is refused again, with the same sentence.
+     * The author of a theme has two things to do about the file, and the message is the
+     * only place that says both.
      */
     public static function stylesFileBeside(string $file): self
     {
         return new self(sprintf(
-            '"%s" is not read any more. A theme\'s styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.',
+            '"%s" is not read any more. A theme\'s styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section. Delete the file, and the theme is read again.',
             $file,
         ));
     }

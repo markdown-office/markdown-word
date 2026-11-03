@@ -208,8 +208,13 @@ final class ThemeLoader
      *
      * The look is in the `styles:` section of the `theme.yml` beside it, and the file
      * beside that is not read: a theme that carried one is a theme whose styles have
-     * gone missing, and the sentence that says where they went is the only thing the
-     * author has to act on.
+     * gone missing, and the sentence that says what to do about it is the only thing
+     * the author has to act on.
+     *
+     * The file is refused for being there and not for what it holds, so the styles
+     * being in the `theme.yml` already does not make it acceptable — it has to be
+     * deleted as well. The message names that too, because the author has two things
+     * to do and only one of them is about where the content goes.
      *
      * Asked of the finder rather than of the file system, because the finder is where
      * the theme's files are — a source that holds the bytes and no path has it too.

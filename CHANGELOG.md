@@ -50,10 +50,13 @@ All notable changes to this project are documented here. The format follows
 
   **A `styles.yml` beside a theme is refused rather than ignored**, because a file that
   is quietly not read is a theme that looks like the one its author wrote and is not —
-  and the sentence that says where the content goes is the only thing the author has to
-  act on:
+  and the sentence that says where the content goes, and that the file has to be deleted
+  as well, is the only thing the author has to act on:
 
-  > "…/styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.
+  > "…/styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section. Delete the file, and the theme is read again.
+
+  The file is refused for being there and not for what it holds, so a theme whose styles
+  are already in its `theme.yml` is refused as well until the file beside it is gone.
 
   The two halves of the suite keep separate vocabularies: a `theme.yml` that carries
   the slides half's `colors:` is refused by this half, as it was before, and a key

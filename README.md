@@ -1487,9 +1487,13 @@ theme: ./themes/house/theme.yml
 **A `styles.yml` beside a theme is refused.** The look is in the `styles:` section of
 the theme's own file, and a file that is quietly not read is a theme that looks like the
 one its author wrote and is not — so the file beside the theme is refused, and the
-sentence says where its content goes:
+sentence says where its content goes and that the file itself has to go:
 
-> "…/styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section.
+> "…/styles.yml" is not read any more. A theme's styles are in the "styles:" section of its "theme.yml", and its named text styles in the "textStyles:" section. Delete the file, and the theme is read again.
+
+The file is refused for being there and not for what it holds, so moving the styles into
+the `theme.yml` is not enough on its own: the file beside the theme has to be deleted
+as well.
 
 **A theme is found beside the document.** The library is told where the document is,
 because a document handed over as a string has no directory of its own:

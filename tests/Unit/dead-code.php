@@ -5,6 +5,7 @@ declare(strict_types=1);
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Exception\InvalidInput;
+use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\TemplateNotFound;
 
 /*
@@ -316,7 +317,53 @@ it('does not claim again what the code does not do', function (string $claim) {
     // A finder is the default for the themes and for nothing else: a picture falls
     // back to `imageBasePath` and a template to the document's own directory.
     'a finder is the default for every file a document names' => '`Files\\DiskFinder` is the default',
+    // The refusal said where the styles go and stopped there. The file beside the
+    // theme is refused for being there and not for what it holds, so an author who
+    // moved the styles into the `theme.yml` and left the file beside it was refused
+    // again with the same sentence — and the sentence has to name the deletion too.
+    //
+    // The old message ended after the `textStyles:` section, and the closing quote of
+    // the string it was written in is what tells it apart from the new one, which
+    // carries on: the sentence itself is in the message that fixes it.
+    'the refusal does not say that the file has to be deleted' => 'in the "textStyles:" section.\'',
 ]);
+
+it('names every step the reader of a refused styles file has to take', function () {
+    // The sentence that says where the styles go is not the whole instruction: the
+    // file beside the theme is refused for being there and not for what it holds, so
+    // an author who moved the styles and left the file is refused again with the same
+    // sentence. The message has to name the deletion as well.
+    //
+    // The phrase in the list above cannot carry that on its own, because the sentence
+    // it bans is in the message that fixes it. This is the check that carries it.
+    $message = MalformedTheme::stylesFileBeside('/srv/themes/house/styles.yml')->getMessage();
+
+    expect($message)->toEndWith('Delete the file, and the theme is read again.');
+});
+
+it('quotes the refusal as the library prints it', function () {
+    // A quote of a sentence the library no longer prints is a false claim on the
+    // page, and nothing else in the suite reads the quote. The quote is compared as
+    // a whole line, because a sentence that is only the beginning of a longer one is
+    // a quote of something else.
+    //
+    // The changelog is checked for the same reason, and keeps the entries it has: an
+    // entry records what a release said, and a later release that changes the message
+    // adds its own quote rather than rewriting this one.
+    $message = MalformedTheme::stylesFileBeside('/srv/themes/house/styles.yml')->getMessage();
+    $quoted = '> ' . str_replace('/srv/themes/house/styles.yml', '…/styles.yml', $message);
+
+    foreach (['README.md', 'CHANGELOG.md'] as $document) {
+        $lines = array_map(
+            'trim',
+            explode("\n", (string) file_get_contents(dirname(__DIR__, 2) . '/' . $document)),
+        );
+
+        expect(in_array($quoted, $lines, true))->toBeTrue(
+            sprintf('The refusal is not quoted as it is printed in %s.', $document),
+        );
+    }
+});
 
 it('has no decorative dividers in it', function () {
     // A rule of dashes above a run of methods says what the method names below it

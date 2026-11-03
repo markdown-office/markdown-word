@@ -776,11 +776,12 @@ it('reads a theme file of its own accord, without a styles section', function ()
         ->and($loaded->styles()->toArray())->toBe((new Styles())->toArray());
 });
 
-it('refuses a styles file beside a theme, and says where the styles go', function () {
+it('refuses a styles file beside a theme, and says every step the author has to take', function () {
     // A theme that carried one is a theme whose styles have gone missing, and a file
     // that is quietly not read is a theme that looks like the one its author wrote and
-    // is not. The message says where the content goes, because that is the one thing
-    // the author has to do about it.
+    // is not. The message says where the content goes, and that the file has to be
+    // deleted: the file is refused for being there, so an author who moved the styles
+    // and left it beside the theme is refused again with the same sentence.
     [$root, $themes] = scratchThemes();
     $directory = $themes . '/one';
     mkdir($directory, 0o777, true);
@@ -790,10 +791,34 @@ it('refuses a styles file beside a theme, and says where the styles go', functio
     expect(fn () => (new ThemeResolver($root))->resolve('one'))
         ->toThrow(MalformedTheme::class, 'is not read any more');
 
-    // And where the content goes, because that is the one thing the author has to do
-    // about it.
+    // Where the content goes, which is the first of the two things the author has to
+    // do about it.
     expect(fn () => (new ThemeResolver($root))->resolve('one'))
         ->toThrow(MalformedTheme::class, '"styles:" section of its "theme.yml"');
+
+    // And that the file has to be deleted, which is the step the sentence has to name
+    // as well: the file is refused for being there and not for what it holds.
+    expect(fn () => (new ThemeResolver($root))->resolve('one'))
+        ->toThrow(MalformedTheme::class, 'Delete the file, and the theme is read again.');
+});
+
+it('reads a theme whose styles are in its own file, and refuses the file beside it', function () {
+    // The two clauses of the message, told apart by the file rather than by the
+    // content: a theme whose styles are in its `theme.yml` is read, and the same
+    // theme with the file of the old format beside it is refused. The file is
+    // refused for being there, so the styles being in the `theme.yml` already does
+    // not make it acceptable.
+    [$root, $themes] = scratchThemes();
+    $directory = writeTheme($themes, 'one', styles: "heading.1:\n  color: 112233\n");
+
+    $resolver = new ThemeResolver($root);
+
+    expect($resolver->resolve('one')->styles()->get(Styles::HEADING_1)['color'])->toBe('112233');
+
+    file_put_contents($directory . '/styles.yml', "heading.1:\n  color: 112233\n");
+
+    expect(fn () => $resolver->resolve('one'))
+        ->toThrow(MalformedTheme::class, 'Delete the file, and the theme is read again.');
 });
 
 it('refuses a theme file with a key it does not know', function () {

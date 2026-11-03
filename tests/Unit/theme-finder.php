@@ -136,6 +136,11 @@ it('refuses a styles file the source holds and has no path to', function () {
 
     expect(fn () => $loader->load('house', 'house', $finder))
         ->toThrow(MalformedTheme::class, 'is not read any more');
+
+    // And that the file has to be deleted, which is the step the sentence has to name
+    // as well: the file is refused for being there and not for what it holds.
+    expect(fn () => $loader->load('house', 'house', $finder))
+        ->toThrow(MalformedTheme::class, 'Delete the file, and the theme is read again.');
 });
 
 it('refuses a theme file that resolves outside the scope, in the library\'s words', function () {
