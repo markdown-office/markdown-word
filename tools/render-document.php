@@ -491,7 +491,7 @@ try {
 // failed falls through to the next, and a run that announced the first would be wrong.
 if ($rendered['backend'] !== TRUTH) {
     \fwrite(\STDERR, \sprintf(
-        "Rendered with %s, which is not Word. LibreOffice does not always agree with Word about where a line falls, and an inline picture is laid out in a different place often enough that a page that fits here may not fit in Word.\n",
+        "Rendered with %s, which is not Word. A renderer that is not Word does not always agree with Word about where a line falls, and an inline picture is laid out in a different place often enough that a page that fits here may not fit in Word.\n",
         $rendered['backend'],
     ));
 }

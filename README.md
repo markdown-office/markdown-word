@@ -719,6 +719,7 @@ The three of them take these:
 | `checked` | for `::field`: `true` leaves a checkbox ticked |
 | `width`, `height` | the size of a box or a shape, in centimetres |
 | `left`, `top` | where a text box floats: from the left margin, and from the top of the paragraph it stands in |
+| `bleed` | for `::textbox`: whether the box may hang off the edge of the page |
 | `border` | the colour of the line round a text box |
 | `fill`, `line` | the colours a shape is drawn in, six hexadecimal digits without a `#` |
 
@@ -726,6 +727,20 @@ The three of them take these:
 would be a paragraph with a border round it, and a paragraph is what a document
 can already say. `left` and `top` place it, in centimetres like every other
 size here.
+
+**A text box hangs off the edge of the page on `bleed=true`.** A box that runs past
+the margin is a thing a document may want — the rule that runs past the edge, the
+note in a box that is meant to be cut off by the paper — and it is also a thing a
+document may get wrong, and the two are told apart by whether the author said so.
+A `left` or a `top` below zero is refused, and the refusal names what would have
+worked:
+
+> The text box is placed at a left of -2, which is off the edge of the page. A box
+> lies within the page unless it is written to bleed, so write left=0 rather than a
+> negative one — or write bleed=true if the box is meant to hang off the edge.
+
+The slides half has the same rule and the same word for it, so that a document and a
+deck are written the same way.
 
 **A dropdown turns the document into a form.** Word only lets a reader choose
 from one while the document is protected for forms, so a document with a dropdown

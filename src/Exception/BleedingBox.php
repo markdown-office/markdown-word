@@ -30,10 +30,18 @@ final class BleedingBox extends InvalidInput
 
     /**
      * The number as it was written, without a fraction of nothing.
+     *
+     * `sprintf()` rather than `number_format()`, which drops the sign of a number that rounds
+     * to zero: a `left` of `-0.001` came out as `0`, and the refusal told the author to write
+     * the number they had already written.
      */
     private static function written(float $given): string
     {
-        $written = rtrim(rtrim(number_format($given, 2, '.', ''), '0'), '.');
+        $written = rtrim(rtrim(sprintf('%.4F', $given), '0'), '.');
+
+        if ($written === '-0') {
+            $written = rtrim(rtrim(sprintf('%.8F', $given), '0'), '.');
+        }
 
         return $written === '' || $written === '-' ? '0' : $written;
     }

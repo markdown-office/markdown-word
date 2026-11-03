@@ -109,7 +109,7 @@ final class DocxOnly
         }
 
         $border = $attributes->getString('border') ?? self::BORDER;
-        $placement = $this->placement($node, $attributes);
+        $placement = $this->placement($attributes);
 
         $box = $target->addTextBox([
             'width' => self::POINTS_PER_CENTIMETRE * $width,
@@ -140,7 +140,7 @@ final class DocxOnly
      *
      * @throws BleedingBox When the box is off the edge of the page and does not say so.
      */
-    private function placement(DirectiveBlock $node, DirectiveAttributes $attributes): array
+    private function placement(DirectiveAttributes $attributes): array
     {
         $left = $attributes->getFloat('left') ?? 0.0;
         $top = $attributes->getFloat('top') ?? 0.0;

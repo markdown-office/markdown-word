@@ -21,7 +21,7 @@ php build.php
 
 In a checkout of the library, `composer install` is what puts the library where
 the script looks for it. Anywhere else, the script wants the same thing: a
-`vendor/autoload.php` beside this directory's parent.
+`vendor/autoload.php` in this directory's parent.
 
 The Markdown sources are in `markdown/`, the Word templates in `templates/`, and
 everything the build generates in `out/`:

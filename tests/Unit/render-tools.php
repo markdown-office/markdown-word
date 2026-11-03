@@ -312,6 +312,25 @@ it('refuses rather than falling back to nothing it can trust', function () {
     expect($answer['out'])->toBe("none\n");
 });
 
+it('does not announce a renderer it cannot run', function () {
+    // WordCraft draws a Word document and DeckCraft draws a deck, and they are two
+    // programs: a machine that has one of them has not got the other. A check that says the
+    // craft backend is there because one of the two is there announces a renderer the run
+    // cannot use, and the announcement is what a caller reads before it asks for the file.
+    $directory = toolsHolding('deckcraft-cli');
+
+    $document = Scratch::path('document', '.docx');
+
+    file_put_contents($document, 'not a document');
+
+    $answer = dispatcher(
+        ['MARKDOWN_OFFICE_PLATFORM' => 'linux', 'PATH' => $directory],
+        ['--which', $document],
+    );
+
+    expect($answer['out'])->toBe("none\n");
+});
+
 it('draws a deck through DeckCraft and a document through LibreOffice when only DeckCraft is there', function () {
     // WordCraft draws a Word document and DeckCraft draws a deck, and they are two
     // programs. A machine that has one of them has not got the other, and a check that
