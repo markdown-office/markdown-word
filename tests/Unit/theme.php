@@ -833,20 +833,45 @@ it('refuses a theme file with a key it does not know', function () {
         ->toThrow(InvalidConfiguration::class, 'A theme may have: name, description, author, styles, textStyles.');
 });
 
-it('refuses the slides half\'s palette, because the two halves keep separate vocabularies', function () {
-    // A theme file serves one half, and a key this half does not know is a mistake
-    // worth saying so about: a theme carrying the other half's palette would look
-    // like it worked and change nothing.
+it('refuses the slides half\'s palette, because the halves part at the look', function () {
+    // The other half's palette is refused rather than read and ignored: a theme
+    // carrying it would look like it worked and change nothing.
     [$root, $themes] = scratchThemes();
     writeTheme($themes, 'one', theme: "name: Test\ncolors:\n  dk1: \"#000000\"\n");
 
     expect(fn () => (new ThemeResolver($root))->resolve('one'))
         ->toThrow(InvalidConfiguration::class, 'Unknown key "colors"');
 
-    // And the keys this half has: its own two sections and nothing of the other
-    // half's.
+    // And the keys this half has: `styles:` for its own look, and the four the two
+    // halves share.
     expect(fn () => (new ThemeResolver($root))->resolve('one'))
         ->toThrow(InvalidConfiguration::class, 'A theme may have: name, description, author, styles, textStyles.');
+});
+
+it('reads the vocabulary the two halves share, and refuses the other half\'s look', function () {
+    // The two vocabularies overlap: `name`, `description`, `author` and `textStyles`
+    // are in both, so a theme file carrying only those is read here and in the slides
+    // half alike, and each draws it its own way. What this half refuses is the other
+    // half's look.
+    [$root, $themes] = scratchThemes();
+    writeTheme($themes, 'shared', theme: "name: Shared\ndescription: Read by both.\nauthor: Nobody\ntextStyles:\n  brand:\n    color: \"0B5CAB\"\n");
+
+    $theme = (new ThemeResolver($root))->resolve('shared')->theme();
+
+    expect($theme->name())->toBe('Shared')
+        ->and($theme->description())->toBe('Read by both.')
+        ->and($theme->author())->toBe('Nobody')
+        ->and($theme->textStyles()->toArray())->toBe(['brand' => ['color' => '0B5CAB']]);
+
+    // The other half's look, key by key: `dark`, `colors`, `fonts`, `style` and
+    // `layouts` are the slides half's, and not one of them is a key this half knows.
+    foreach (['dark', 'colors', 'fonts', 'style', 'layouts'] as $key) {
+        [$root, $themes] = scratchThemes();
+        writeTheme($themes, 'slides', theme: "name: Slides\n{$key}: {}\n");
+
+        expect(fn () => (new ThemeResolver($root))->resolve('slides'))
+            ->toThrow(InvalidConfiguration::class, sprintf('Unknown key "%s"', $key));
+    }
 });
 
 it('refuses a theme file that does not name itself', function () {

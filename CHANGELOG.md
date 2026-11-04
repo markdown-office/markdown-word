@@ -58,9 +58,11 @@ All notable changes to this project are documented here. The format follows
   The file is refused for being there and not for what it holds, so a theme whose styles
   are already in its `theme.yml` is refused as well until the file beside it is gone.
 
-  The two halves of the suite keep separate vocabularies: a `theme.yml` that carries
-  the slides half's `colors:` is refused by this half, as it was before, and a key
-  nobody wrote down is still refused rather than left out.
+  The two halves of the suite part at the look: a `theme.yml` that carries the
+  slides half's `colors:` is refused by this half, as it was before, and a key
+  nobody wrote down is still refused rather than left out. A theme file that carries
+  only what the two halves share — a name, a description, an author and the named
+  text styles — is read by both, and each draws it its own way.
 
   A document's own `styles:` in its frontmatter still overrides its theme's, slot by
   slot, and a document that names one property of one slot still keeps the rest.

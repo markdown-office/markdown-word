@@ -19,8 +19,7 @@ use MarkdownWord\Exception\UnknownStyleSlot;
  * `textStyles:` for the named styles a document may write a word in.
  *
  * This half deliberately holds no palette, no type scale and no rules for turning
- * either into slot values. That is the one place this half differs from the
- * presentation half, and the reason is worth stating. PHPWord writes
+ * either into slot values, and the reason is worth stating. PHPWord writes
  * `word/theme/theme1.xml` with a fixed scheme and no way to change it
  * (`Writer\Word2007\Part\Theme` writes its own twelve colours), and the renderer
  * writes colours straight onto the runs rather than referring to theme slots. A
@@ -29,10 +28,13 @@ use MarkdownWord\Exception\UnknownStyleSlot;
  * wrote down, applied in a layer the reader of the file never sees. A theme that
  * says `heading.1: {color: "…"}` says what it means.
  *
- * The two halves of this suite keep separate vocabularies, and this one is narrow on
- * purpose: a `theme.yml` that carries the slides half's `colors:` or `fonts:` is
- * refused, and so is one that carries a key nobody wrote down. A theme file serves
- * one half, and a key this half does not know is a mistake worth saying so about.
+ * The two halves of this suite part at the look, and this one is narrow on purpose:
+ * a `theme.yml` that carries the slides half's `colors:` or `fonts:` is refused, and
+ * so is one that carries a key nobody wrote down. This half's own look is `styles:`,
+ * and the slides half's is `dark:`, `colors:`, `fonts:`, `style:` or `layouts:`;
+ * what the two share is a theme's name, its description, its author and its named
+ * text styles, so a theme file carrying only those is read by both, and each draws
+ * it its own way. A key this half does not know is a mistake worth saying so about.
  */
 final class Theme
 {

@@ -326,6 +326,21 @@ it('does not claim again what the code does not do', function (string $claim) {
     // the string it was written in is what tells it apart from the new one, which
     // carries on: the sentence itself is in the message that fixes it.
     'the refusal does not say that the file has to be deleted' => 'in the "textStyles:" section.\'',
+    // The two halves of the suite share a vocabulary: `name`, `description`, `author`
+    // and `textStyles` are in both, so a theme file carrying only those is read by
+    // both halves and each draws it its own way. What the two part at is the look —
+    // `styles:` here, and `dark:`, `colors:`, `fonts:`, `style:` or `layouts:` there
+    // — and a file carrying the other half's look is refused rather than read and
+    // ignored.
+    //
+    // The banned phrase is the fragment both of the false sentences used, so it does
+    // not catch a sentence that says the halves part at the look.
+    'the halves keep separate vocabularies' => 'suite keep separate vocabularies',
+    'a theme file serves one half' => 'A theme file serves one half',
+    // The halves differ in more than one place: the slides half's theme file may
+    // carry `dark:` and `layouts:` as well, and this one's may not. The palette was
+    // not the only difference between the two vocabularies.
+    'the halves differ in one place only' => 'the one place this half differs',
 ]);
 
 it('names every step the reader of a refused styles file has to take', function () {
