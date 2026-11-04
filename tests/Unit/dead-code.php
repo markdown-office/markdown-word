@@ -5,6 +5,7 @@ declare(strict_types=1);
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Exception\InvalidInput;
+use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\TemplateNotFound;
 
 /*
@@ -251,12 +252,33 @@ it('does not claim again what the code does not do', function (string $claim) {
     // file rather than by the directory around it. Two messages said a theme is a
     // directory, the page said the same in a longer sentence, and three docblocks said
     // it in their own words.
+    //
+    // The last of the six is the page's own sentence, and it is wrong a second time
+    // now: a theme is one file, so a `styles.yml` beside it is not a file of the
+    // theme's but a file of the format this half used to have. The phrase stays banned
+    // — it is exactly the claim that could come back.
     'a theme is a directory and nothing else' => 'A theme is a directory holding that file',
     'a theme is a directory and nothing else, on this machine' => 'A theme is a directory on this machine, not something to fetch',
     'a theme is a directory and nothing else, on the page' => 'A theme is a directory holding a `theme.yml` and, usually, a `styles.yml`',
     'a theme is a directory and nothing else, in the loader' => 'Reads a theme out of a directory.',
     'a theme is a directory and nothing else, in the theme' => 'A theme as a directory holds it',
     'a theme is a directory and nothing else, in the failure' => 'A theme directory does not describe a theme',
+    // Two more sentences this change made false, both about the file a theme's look
+    // used to live in. The loader's said a `styles.yml` beside a theme was read when
+    // it was there, and the theme's said the look of a theme was that file. A theme is
+    // one file now, and the file beside it is refused rather than read.
+    'a theme without a styles file is still a theme' => '`styles.yml` is read when it is there',
+    'the look of a theme is in a file of its own' => 'The look of a theme is `styles.yml`',
+    // The loader's own docblock said a theme file out of the scope was read as readily
+    // as one inside it. It is refused, and the sentence contradicted the clause above
+    // it — the file is resolved and held to the scope before it is read — so a reader
+    // who trusted it could have "simplified" the check away. The wording that turned
+    // the reason back into a fact is banned.
+    'a theme file out of the scope is read as readily as one inside it' => 'is read just as readily as one inside it',
+    // The refusal names the file it refuses, and the two documents quoted it with a
+    // bare file name rather than with the path it prints — so a reader looking for
+    // the sentence in the output would not find it.
+    'the refusal is quoted with a bare file name' => '"styles.yml" is not read any more',
     // PHPWord measures an image in pixels, and its RTF and ODF writers read the
     // number back as pixels. Only its Word writer labels the number `pt`, so a
     // picture of 96 pixels came to be laid out 96 points wide — a third too large.
@@ -295,7 +317,68 @@ it('does not claim again what the code does not do', function (string $claim) {
     // A finder is the default for the themes and for nothing else: a picture falls
     // back to `imageBasePath` and a template to the document's own directory.
     'a finder is the default for every file a document names' => '`Files\\DiskFinder` is the default',
+    // The refusal said where the styles go and stopped there. The file beside the
+    // theme is refused for being there and not for what it holds, so an author who
+    // moved the styles into the `theme.yml` and left the file beside it was refused
+    // again with the same sentence — and the sentence has to name the deletion too.
+    //
+    // The old message ended after the `textStyles:` section, and the closing quote of
+    // the string it was written in is what tells it apart from the new one, which
+    // carries on: the sentence itself is in the message that fixes it.
+    'the refusal does not say that the file has to be deleted' => 'in the "textStyles:" section.\'',
+    // The two halves of the suite share a vocabulary: `name`, `description`, `author`
+    // and `textStyles` are in both, so a theme file carrying only those is read by
+    // both halves and each draws it its own way. What the two part at is the look —
+    // `styles:` here, and `dark:`, `colors:`, `fonts:`, `style:` or `layouts:` there
+    // — and a file carrying the other half's look is refused rather than read and
+    // ignored.
+    //
+    // The banned phrase is the fragment both of the false sentences used, so it does
+    // not catch a sentence that says the halves part at the look.
+    'the halves keep separate vocabularies' => 'suite keep separate vocabularies',
+    'a theme file serves one half' => 'A theme file serves one half',
+    // The halves differ in more than one place: the slides half's theme file may
+    // carry `dark:` and `layouts:` as well, and this one's may not. The palette was
+    // not the only difference between the two vocabularies.
+    'the halves differ in one place only' => 'the one place this half differs',
 ]);
+
+it('names every step the reader of a refused styles file has to take', function () {
+    // The sentence that says where the styles go is not the whole instruction: the
+    // file beside the theme is refused for being there and not for what it holds, so
+    // an author who moved the styles and left the file is refused again with the same
+    // sentence. The message has to name the deletion as well.
+    //
+    // The phrase in the list above cannot carry that on its own, because the sentence
+    // it bans is in the message that fixes it. This is the check that carries it.
+    $message = MalformedTheme::stylesFileBeside('/srv/themes/house/styles.yml')->getMessage();
+
+    expect($message)->toEndWith('Delete the file, and the theme is read again.');
+});
+
+it('quotes the refusal as the library prints it', function () {
+    // A quote of a sentence the library no longer prints is a false claim on the
+    // page, and nothing else in the suite reads the quote. The quote is compared as
+    // a whole line, because a sentence that is only the beginning of a longer one is
+    // a quote of something else.
+    //
+    // The changelog is checked for the same reason, and keeps the entries it has: an
+    // entry records what a release said, and a later release that changes the message
+    // adds its own quote rather than rewriting this one.
+    $message = MalformedTheme::stylesFileBeside('/srv/themes/house/styles.yml')->getMessage();
+    $quoted = '> ' . str_replace('/srv/themes/house/styles.yml', '…/styles.yml', $message);
+
+    foreach (['README.md', 'CHANGELOG.md'] as $document) {
+        $lines = array_map(
+            'trim',
+            explode("\n", (string) file_get_contents(dirname(__DIR__, 2) . '/' . $document)),
+        );
+
+        expect(in_array($quoted, $lines, true))->toBeTrue(
+            sprintf('The refusal is not quoted as it is printed in %s.', $document),
+        );
+    }
+});
 
 it('has no decorative dividers in it', function () {
     // A rule of dashes above a run of methods says what the method names below it

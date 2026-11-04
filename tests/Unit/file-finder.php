@@ -241,6 +241,9 @@ it('lists the files of a theme, sorted, and nothing for a theme that is not ther
 
     $finder = new DiskFinder(theme: [$base]);
 
+    // The file from the format this library used to have is listed as well: the finder
+    // lists what a directory holds and knows nothing of what a theme may hold. It is
+    // the library that refuses it.
     expect($finder->files('house'))->toBe(['cover.png', 'styles.yml', 'theme.yml'])
         ->and($finder->files('missing'))->toBe([]);
 });

@@ -56,7 +56,7 @@ final class TextStyles
      */
     public const RESERVED = 'style';
 
-    /** The key a theme's `styles.yml` carries them under. */
+    /** The key a theme's `theme.yml` carries them under. */
     public const KEY = 'textStyles';
 
     /**

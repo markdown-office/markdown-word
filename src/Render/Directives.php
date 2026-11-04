@@ -34,7 +34,7 @@ use PhpOffice\PhpWord\Element\AbstractContainer;
  * care about case and `::TOC` is not a different directive from `::toc`.
  *
  * A theme's text styles are names too, and they are not fixed: they are the
- * ones the theme's `styles.yml` brings, so they are held apart from the two
+ * ones the theme's `theme.yml` brings, so they are held apart from the two
  * maps rather than written into them. The handler that draws them is asked
  * whether a name is its own before anything else happens, which is what lets a
  * name that is not a style be drawn as the source form it was written as.

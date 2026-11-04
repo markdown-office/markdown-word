@@ -61,13 +61,22 @@ function styleThemes(): array
     return [$root, $root . '/themes'];
 }
 
-/** A theme with a `styles.yml` of the given contents. */
-function writeStyleTheme(string $themes, string $name, string $styles): void
+/**
+ * A theme whose file says what the test means.
+ *
+ * The slots are the body of the theme's `styles:` section and the named styles the
+ * body of its `textStyles:` section, written as the YAML the test means: a colour
+ * left unquoted stays unquoted, because how YAML reads it is part of what the loader
+ * has to cope with.
+ */
+function writeStyleTheme(string $themes, string $name, string $styles = '', string $textStyles = ''): void
 {
     $directory = $themes . '/' . $name;
     mkdir($directory, 0o777, true);
-    file_put_contents($directory . '/theme.yml', "name: Test\n");
-    file_put_contents($directory . '/styles.yml', $styles);
+    file_put_contents(
+        $directory . '/theme.yml',
+        "name: Test\n" . yamlSection('styles', $styles) . yamlSection('textStyles', $textStyles),
+    );
 }
 
 /** The runs of the first paragraph of a document. */
@@ -133,7 +142,7 @@ it('draws a name it does not know as its own source text', function () {
 
 it('draws the names a theme defines and leaves the rest alone', function () {
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'house', "textStyles:\n  brand:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'house', textStyles: "brand:\n  color: \"0B5CAB\"\n");
 
     $markdown = "A :brand[Bakery] and a :green[go] here.\n";
     $converter = (new MarkdownToWord($markdown, directory: $root))->withTheme('house');
@@ -244,7 +253,7 @@ it('merges a style of the same name over the one already there', function () {
 
 it('draws a style the theme spells with a capital letter, whichever case the document writes it in', function () {
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'house', "textStyles:\n  Brand:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'house', textStyles: "Brand:\n  color: \"0B5CAB\"\n");
 
     $converter = (new MarkdownToWord('# T', directory: $root))->withTheme('house');
     $markdown = "A :brand[Bakery] and a :Brand[Bakery] here.\n";
@@ -256,7 +265,7 @@ it('names a style the way the theme spelled it', function () {
     // The author's change is in the theme, so the spelling the theme wrote is the one
     // to name.
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'house', "textStyles:\n  Brand:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'house', textStyles: "Brand:\n  color: \"0B5CAB\"\n");
 
     $converter = (new MarkdownToWord('# T', directory: $root))->withTheme('house');
     $config = $converter->configurationFor($converter->parse('# T'));
@@ -279,7 +288,7 @@ it('refuses a theme that names one text style twice, in two spellings', function
     // The names are folded, so `Brand` and `brand` are one name: a theme carrying both
     // has two styles a document cannot tell apart.
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'bad', "textStyles:\n  Brand:\n    color: \"0B5CAB\"\n  brand:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'bad', textStyles: "Brand:\n  color: \"0B5CAB\"\nbrand:\n  color: \"0B5CAB\"\n");
 
     expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
         ->toThrow(MalformedTheme::class, 'is the same style as');
@@ -289,7 +298,7 @@ it('refuses a text style named with the reserved word in another case', function
     // The reserved word is folded with the rest of the names, because `Style` is the
     // same word as `style`.
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'bad', "textStyles:\n  Style:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'bad', textStyles: "Style:\n  color: \"0B5CAB\"\n");
 
     expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
         ->toThrow(InvalidConfiguration::class, '"style" is the name the raw form takes.');
@@ -300,7 +309,7 @@ it('refuses a text style named after a directive', function () {
     // never be applied to a word: `:footnote[…]` draws the footnote, and the style is
     // left with nothing to reach it.
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'bad', "textStyles:\n  footnote:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'bad', textStyles: "footnote:\n  color: \"0B5CAB\"\n");
 
     expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
         ->toThrow(InvalidConfiguration::class, '"footnote" is the name of a directive this library draws');
@@ -309,7 +318,7 @@ it('refuses a text style named after a directive', function () {
 it('refuses a text style named after a directive in another case', function () {
     // The names are folded, as every other name in this library is.
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'bad', "textStyles:\n  Footnote:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'bad', textStyles: "Footnote:\n  color: \"0B5CAB\"\n");
 
     expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
         ->toThrow(InvalidConfiguration::class, '"footnote" is the name of a directive this library draws');
@@ -326,7 +335,7 @@ it('refuses a configuration that names a text style after a directive', function
 
 it('renders a theme with no text styles, and draws a named style against it as source text', function () {
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'plain', "heading.1:\n  color: 112233\n");
+    writeStyleTheme($themes, 'plain', styles: "heading.1:\n  color: 112233\n");
 
     $markdown = "A :brand[Bakery] here.\n";
     $converter = (new MarkdownToWord($markdown, directory: $root))->withTheme('plain');
@@ -357,35 +366,35 @@ it('draws a style with no text at all as its source text', function () {
     expect(renderText("A :brand[] here.\n", $config))->toBe('A :brand here.');
 });
 
-it('refuses a styles file whose text styles name an attribute that does not exist', function () {
+it('refuses a theme whose text styles name an attribute that does not exist', function () {
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'bad', "textStyles:\n  brand:\n    colour: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'bad', textStyles: "brand:\n  colour: \"0B5CAB\"\n");
 
     expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
         ->toThrow(UnknownConfigurationKey::class, 'Unknown "colour" property of the "brand" style');
 });
 
-it('refuses a styles file whose text style has no properties', function () {
+it('refuses a theme whose text style has no properties', function () {
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'bad', "textStyles:\n  brand: {}\n");
+    writeStyleTheme($themes, 'bad', textStyles: "brand: {}\n");
 
     expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
         ->toThrow(InvalidConfiguration::class, 'A style that styles nothing is a mistake.');
 });
 
-it('refuses a styles file that defines a style called "style"', function () {
+it('refuses a theme that defines a style called "style"', function () {
     // The one reserved word: `style` is the name the raw form takes, and a theme
     // that took it would leave the raw form with nothing to mean.
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'bad', "textStyles:\n  style:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme($themes, 'bad', textStyles: "style:\n  color: \"0B5CAB\"\n");
 
     expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
         ->toThrow(InvalidConfiguration::class, '"style" is the name the raw form takes.');
 });
 
-it('refuses a styles file whose text style holds a value it cannot use', function () {
+it('refuses a theme whose text style holds a value it cannot use', function () {
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'bad', "textStyles:\n  brand:\n    color: \"#0B5CAB\"\n");
+    writeStyleTheme($themes, 'bad', textStyles: "brand:\n  color: \"#0B5CAB\"\n");
 
     expect(fn () => (new MarkdownToWord('# T', directory: $root))->withTheme('bad'))
         ->toThrow(InvalidConfiguration::class, 'six hexadecimal digits');
@@ -393,7 +402,12 @@ it('refuses a styles file whose text style holds a value it cannot use', functio
 
 it('leaves the slot styles alone when a theme brings text styles', function () {
     [$root, $themes] = styleThemes();
-    writeStyleTheme($themes, 'house', "heading.1:\n  color: 112233\n\ntextStyles:\n  brand:\n    color: \"0B5CAB\"\n");
+    writeStyleTheme(
+        $themes,
+        'house',
+        styles: "heading.1:\n  color: 112233\n",
+        textStyles: "brand:\n  color: \"0B5CAB\"\n",
+    );
 
     $markdown = "---\ntheme: house\n---\n\n# T\n";
     $converter = new MarkdownToWord($markdown, directory: $root, parser: CommonMarkParser::withFrontMatter());

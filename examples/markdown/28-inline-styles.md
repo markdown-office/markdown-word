@@ -8,6 +8,10 @@ The theme this document names — `corporate`, which ships with the library —
 brings two named styles with it, `brand` and `muted`. A word written in one of
 them is set in that style, in the middle of a sentence.
 
+The two live in the theme's own file — its `theme.yml`. A theme is one file: a
+`styles:` section says how the document's headings, body and code are drawn, and
+a `textStyles:` section says what a named style looks like.
+
 The foundry's own name, in the brand style: :brand[Orrery] Type Foundry.
 
 A line of small print, in the muted one: :muted[Cast by hand since 1974.]
