@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-11-04
 
 ### Added
 
@@ -1406,6 +1406,7 @@ on it:
 `README.md` has the full list, and `Reverse\Options` is where each one is
 configurable.
 
+[0.4.0]: https://github.com/markdown-office/markdown-word/releases/tag/v0.4.0
 [0.3.1]: https://github.com/markdown-office/markdown-word/releases/tag/v0.3.1
 [composer-patches]: https://github.com/cweagans/composer-patches
 [0.2.2]: https://github.com/markdown-office/markdown-word/releases/tag/v0.2.2
