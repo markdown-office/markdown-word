@@ -630,6 +630,12 @@ as it stands. So is a construct CommonMark does not call emphasis: `__ Bakery__`
 and `** text**` are text, because a delimiter that opens an emphasis may not be
 followed by a space and one that closes it may not be preceded by one.
 
+**A label holds no brackets.** It ends at the first `]`, so a link cannot be in
+one — a link is written in brackets. `:brand[[Bakery](https://example.com)]` is
+not a link with a styled word in it: the directive ends at `:brand` and the rest
+is ordinary Markdown. A link *around* the directive is the way to write one:
+`[:brand[Bakery]](https://example.com)`.
+
 **What this library cannot draw is drawn as its own source text.** That is the
 policy of this half, and the inline styles keep it:
 
