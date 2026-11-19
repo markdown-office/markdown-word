@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A pipe inside a table cell stays in the cell.** A pipe ends a cell in GFM,
+  whatever surrounds it, so a cell holding one was written with the cell split
+  in two — and a row with more cells in it than the header has is not a table at
+  all.
+
+  The escaping was already there: `Reverse\Escaping::text()` has taken a flag
+  for a run inside a cell since it was written, and nothing ever set it. It is
+  set now, and it reaches the runs of a cell — the text, a code span, the label
+  of a link, its destination and its title.
+
+  The reader of a table takes the backslash of a `\|` for the escape it is and
+  keeps the pipe, so the escape is not part of the text the reader sees.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

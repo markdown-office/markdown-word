@@ -44,7 +44,7 @@ final class InlineWriter
             }
 
             if ($inline->is(Inline::LINK, Inline::IMAGE)) {
-                $out = $this->linkOrImage($out, $open, $inline);
+                $out = $this->linkOrImage($out, $open, $inline, $inTable);
                 $lineStart = false;
 
                 continue;
@@ -84,7 +84,7 @@ final class InlineWriter
      *
      * @param list<string> $open
      */
-    private function linkOrImage(string $out, array &$open, Inline $inline): string
+    private function linkOrImage(string $out, array &$open, Inline $inline, bool $inTable): string
     {
         $out = $this->closeAll($out, $open);
 
@@ -95,7 +95,7 @@ final class InlineWriter
             $out = substr($out, 0, -1) . '\\!';
         }
 
-        return $out . ($inline->is(Inline::LINK) ? $this->link($inline) : $this->image($inline));
+        return $out . ($inline->is(Inline::LINK) ? $this->link($inline, $inTable) : $this->image($inline));
     }
 
     /**
@@ -110,9 +110,11 @@ final class InlineWriter
     {
         if ($inline->code) {
             // A code span is verbatim, so its content is written as it stands:
-            // escaping inside it would make the backslashes visible. Where no
-            // code span can hold the content, the characters are written out.
-            $span = Escaping::codeSpan($inline->text);
+            // escaping inside it would make the backslashes visible. A pipe is
+            // the exception, because a pipe ends a cell and the reader of the
+            // table takes the backslash for the escape it is rather than for a
+            // character of the content.
+            $span = Escaping::codeSpan($inline->text, $inTable);
 
             return $out . ($span ?? $this->hardenNewlines(
                 Escaping::text($inline->text, $lineStart, $inTable),
@@ -237,18 +239,26 @@ final class InlineWriter
         return '![' . $alt . '](' . $target . ')';
     }
 
-    private function link(Inline $inline): string
+    private function link(Inline $inline, bool $inTable): string
     {
-        $label = $this->write($inline->children);
+        $label = $this->write($inline->children, $inTable);
 
         $url = $inline->url;
+        $title = $inline->title;
+
+        if ($inTable) {
+            // A pipe ends a cell whatever surrounds it, so the destination and
+            // the title are written with the pipe escaped.
+            $url = str_replace('|', '\\|', $url);
+            $title = $title === null ? null : str_replace('|', '\\|', $title);
+        }
 
         if (preg_match('/[\s()<>]/', $url) === 1) {
             $url = '<' . str_replace(['<', '>'], ['\\<', '\\>'], $url) . '>';
         }
 
-        if ($inline->title !== null && $inline->title !== '') {
-            $url .= ' "' . str_replace('"', '\\"', $inline->title) . '"';
+        if ($title !== null && $title !== '') {
+            $url .= ' "' . str_replace('"', '\\"', $title) . '"';
         }
 
         return '[' . $label . '](' . $url . ')';

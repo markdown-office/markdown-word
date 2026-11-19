@@ -48,13 +48,15 @@ final class MarkdownWriter
      * @param list<Block> $blocks
      * @param string       $separator A single newline in a tight list, a blank
      *        line in a loose one.
+     * @param bool         $inTable Whether the blocks sit inside a table cell,
+     *        where a pipe would end the cell.
      */
-    private function blocks(array $blocks, string $separator = "\n\n"): string
+    private function blocks(array $blocks, string $separator = "\n\n", bool $inTable = false): string
     {
         $parts = [];
 
         foreach ($blocks as $block) {
-            $part = $this->block($block);
+            $part = $this->block($block, $inTable);
 
             if ($part !== '') {
                 // A block never begins or ends with a line break of its own, so
@@ -66,24 +68,24 @@ final class MarkdownWriter
         return implode($separator, $parts);
     }
 
-    private function block(Block $block): string
+    private function block(Block $block, bool $inTable = false): string
     {
         return match ($block->kind) {
-            Block::PARAGRAPH => $this->paragraph($block),
+            Block::PARAGRAPH => $this->paragraph($block, $inTable),
             Block::RULE => '---',
             Block::CODE => $this->code($block),
-            Block::LIST => $this->list($block),
-            Block::QUOTE => $this->quote($block),
+            Block::LIST => $this->list($block, $inTable),
+            Block::QUOTE => $this->quote($block, $inTable),
             Block::TABLE => $this->table($block),
             default => '',
         };
     }
 
-    private function paragraph(Block $block): string
+    private function paragraph(Block $block, bool $inTable = false): string
     {
         // A newline at either end of a paragraph is an artefact of the block that
         // held it rather than something the reader should see.
-        $text = trim($this->inlines->write($block->inlines), "\n");
+        $text = trim($this->inlines->write($block->inlines, $inTable), "\n");
         $level = $block->attr('level');
 
         if (!is_int($level)) {
@@ -127,9 +129,9 @@ final class MarkdownWriter
         return $fence . $info . "\n" . $text . "\n" . $fence;
     }
 
-    private function quote(Block $block): string
+    private function quote(Block $block, bool $inTable = false): string
     {
-        $body = $this->blocks($block->children);
+        $body = $this->blocks($block->children, "\n\n", $inTable);
 
         if ($body === '') {
             return '';
@@ -145,7 +147,7 @@ final class MarkdownWriter
         return implode("\n", $lines);
     }
 
-    private function list(Block $block): string
+    private function list(Block $block, bool $inTable = false): string
     {
         $ordered = (bool) $block->attr('ordered', false);
         $start = (int) $block->attr('start', 1);
@@ -162,7 +164,7 @@ final class MarkdownWriter
         $lines = [];
 
         foreach ($block->children as $item) {
-            $lines[] = $this->item($item, $marker, $separator);
+            $lines[] = $this->item($item, $marker, $separator, $inTable);
 
             if ($ordered) {
                 $this->counters[count($this->counters) - 1]++;
@@ -179,7 +181,7 @@ final class MarkdownWriter
      * One list item, whose body is either several blocks separated by blank lines
      * or a nested list.
      */
-    private function item(Block $item, string $marker, string $separator): string
+    private function item(Block $item, string $marker, string $separator, bool $inTable = false): string
     {
         $blocks = $item->children;
         $checkbox = $this->checkbox($blocks);
@@ -188,7 +190,7 @@ final class MarkdownWriter
             $blocks[0] = $blocks[0]->withInlines($this->withoutCheckbox($blocks[0]->inlines));
         }
 
-        $body = $this->blocks($blocks, $separator);
+        $body = $this->blocks($blocks, $separator, $inTable);
 
         if ($body === '') {
             return $marker . ' ' . $checkbox;
@@ -321,13 +323,16 @@ final class MarkdownWriter
     /**
      * A cell holds blocks; GFM holds one line, so a paragraph break becomes the
      * one way of writing more than one line in a cell.
+     *
+     * A pipe ends the cell whatever surrounds it, so the runs written in one
+     * have their pipes escaped.
      */
     private function cell(Block $cell): string
     {
         $parts = [];
 
         foreach ($cell->children as $block) {
-            $text = $this->block($block);
+            $text = $this->block($block, inTable: true);
 
             if ($text !== '') {
                 $parts[] = str_replace("\n", '<br>', $text);

@@ -78,8 +78,11 @@ final class Escaping
      * Returns null when the content cannot be written as a code span at all: a
      * span may not contain a blank line, and there is then nothing to fall back
      * on but writing the characters as they are.
+     *
+     * @param bool $inTable Whether the span sits inside a table cell, where a
+     *        pipe would end the cell.
      */
-    public static function codeSpan(string $literal): ?string
+    public static function codeSpan(string $literal, bool $inTable = false): ?string
     {
         // A code span ends at a blank line rather than at the fence, so one that
         // spans several paragraphs has no valid form.
@@ -102,7 +105,24 @@ final class Escaping
             $literal = str_repeat(' ', $pad) . $literal . str_repeat(' ', $pad);
         }
 
+        if ($inTable) {
+            $literal = self::escapeTablePipes($literal);
+        }
+
         return $fence . $literal . $fence;
+    }
+
+    /**
+     * The pipes of a code span's content, escaped for a table cell.
+     *
+     * A pipe ends a cell whatever surrounds it, so it is written `\|`. The
+     * reader of a table takes the backslash for the escape it is and keeps the
+     * pipe, so the escape is not part of the text the reader sees — which is
+     * what lets a code span carry one, its content being read as it stands.
+     */
+    private static function escapeTablePipes(string $literal): string
+    {
+        return str_replace('|', '\\|', $literal);
     }
 
     /**
