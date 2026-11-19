@@ -88,55 +88,39 @@ final class TextExtractor
      */
     private static function fromElement(mixed $element, string $separator, array $hyperlinks = []): string
     {
-        if ($element instanceof Text) {
+        return match (true) {
             // Both placeholders are swapped out while the file is written, so a text
             // extraction taken from the element tree before that sees them. The
             // hyperlink one is resolved here because its payload is in hand; a table of
             // contents' placeholder cannot be — the field it stands for is built from
             // the directive, which is not in the tree — so it is dropped rather than
             // reported as part of the document's wording.
-            return str_contains($text = self::textOf($element), Toc::MARKER)
+            $element instanceof Text => str_contains($text = self::textOf($element), Toc::MARKER)
                 ? self::withoutTocPlaceholders(LinkPayloadCollector::substitute($text, $hyperlinks))
-                : LinkPayloadCollector::substitute($text, $hyperlinks);
-        }
+                : LinkPayloadCollector::substitute($text, $hyperlinks),
 
-        if ($element instanceof Link) {
-            return $element->getText();
-        }
+            $element instanceof Link => $element->getText(),
 
-        if ($element instanceof TextBreak) {
-            return self::LINE_BREAK;
-        }
+            $element instanceof TextBreak => self::LINE_BREAK,
 
-        if ($element instanceof Image) {
-            return '';
-        }
+            $element instanceof Image => '',
 
-        if ($element instanceof ListItem) {
-            return self::textOf($element->getTextObject());
-        }
+            $element instanceof ListItem => self::textOf($element->getTextObject()),
 
-        if ($element instanceof TextRun) {
-            return self::runs($element, $separator, $hyperlinks);
-        }
+            $element instanceof TextRun => self::runs($element, $separator, $hyperlinks),
 
-        if ($element instanceof Table) {
-            return self::table($element, $separator, $hyperlinks);
-        }
+            $element instanceof Table => self::table($element, $separator, $hyperlinks),
 
-        if ($element instanceof AbstractContainer) {
             // A footnote's body is not part of the sentence the mark sits in: Word
             // draws it at the foot of the page, and PHPWord holds it as a container
             // inside the run. Read as text it would land mid-sentence — a claim
             // about the document's wording that is true nowhere in the document.
-            if ($element instanceof Footnote) {
-                return '';
-            }
+            $element instanceof AbstractContainer => $element instanceof Footnote
+                ? ''
+                : self::fromContainer($element, $separator, $hyperlinks),
 
-            return self::fromContainer($element, $separator, $hyperlinks);
-        }
-
-        return '';
+            default => '',
+        };
     }
 
     /**

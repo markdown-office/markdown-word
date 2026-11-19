@@ -213,6 +213,17 @@ final class Package
             return $this->parts[$name];
         }
 
+        return $this->parts[$name] = $this->parsePart($name, $required);
+    }
+
+    /**
+     * A part as a document, or null when the archive does not hold one.
+     *
+     * @throws MalformedDocument When the part is required and the archive does
+     *         not hold it, or holds something that is not XML.
+     */
+    private function parsePart(string $name, bool $required): ?\DOMDocument
+    {
         $xml = $this->read($name);
 
         if ($xml === false) {
@@ -220,7 +231,7 @@ final class Package
                 throw new MalformedDocument(sprintf('The document is missing "%s".', $name));
             }
 
-            return $this->parts[$name] = null;
+            return null;
         }
 
         $dom = Xml::parse($xml);
@@ -230,10 +241,10 @@ final class Package
                 throw new MalformedDocument(sprintf('"%s" is not valid XML.', $name));
             }
 
-            return $this->parts[$name] = null;
+            return null;
         }
 
-        return $this->parts[$name] = $dom;
+        return $dom;
     }
 
     /**
