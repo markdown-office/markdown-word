@@ -46,11 +46,14 @@ final class Escaping
         $text = self::escapeUnderscores($text);
 
         // `~~` is GFM strikethrough; a single tilde is ordinary prose.
-        $text = (string) preg_replace('/~~/', '\\~\\~', $text);
+        $text = str_replace('~~', '\\~\\~', $text);
 
         // `&` is only a problem where it could start a character reference, and
-        // `&amp;` in the output would decode back to a bare ampersand.
-        $text = (string) preg_replace('/&(?=#[0-9]+;?|#x[0-9a-fA-F]+;?|[A-Za-z][A-Za-z0-9]*;)/', '\\\\&', $text);
+        // `&amp;` in the output would decode back to a bare ampersand. A numeric
+        // reference is a `#` and its digits, with or without the semicolon; a
+        // named one is a name and a semicolon.
+        $text = (string) preg_replace('/&(#\d+;?|#x[0-9a-fA-F]+;?)/', '\\&$1', $text);
+        $text = (string) preg_replace('/&([A-Za-z][A-Za-z0-9]*;)/', '\\&$1', $text);
 
         // A `<` only matters where it could open a tag or an autolink, which is
         // why `a < b` is left alone and `<div>` is not. The delimiter is `~`
@@ -120,18 +123,29 @@ final class Escaping
             return $text;
         }
 
+        $escaped = self::escapeLeading($rest);
+
+        return $escaped === null ? $text : $space . $escaped;
+    }
+
+    /**
+     * What the line begins with, with the character that has to be escaped put
+     * before it, or null when the line starts nothing that could open a block.
+     */
+    private static function escapeLeading(string $rest): ?string
+    {
         if (str_contains(self::LINE_START, $rest[0])) {
-            return $space . '\\' . $rest;
+            return '\\' . $rest;
         }
 
         // An ordered list marker, as in a paragraph that opens with "1986. It was…".
         if (preg_match('/^\d{1,9}([.)])(?=\s|$)/', $rest, $marker) === 1) {
             $length = strlen($marker[0]);
 
-            return $space . substr($rest, 0, $length - 1) . '\\' . $marker[1] . substr($rest, $length);
+            return substr($rest, 0, $length - 1) . '\\' . $marker[1] . substr($rest, $length);
         }
 
-        return $text;
+        return null;
     }
 
     /**
