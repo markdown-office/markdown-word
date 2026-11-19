@@ -17,25 +17,32 @@ use MarkdownWord\Theme\ThemeResolver;
  * otherwise the frontmatter names one. The name given in code is resolved once,
  * when it is given, so the document is drawn in the theme that was found there
  * rather than in one found again later.
+ *
+ * A selection is a value: naming a theme gives a new selection rather than
+ * changing this one. A converter that is cloned shares the selection it had, and
+ * a theme named on the clone is the clone's alone.
  */
 final class ThemeSelection
 {
     /**
-     * The theme named by {@see \MarkdownWord\MarkdownToWord::withTheme()} or the
-     * command line, if either named one.
+     * @param string|null $name The theme named in code, if one was named.
+     * @param LoadedTheme|null $resolved The theme that name resolved to.
+     * @param string|null $directory Where a theme beside the document is found.
+     * @param list<string> $roots Further directories a theme may be found in.
+     * @param FileFinder|null $files Where the themes come from.
      */
-    private ?string $name = null;
+    private function __construct(
+        private readonly ?string $name,
+        private readonly ?LoadedTheme $resolved,
+        private readonly ?string $directory,
+        private readonly array $roots,
+        private readonly ?FileFinder $files,
+    ) {
+    }
 
     /**
-     * The theme {@see self::select()} resolved, kept so that the name is resolved
-     * once.
+     * A selection that names no theme, so that a document's own frontmatter is read.
      *
-     * A source that counts its reads would say so: the name is asked for when it is
-     * given, and the theme that came back is the one the document is drawn in.
-     */
-    private ?LoadedTheme $resolved = null;
-
-    /**
      * @param string|null $directory The directory the document was read from, which is
      *        where a theme beside it is found: a document names a theme, and the theme
      *        that travels with it is the one next to it rather than the one next to
@@ -48,15 +55,19 @@ final class ThemeSelection
      * @param FileFinder|null $files Where the themes come from: a program whose themes
      *        are not in a directory.
      */
-    public function __construct(
-        private readonly ?string $directory = null,
-        private readonly array $roots = [],
-        private readonly ?FileFinder $files = null,
-    ) {
+    public static function none(
+        ?string $directory = null,
+        array $roots = [],
+        ?FileFinder $files = null,
+    ): self {
+        return new self(null, null, $directory, $roots, $files);
     }
 
     /**
      * The theme named in code, resolved once.
+     *
+     * A new selection rather than a change to this one, so that a converter that is
+     * cloned cannot have its theme changed by the clone.
      *
      * @throws Exception\ThemeNotFound when the theme is not one that resolves. Checked
      *         here so a typo is reported before the document is read rather than partway
@@ -67,27 +78,25 @@ final class ThemeSelection
      *         directive this library draws
      * @throws Exception\Exception when the theme's own file cannot be read or parsed
      */
-    public function select(?string $name): void
+    public function select(?string $name): self
     {
-        if ($name !== null) {
-            $theme = $this->themes()->resolve($name);
-
-            Directives::assertStylesAreDrawable($theme->textStyles());
-
-            // Kept, so that the name is resolved once: the document is drawn in the
-            // theme that was found here rather than in one found again later.
-            $this->resolved = $theme;
-        } else {
-            $this->resolved = null;
+        if ($name === null) {
+            return new self(null, null, $this->directory, $this->roots, $this->files);
         }
 
-        $this->name = $name;
+        $theme = $this->themes()->resolve($name);
+
+        Directives::assertStylesAreDrawable($theme->textStyles());
+
+        // Kept, so that the name is resolved once: the document is drawn in the
+        // theme that was found here rather than in one found again later.
+        return new self($name, $theme, $this->directory, $this->roots, $this->files);
     }
 
     /**
      * The theme this document is drawn in, or null when it names none.
      *
-     * A theme named in code answers for the document, so the frontmatter is not read —
+     * A theme named in code answers for the document, so the frontmatter's `theme:` is not read —
      * which is also why a document naming a theme that does not resolve is not reported
      * here: the name was overridden, and a caller that passed a theme of its own asked for
      * that one. This is the only source that is *silently* ignored, and it is ignored only

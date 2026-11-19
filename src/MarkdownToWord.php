@@ -99,8 +99,12 @@ final class MarkdownToWord implements Converter
     /**
      * The theme the documents are drawn in, and the name given in code when there
      * is one.
+     *
+     * Not readonly: naming a theme gives a new selection rather than changing the one
+     * held, and the converter holds the new one. A clone shares the selection it had,
+     * and a theme named on the clone is the clone's alone.
      */
-    private readonly ThemeSelection $themes;
+    private ThemeSelection $themes;
 
     /**
      * @param string|null $source A path, or the Markdown itself; {@see Input}
@@ -147,7 +151,7 @@ final class MarkdownToWord implements Converter
         private readonly ?FileFinder $files = null,
         array $roots = [],
     ) {
-        $this->themes = new ThemeSelection($directory, $roots, $files);
+        $this->themes = ThemeSelection::none($directory, $roots, $files);
     }
 
     /**
@@ -173,7 +177,7 @@ final class MarkdownToWord implements Converter
      */
     public function withTheme(?string $name): self
     {
-        $this->themes->select($name);
+        $this->themes = $this->themes->select($name);
 
         return $this;
     }

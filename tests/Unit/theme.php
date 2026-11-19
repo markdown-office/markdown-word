@@ -623,6 +623,19 @@ it('takes the theme from the converter in code over the one in the block', funct
     expect($config->getStyles()->get(Styles::HEADING_1)['name'])->toBe('Georgia');
 });
 
+it('keeps the theme of a clone to the clone', function () {
+    // A clone is a copy of the converter, and a copy that shares its theme with the
+    // original is a copy whose theme can be changed from under it: naming a theme on
+    // the clone has to leave the original alone.
+    $converter = (new MarkdownToWord('# T'))->withTheme('corporate');
+    $clone = clone $converter;
+    $clone->withTheme(null);
+
+    $config = $converter->configurationFor($converter->parse('# T'), '# T');
+
+    expect($config->getStyles()->get(Styles::HEADING_1)['color'])->toBe('1F3864');
+});
+
 it('draws a document in the theme beside it, whatever the process is working in', function () {
     // The converter is told where the document is: a document handed over as a string
     // has no directory of its own, and the working directory is where the program
