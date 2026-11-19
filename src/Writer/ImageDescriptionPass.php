@@ -28,7 +28,6 @@ use ZipArchive;
  */
 final class ImageDescriptionPass
 {
-    private const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
     private const V_NS = 'urn:schemas-microsoft-com:vml';
     private const O_NS = 'urn:schemas-microsoft-com:office:office';
     private const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';

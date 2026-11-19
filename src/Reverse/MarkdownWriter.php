@@ -20,8 +20,12 @@ final class MarkdownWriter
     /** @var list<int> The number the next ordered item at each open level carries. */
     private array $counters = [];
 
+    /** What is inside a block, written as Markdown. */
+    private readonly InlineWriter $inlines;
+
     public function __construct(private readonly Options $options)
     {
+        $this->inlines = new InlineWriter();
     }
 
     /**
@@ -44,13 +48,15 @@ final class MarkdownWriter
      * @param list<Block> $blocks
      * @param string       $separator A single newline in a tight list, a blank
      *        line in a loose one.
+     * @param bool         $inTable Whether the blocks sit inside a table cell,
+     *        where a pipe would end the cell.
      */
-    private function blocks(array $blocks, string $separator = "\n\n"): string
+    private function blocks(array $blocks, string $separator = "\n\n", bool $inTable = false): string
     {
         $parts = [];
 
         foreach ($blocks as $block) {
-            $part = $this->block($block);
+            $part = $this->block($block, $inTable);
 
             if ($part !== '') {
                 // A block never begins or ends with a line break of its own, so
@@ -62,24 +68,24 @@ final class MarkdownWriter
         return implode($separator, $parts);
     }
 
-    private function block(Block $block): string
+    private function block(Block $block, bool $inTable = false): string
     {
         return match ($block->kind) {
-            Block::PARAGRAPH => $this->paragraph($block),
+            Block::PARAGRAPH => $this->paragraph($block, $inTable),
             Block::RULE => '---',
             Block::CODE => $this->code($block),
-            Block::LIST => $this->list($block),
-            Block::QUOTE => $this->quote($block),
+            Block::LIST => $this->list($block, $inTable),
+            Block::QUOTE => $this->quote($block, $inTable),
             Block::TABLE => $this->table($block),
             default => '',
         };
     }
 
-    private function paragraph(Block $block): string
+    private function paragraph(Block $block, bool $inTable = false): string
     {
         // A newline at either end of a paragraph is an artefact of the block that
         // held it rather than something the reader should see.
-        $text = trim($this->inlines($block->inlines), "\n");
+        $text = trim($this->inlines->write($block->inlines, $inTable), "\n");
         $level = $block->attr('level');
 
         if (!is_int($level)) {
@@ -123,9 +129,9 @@ final class MarkdownWriter
         return $fence . $info . "\n" . $text . "\n" . $fence;
     }
 
-    private function quote(Block $block): string
+    private function quote(Block $block, bool $inTable = false): string
     {
-        $body = $this->blocks($block->children);
+        $body = $this->blocks($block->children, "\n\n", $inTable);
 
         if ($body === '') {
             return '';
@@ -141,13 +147,14 @@ final class MarkdownWriter
         return implode("\n", $lines);
     }
 
-    private function list(Block $block): string
+    private function list(Block $block, bool $inTable = false): string
     {
         $ordered = (bool) $block->attr('ordered', false);
         $start = (int) $block->attr('start', 1);
         $format = (string) $block->attr('format', 'decimal');
         $delimiter = (string) $block->attr('delimiter', '.');
-        $marker = $ordered ? ($this->marker($format, $start) . $delimiter) : '-';
+        $numbering = new ListMarker($format);
+        $marker = $ordered ? ($numbering->marker($start) . $delimiter) : '-';
 
         $this->counters[] = $start;
 
@@ -157,11 +164,11 @@ final class MarkdownWriter
         $lines = [];
 
         foreach ($block->children as $item) {
-            $lines[] = $this->item($item, $marker, $separator);
+            $lines[] = $this->item($item, $marker, $separator, $inTable);
 
             if ($ordered) {
                 $this->counters[count($this->counters) - 1]++;
-                $marker = $this->marker($format, $this->counters[count($this->counters) - 1]) . $delimiter;
+                $marker = $numbering->marker($this->counters[count($this->counters) - 1]) . $delimiter;
             }
         }
 
@@ -174,7 +181,7 @@ final class MarkdownWriter
      * One list item, whose body is either several blocks separated by blank lines
      * or a nested list.
      */
-    private function item(Block $item, string $marker, string $separator): string
+    private function item(Block $item, string $marker, string $separator, bool $inTable = false): string
     {
         $blocks = $item->children;
         $checkbox = $this->checkbox($blocks);
@@ -183,7 +190,7 @@ final class MarkdownWriter
             $blocks[0] = $blocks[0]->withInlines($this->withoutCheckbox($blocks[0]->inlines));
         }
 
-        $body = $this->blocks($blocks, $separator);
+        $body = $this->blocks($blocks, $separator, $inTable);
 
         if ($body === '') {
             return $marker . ' ' . $checkbox;
@@ -240,84 +247,6 @@ final class MarkdownWriter
         $first = array_shift($inlines);
 
         return [$first->withText((string) preg_replace('/^[\x{2610}\x{2612}]\s?/u', '', $first->text)), ...$inlines];
-    }
-
-    /**
-     * The numbering a `w:numFmt` value stands for.
-     *
-     * Markdown spells these as marker text, so a Word list numbered `a, b, c`
-     * comes back as `a. b. c.`. A format the table does not know is written as
-     * the number itself, which a reader can still make sense of.
-     */
-    private function marker(string $format, int $number): string
-    {
-        return match ($format) {
-            'lowerLetter' => $this->alphabet($number, false),
-            'upperLetter' => $this->alphabet($number, true),
-            'lowerRoman' => strtolower($this->roman($number)),
-            'upperRoman' => $this->roman($number),
-            'decimalZero' => $this->decimalZero($number),
-            default => (string) $number,
-        };
-    }
-
-    /**
-     * The letters of a spreadsheet column, which is how Word goes on numbering a
-     * list past the twenty-sixth item: `a` to `z`, then `aa`, `ab` and so on.
-     *
-     * The count carries no zero in it, so the run continues rather than starting
-     * again, and what is left of the count goes in front of the letter.
-     */
-    private function alphabet(int $number, bool $upper): string
-    {
-        if ($number < 1) {
-            return (string) $number;
-        }
-
-        $letters = '';
-
-        while ($number > 0) {
-            $letters = chr(ord('a') + ($number - 1) % 26) . $letters;
-            $number = intdiv($number - 1, 26);
-        }
-
-        return $upper ? strtoupper($letters) : $letters;
-    }
-
-    /**
-     * A number padded to two digits, which is the whole of what `decimalZero`
-     * means; past ninety-nine there is nothing left to pad to.
-     */
-    private function decimalZero(int $number): string
-    {
-        return str_pad((string) $number, 2, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * A Roman numeral. There is none for a number above three thousand nine
-     * hundred and ninety-nine, so past that the number itself is written.
-     */
-    private function roman(int $number): string
-    {
-        if ($number < 1 || $number > 3999) {
-            return (string) $number;
-        }
-
-        $values = [
-            'M' => 1000, 'CM' => 900, 'D' => 500, 'CD' => 400, 'C' => 100,
-            'XC' => 90, 'L' => 50, 'XL' => 40, 'X' => 10, 'IX' => 9,
-            'V' => 5, 'IV' => 4, 'I' => 1,
-        ];
-
-        $roman = '';
-        foreach ($values as $letters => $value) {
-            while ($number >= $value) {
-                $roman .= $letters;
-                $number -= $value;
-            }
-        }
-
-        return $roman;
     }
 
     private function table(Block $block): string
@@ -394,13 +323,16 @@ final class MarkdownWriter
     /**
      * A cell holds blocks; GFM holds one line, so a paragraph break becomes the
      * one way of writing more than one line in a cell.
+     *
+     * A pipe ends the cell whatever surrounds it, so the runs written in one
+     * have their pipes escaped.
      */
     private function cell(Block $cell): string
     {
         $parts = [];
 
         foreach ($cell->children as $block) {
-            $text = $this->block($block);
+            $text = $this->block($block, inTable: true);
 
             if ($text !== '') {
                 $parts[] = str_replace("\n", '<br>', $text);
@@ -408,254 +340,5 @@ final class MarkdownWriter
         }
 
         return implode('<br>', $parts);
-    }
-
-    /**
-     * Write a run of inlines as Markdown.
-     *
-     * The emphasis delimiters are held open across runs rather than opened and
-     * closed one run at a time. A bold run followed by a bold italic one then
-     * comes out as `**a*b***`, because the `**` the first run opened is still open
-     * when the second adds its `*`, so the two spans meet. Closing each run on its
-     * own would give `**a*****b***`, whose run of five asterisks in the middle is
-     * ambiguous and a parser may not agree on where the spans stop.
-     *
-     * @param list<Inline> $inlines
-     */
-    private function inlines(array $inlines, bool $inTable = false): string
-    {
-        $out = '';
-        $open = [];
-        $lineStart = true;
-
-        $runs = $this->coalesce($inlines);
-
-        // A break at either end of a paragraph says nothing: it is the boundary
-        // between one paragraph and the next, not a line break inside one.
-        while ($runs !== [] && $runs[0]->is(Inline::BREAK)) {
-            array_shift($runs);
-        }
-
-        while ($runs !== [] && $runs[count($runs) - 1]->is(Inline::BREAK)) {
-            array_pop($runs);
-        }
-
-        foreach ($runs as $inline) {
-            if ($inline->is(Inline::BREAK)) {
-                $out = $this->closeAll($out, $open);
-                $out .= "  \n";
-                $lineStart = true;
-
-                continue;
-            }
-
-            if ($inline->is(Inline::LINK, Inline::IMAGE)) {
-                $out = $this->closeAll($out, $open);
-
-                // `![` is an image, so an exclamation mark written straight
-                // before a link has to be escaped. The document said "!foo"; the
-                // Markdown must not say "an image of foo".
-                if ($out !== '' && str_ends_with($out, '!')) {
-                    $out = substr($out, 0, -1) . '\\!';
-                }
-
-                $out .= $inline->is(Inline::LINK) ? $this->link($inline) : $this->image($inline);
-                $lineStart = false;
-
-                continue;
-            }
-
-            $out = $this->emphasis($out, $open, $inline, $lineStart, $inTable);
-            $lineStart = false;
-        }
-
-        return $this->closeAll($out, $open);
-    }
-
-    /**
-     * Write one text run, keeping open any emphasis the neighbouring runs share.
-     *
-     * @param string       $out    Everything written before this run.
-     * @param list<string> $open   The delimiters still open around it, outermost
-     *        first, which this run may close, add to or leave alone.
-     * @param Inline       $inline The run to write.
-     */
-    private function emphasis(string $out, array &$open, Inline $inline, bool $lineStart, bool $inTable): string
-    {
-        if ($inline->code) {
-            // A code span is verbatim, so its content is written as it stands:
-            // escaping inside it would make the backslashes visible. Where no
-            // code span can hold the content, the characters are written out.
-            $span = Escaping::codeSpan($inline->text);
-
-            return $out . ($span ?? $this->hardenNewlines(
-                Escaping::text($inline->text, $lineStart, $inTable),
-            ));
-        }
-
-        $wanted = $this->markers($inline);
-
-        // Drop the markers this run does not carry, innermost first, so that
-        // what stays open is a prefix of what the run wants.
-        foreach (array_reverse(array_keys($open), true) as $index) {
-            if (!in_array($open[$index], $wanted, true)) {
-                $out = $this->close($out, $open[$index]);
-                unset($open[$index]);
-            }
-        }
-
-        $open = array_values($open);
-
-        $text = $this->hardenNewlines(Escaping::text($inline->text, $lineStart, $inTable));
-
-        // A delimiter has to sit against the text it delimits, so whitespace that
-        // opens or closes a run is written outside the markers: a `*` followed by
-        // a space cannot open anything, and a `*` preceded by one cannot close
-        // anything.
-        $leading = '';
-        if ($text !== '' && preg_match('/^(\s+)(.*)$/s', $text, $matches) === 1) {
-            [$leading, $text] = [$matches[1], $matches[2]];
-        }
-
-        $out .= $leading;
-
-        foreach ($wanted as $marker) {
-            if (!in_array($marker, $open, true)) {
-                $out .= $marker;
-                $open[] = $marker;
-            }
-        }
-
-        // A run that is nothing but whitespace has nothing to emphasise, and
-        // delimiters around it would not parse.
-        return $text === '' ? $out : $out . $text;
-    }
-
-    /**
-     * Turn the newlines inside a run into hard line breaks.
-     *
-     * A newline in a run's text is a line break Word held inside one paragraph,
-     * not a boundary between two. A hard break keeps it a line break on the way
-     * back; a soft one would collapse to a space and quietly join two lines of a
-     * `<pre>` block into one.
-     */
-    private function hardenNewlines(string $text): string
-    {
-        if (!str_contains($text, "\n")) {
-            return $text;
-        }
-
-        return implode("  \n", explode("\n", str_replace("\r", '', $text)));
-    }
-
-    /**
-     * The delimiters a run's formatting calls for, outermost first.
-     *
-     * @return list<string>
-     */
-    private function markers(Inline $inline): array
-    {
-        $markers = [];
-
-        if ($inline->strike) {
-            $markers[] = '~~';
-        }
-
-        if ($inline->bold) {
-            $markers[] = '**';
-        }
-
-        if ($inline->italic) {
-            $markers[] = '*';
-        }
-
-        return $markers;
-    }
-
-    /**
-     * Close an open delimiter, stepping over any whitespace that would stop it
-     * from closing.
-     */
-    private function close(string $out, string $marker)
-    {
-        if (preg_match('/^(.*?)(\s*)$/s', $out, $matches) === 1 && $matches[2] !== '') {
-            return $matches[1] . $marker . $matches[2];
-        }
-
-        return $out . $marker;
-    }
-
-    /**
-     * @param list<string> $open
-     */
-    private function closeAll(string $out, array &$open): string
-    {
-        while ($open !== []) {
-            $out = $this->close($out, array_pop($open));
-        }
-
-        return $out;
-    }
-
-    private function image(Inline $inline): string
-    {
-        $alt = Escaping::text($inline->alt, lineStart: false, inTable: true);
-        $target = Escaping::text($inline->target, lineStart: false, inTable: true);
-
-        // A destination holding whitespace, a parenthesis or an angle bracket has
-        // to be put in angle brackets, which is the only form that can carry one.
-        if (preg_match('/[\s()<>]/', $target) === 1) {
-            $target = '<' . str_replace(['<', '>'], ['\\<', '\\>'], $target) . '>';
-        }
-
-        return '![' . $alt . '](' . $target . ')';
-    }
-
-    private function link(Inline $inline): string
-    {
-        $label = $this->inlines($inline->children);
-
-        $url = $inline->url;
-
-        if (preg_match('/[\s()<>]/', $url) === 1) {
-            $url = '<' . str_replace(['<', '>'], ['\\<', '\\>'], $url) . '>';
-        }
-
-        if ($inline->title !== null && $inline->title !== '') {
-            $url .= ' "' . str_replace('"', '\\"', $inline->title) . '"';
-        }
-
-        return '[' . $label . '](' . $url . ')';
-    }
-
-    /**
-     * Join neighbouring runs that are formatted identically, as
-     * {@see DocumentReader::merge()} does.
-     *
-     * @param list<Inline> $inlines
-     * @return list<Inline>
-     */
-    private function coalesce(array $inlines): array
-    {
-        $out = [];
-
-        foreach ($inlines as $inline) {
-            $last = $out === [] ? null : $out[count($out) - 1];
-
-            if (
-                $last !== null
-                && $last->is(Inline::TEXT)
-                && $inline->is(Inline::TEXT)
-                && $last->sameFormatting($inline)
-            ) {
-                $out[count($out) - 1] = $last->withText($last->text . $inline->text);
-
-                continue;
-            }
-
-            $out[] = $inline;
-        }
-
-        return $out;
     }
 }

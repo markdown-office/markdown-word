@@ -179,6 +179,28 @@ it('reads a table with its column alignment', function () {
     expect($markdown)->toContain('| 1 | 2 | 3 |');
 });
 
+it('keeps a pipe inside a table cell in that cell', function () {
+    // A pipe ends a cell whatever surrounds it, so a pipe that is written as it
+    // is splits the cell in two and the table with it. The pipe of a cell is
+    // written escaped, and the reader of the table takes the escape for what it
+    // is rather than for a character of the text.
+    $markdown = roundTrip("| A | B |\n| --- | --- |\n| a \\| b | c |");
+
+    expect($markdown)->toContain('| a \\| b | c |');
+});
+
+it('keeps a pipe inside a code span in that cell', function () {
+    $markdown = roundTrip("| A | B |\n| --- | --- |\n| `a \\| b` | c |");
+
+    expect($markdown)->toContain('| `a \\| b` | c |');
+});
+
+it('keeps a pipe inside the label of a link in that cell', function () {
+    $markdown = roundTrip("| A | B |\n| --- | --- |\n| [a \\| b](https://example.com) | c |");
+
+    expect($markdown)->toContain('| [a \\| b](https://example.com) | c |');
+});
+
 it('reads a thematic break', function () {
     expect(roundTrip('above' . "\n\n---\n\n" . 'below'))->toContain('---');
 });

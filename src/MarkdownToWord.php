@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace MarkdownWord;
 
 use League\CommonMark\Node\Block\Document;
-use MarkdownWord\Configuration\TextStyles;
 use MarkdownWord\Document\ConfigurationMerger;
 use MarkdownWord\Document\Frontmatter;
-use MarkdownWord\Exception\InvalidConfiguration;
 use MarkdownWord\Exception\NothingToConvert;
 use MarkdownWord\Files\FileFinder;
 use MarkdownWord\Parser\CommonMarkParser;
@@ -36,8 +34,6 @@ use MarkdownWord\Render\LinkPayloadCollector;
 use MarkdownWord\Render\NumberingRegistry;
 use MarkdownWord\Render\StyleRegistrar;
 use MarkdownWord\Render\StyleResolver;
-use MarkdownWord\Theme\LoadedTheme;
-use MarkdownWord\Theme\ThemeResolver;
 use MarkdownWord\Writer\DocxWriter;
 use MarkdownWord\Writer\OdtWriter;
 use MarkdownWord\Writer\RtfWriter;
@@ -100,17 +96,15 @@ final class MarkdownToWord implements Converter
      */
     private string $lastMarkdown = '';
 
-    /** The theme named by {@see self::withTheme()} or the command line, if either named one. */
-    private ?string $theme = null;
-
     /**
-     * The theme {@see self::withTheme()} resolved, kept so that the name is resolved
-     * once.
+     * The theme the documents are drawn in, and the name given in code when there
+     * is one.
      *
-     * A source that counts its reads would say so: the name is asked for when it is
-     * given, and the theme that came back is the one the document is drawn in.
+     * Not readonly: naming a theme gives a new selection rather than changing the one
+     * held, and the converter holds the new one. A clone shares the selection it had,
+     * and a theme named on the clone is the clone's alone.
      */
-    private ?LoadedTheme $resolved = null;
+    private ThemeSelection $themes;
 
     /**
      * @param string|null $source A path, or the Markdown itself; {@see Input}
@@ -153,10 +147,11 @@ final class MarkdownToWord implements Converter
         private readonly ?MarkdownParserInterface $parser = null,
         private readonly Configuration|array|null $overrides = null,
         private readonly bool $detached = false,
-        private readonly ?string $directory = null,
+        ?string $directory = null,
         private readonly ?FileFinder $files = null,
-        private readonly array $roots = [],
+        array $roots = [],
     ) {
+        $this->themes = ThemeSelection::none($directory, $roots, $files);
     }
 
     /**
@@ -182,19 +177,7 @@ final class MarkdownToWord implements Converter
      */
     public function withTheme(?string $name): self
     {
-        if ($name !== null) {
-            $theme = $this->themes()->resolve($name);
-
-            self::assertStylesAreDrawable($theme->textStyles());
-
-            // Kept, so that the name is resolved once: the document is drawn in the
-            // theme that was found here rather than in one found again later.
-            $this->resolved = $theme;
-        } else {
-            $this->resolved = null;
-        }
-
-        $this->theme = $name;
+        $this->themes = $this->themes->select($name);
 
         return $this;
     }
@@ -227,7 +210,7 @@ final class MarkdownToWord implements Converter
      *         value that is not what it is used as, or when a named text style takes
      *         the name of a directive this library draws
      * @throws Exception\ThemeNotFound when the document's or the caller's `theme:` does
-     *         not resolve. Deliberately not swallowed: see {@see self::themeFor()}.
+     *         not resolve. Deliberately not swallowed: see {@see ThemeSelection::forDocument()}.
      * @throws Exception\MalformedTheme when the theme's own file does not describe a theme
      * @throws Exception\UnknownStyleSlot when the theme names a slot that does not exist
      * @throws Exception\Exception when the theme's own file cannot be read or parsed
@@ -241,7 +224,7 @@ final class MarkdownToWord implements Converter
         // whole set of them arrives at once instead of one per run.
         $frontmatter->assertValid();
 
-        $theme = $this->themeFor($frontmatter);
+        $theme = $this->themes->forDocument($frontmatter);
 
         // The constructor's configuration is the base rather than a layer over a default
         // one, because it is the only layer that knows which slots were *chosen*: passed
@@ -255,78 +238,9 @@ final class MarkdownToWord implements Converter
                 : $this->config->withTheme($theme->styles(), $theme->textStyles()),
         );
 
-        self::assertStylesAreDrawable($configuration->getTextStyles());
+        Directives::assertStylesAreDrawable($configuration->getTextStyles());
 
         return $configuration;
-    }
-
-    /**
-     * A named style may not take the name of a directive this library draws.
-     *
-     * The directive is drawn before the style is, so a style called `footnote` is never
-     * applied to a word: `:footnote[…]` draws the footnote, and the style is left with
-     * nothing to reach it.
-     *
-     * Asked here rather than in the configuration, which does not know what the renderer
-     * draws, and asked of the merged configuration rather than of a theme alone, so a
-     * style from a theme and one from a caller's code are refused the same way.
-     *
-     * @throws InvalidConfiguration when a style takes the name of a directive.
-     */
-    private static function assertStylesAreDrawable(TextStyles $styles): void
-    {
-        $drawn = array_map(TextStyles::fold(...), Directives::names());
-
-        foreach ($styles->names() as $name) {
-            $folded = TextStyles::fold($name);
-
-            if (!in_array($folded, $drawn, true)) {
-                continue;
-            }
-
-            throw new InvalidConfiguration(sprintf(
-                'The style "%s" cannot be defined: "%s" is the name of a directive this library draws. A named style has to be a name of your own, such as "brand".',
-                $name,
-                $folded,
-            ));
-        }
-    }
-
-    /**
-     * The theme this document is drawn in, or null when it names none.
-     *
-     * A theme named in code answers for the document, so the frontmatter is not read —
-     * which is also why a document naming a theme that does not resolve is not reported
-     * here: the name was overridden, and a caller that passed a theme of its own asked for
-     * that one. This is the only source that is *silently* ignored, and it is ignored only
-     * because something louder replaced it.
-     *
-     * @throws Exception\ThemeNotFound when the theme in play is not one that resolves
-     * @throws Exception\MalformedTheme when the theme's own file does not describe a theme
-     * @throws Exception\UnknownStyleSlot when the theme names a slot that does not exist
-     * @throws Exception\Exception when the theme's own file cannot be read or parsed
-     */
-    private function themeFor(Frontmatter $frontmatter): ?LoadedTheme
-    {
-        if ($this->theme !== null) {
-            // The name in code was resolved when it was given, and it is resolved
-            // once: a source that counts its reads would say so.
-            return $this->resolved;
-        }
-
-        $name = $frontmatter->themeName();
-
-        return $name === null ? null : $this->themes()->resolve($name);
-    }
-
-    private function themes(): ThemeResolver
-    {
-        return new ThemeResolver(
-            workingDirectory: getcwd() ?: '.',
-            documentDirectory: $this->directory,
-            roots: $this->roots,
-            files: $this->files,
-        );
     }
 
     public function parse(string $markdown): Document

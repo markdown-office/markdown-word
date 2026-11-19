@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use MarkdownWord\Reverse\Block;
 use MarkdownWord\Reverse\Escaping;
+use MarkdownWord\Reverse\Inline;
 use MarkdownWord\Reverse\MarkdownWriter;
 use MarkdownWord\Reverse\Options as ReverseOptions;
 use MarkdownWord\WordToMarkdown;
@@ -282,6 +283,30 @@ it('fences a code block a document holds as paragraphs', function () {
 
     expect((new WordToMarkdown($package))->convert())
         ->toBe("``````\nbefore ````` after\nsecond line\n``````");
+});
+
+it('escapes the pipes of a table cell', function () {
+    // A pipe ends the cell whatever surrounds it, so the pipes of a cell are
+    // written escaped: in the text, in a code span, in the label of a link, in
+    // its destination and in its title.
+    $cell = fn (array $inlines): Block => Block::cell([Block::paragraph($inlines)]);
+
+    $markdown = writeFixes(
+        Block::table([
+            Block::row([
+                $cell([Inline::text('a | b')]),
+                $cell([Inline::text('c | d', code: true)]),
+                $cell([Inline::link('https://example.com/e|f', 'g | h', [Inline::text('i | j')])]),
+            ]),
+        ]),
+    );
+
+    expect($markdown)->toContain('| a \\| b | `c \\| d` | [i \\| j](https://example.com/e\\|f "g \\| h") |');
+});
+
+it('leaves a pipe outside a table cell alone', function () {
+    // A pipe only ends a cell, so a pipe anywhere else is written as it is.
+    expect(writeFixes(Block::paragraph([Inline::text('a | b')])))->toBe('a | b');
 });
 
 it('finds the longest run of a character in one pass', function () {

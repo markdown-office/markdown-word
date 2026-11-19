@@ -47,10 +47,6 @@ final class ParagraphStyle
      */
     public static function merge(array|string|Paragraph|null $style, array $extra): array|string|Paragraph|null
     {
-        if ($style === null) {
-            return $extra;
-        }
-
         // A named Word style is a black box: PHPWord resolves it to its own
         // properties at write time, so an override cannot be layered on it. The
         // named style wins and the caller falls back to an array.
@@ -64,6 +60,16 @@ final class ParagraphStyle
             return $style;
         }
 
+        return $style === null ? $extra : self::mergeArrays($style, $extra);
+    }
+
+    /**
+     * @param  array<string, mixed>  $style
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
+    private static function mergeArrays(array $style, array $extra): array
+    {
         $merged = $style;
 
         foreach ($extra as $key => $value) {
@@ -84,6 +90,16 @@ final class ParagraphStyle
     public static function table(array $style): array
     {
         return $style + ['alignment' => 'left', 'layout' => 'autofit'];
+    }
+
+    /**
+     * Whether a style already carries a shading of its own.
+     *
+     * @param array<string, mixed>|string|null $style
+     */
+    public static function hasShading(array|string|null $style): bool
+    {
+        return is_array($style) && ($style['shading']['fill'] ?? '') !== '';
     }
 
     /**

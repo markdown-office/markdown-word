@@ -123,7 +123,7 @@ final class MarkdownTemplate
      */
     public function __construct(
         private readonly string $template,
-        private readonly Configuration $config = new Configuration(),
+        Configuration $config = new Configuration(),
         array $values = [],
         private readonly ?MarkdownParserInterface $parser = null,
         Configuration|array|null $overrides = null,
