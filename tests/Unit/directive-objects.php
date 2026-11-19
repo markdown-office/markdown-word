@@ -2,14 +2,22 @@
 
 declare(strict_types=1);
 
+use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration;
 use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Render\Directive\Footnote;
+use MarkdownWord\Render\Directive\TextStyle;
 use MarkdownWord\Render\Directives;
+use MarkdownWord\Render\InlineStyle;
+use MarkdownWord\Render\StyleResolver;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
 use MarkdownWord\Tests\Support\Upstream;
+use MarkdownWord\Configuration\TextStyles;
 use MarkdownWord\Text\TextExtractor;
+use PhpOffice\PhpWord\Element\Section;
+use PhpOffice\PhpWord\Element\TextRun;
 use PhpOffice\PhpWord\PhpWord;
 
 /*
@@ -268,3 +276,28 @@ it('draws a directive it cannot place as the characters the author wrote', funct
     ],
     'a section break inside a quote' => ['> ::section{columns=2}', '::section{columns="2"}'],
 ]);
+
+it('draws a directive with no renderer as the label stands', function () {
+    // The registry and the handlers are public, and a caller with no renderer to
+    // draw a label's runs with gets what it got before the label was parsed: the
+    // label as it stands, in one run of text.
+    $styles = new TextStyles(['brand' => ['color' => '0B5CAB']]);
+    $resolver = new StyleResolver(Configuration::create());
+    $registry = new Directives(textStyle: new TextStyle($styles, $resolver));
+
+    $target = new TextRun();
+
+    expect($registry->drawInline(new DirectiveInline('brand', null, 'Bakery'), $target, new InlineStyle()))
+        ->toBeTrue()
+        ->and(renderRuns($target)[0]['text'] ?? null)->toBe('Bakery');
+
+    // And a footnote's body is the text it stands as, in the note.
+    $section = new Section(1);
+
+    (new Footnote($resolver))(new DirectiveInline('footnote', null, 'A note.'), $section, new InlineStyle());
+
+    $notes = $section->getElements();
+
+    expect($notes)->toHaveCount(1)
+        ->and(renderRuns($notes[0])[0]['text'] ?? null)->toBe('A note.');
+});

@@ -220,10 +220,12 @@ it('writes a name it cannot draw as the characters the author typed', function (
 
     $text = TemplateFactory::textOf($path);
 
-    // The unknown name and the label that holds Markdown both come back as
-    // their own source form, in the middle of the sentences that hold them.
+    // The unknown name comes back as its own source form, in the middle of the
+    // sentences that hold it. The label that holds Markdown does not: it is parsed,
+    // so the word is in the style and the asterisks are not in the document.
     expect($text)->toContain(':ember[Orrery]')
-        ->and($text)->toContain(':brand[**Orrery**]');
+        ->and($text)->not->toContain(':brand[**Orrery**]')
+        ->and($text)->toContain('Orrery');
 });
 
 // The objects

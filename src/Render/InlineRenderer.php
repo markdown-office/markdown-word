@@ -147,13 +147,27 @@ final class InlineRenderer
 
     private function renderDirective(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): AbstractContainer
     {
-        if ($this->directives->drawInline($node, $target, $style)) {
+        if ($this->directives->drawInline($node, $target, $style, $this->drawLabel(...))) {
             return $target;
         }
 
         $this->renderUnclaimedDirective($node, $target, $style);
 
         return $target;
+    }
+
+    /**
+     * Draw the runs of a directive's label, for a handler that draws the label rather
+     * than its source text.
+     *
+     * A label is parsed as inline Markdown, so a directive may hold several runs and
+     * only the renderer knows how to draw them.
+     *
+     * @param callable(iterable<Node>, AbstractContainer, InlineStyle): void
+     */
+    private function drawLabel(iterable $nodes, AbstractContainer $target, InlineStyle $style): void
+    {
+        $this->render($nodes, $target, $style);
     }
 
     /**

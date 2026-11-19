@@ -8,6 +8,28 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **A word in a style may hold emphasis of its own.** `:brand[**Bakery**]` is drawn as the
+  word `Bakery` in the brand style and in bold. It used to be drawn as the directive's own
+  source text, with its asterisks, because the label of a directive was a string rather
+  than Markdown and a complete construct in one could not have it honoured.
+
+  The label is parsed as inline Markdown now, so what the parser reads is what the
+  document draws: `2 * 3` and `snake_case` are drawn as they are, and `__ Bakery__` is
+  text, because a delimiter that opens an emphasis may not be followed by a space and one
+  that closes it may not be preceded by one.
+
+  The body of a footnote is Markdown for the same reason: `:footnote[*emphasis*]` is a
+  note whose body is in italics.
+
+  The two halves agree with each other because they ask the same parser, so the list of
+  patterns this half kept — the rules that said what a label may not hold — and the tool
+  that compared them with the slides half's are gone. The corpus of the labels is still
+  here, and the test reads every label in it and checks that the document draws what the
+  parser reads.
+
+- **This half needs the directives package in version 0.4.0 or newer.** The label is parsed
+  by that package, and the version before it did not parse it.
+
 - **A pipe inside a table cell stays in the cell.** A pipe ends a cell in GFM,
   whatever surrounds it, so a cell holding one was written with the cell split
   in two — and a row with more cells in it than the header has is not a table at

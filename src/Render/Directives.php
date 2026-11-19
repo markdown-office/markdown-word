@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Render;
 
+use League\CommonMark\Node\Node;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration\TextStyles;
@@ -77,12 +78,12 @@ final class Directives
     /** @var array<string, callable(DirectiveBlock, AbstractContainer, RenderContext): void> */
     private readonly array $block;
 
-    /** @var array<string, callable(DirectiveInline, AbstractContainer, InlineStyle): void> */
+    /** @var array<string, callable(DirectiveInline, AbstractContainer, InlineStyle, ?callable): void> */
     private readonly array $inline;
 
     /**
      * @param array<string, callable(DirectiveBlock, AbstractContainer, RenderContext): void> $block
-     * @param array<string, callable(DirectiveInline, AbstractContainer, InlineStyle): void> $inline
+     * @param array<string, callable(DirectiveInline, AbstractContainer, InlineStyle, ?callable): void> $inline
      * @param TextStyle|null $textStyle The inline styles, whose names a theme brings.
      */
     public function __construct(
@@ -218,7 +219,7 @@ final class Directives
     }
 
     /**
-     * @param callable(DirectiveInline, AbstractContainer, InlineStyle): void $draw
+     * @param callable(DirectiveInline, AbstractContainer, InlineStyle, ?callable): void $draw
      */
     public function withInline(string $name, callable $draw): self
     {
@@ -283,12 +284,25 @@ final class Directives
             && isset($claimed[self::foldName($name)]);
     }
 
-    public function drawInline(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): bool
-    {
+    /**
+     * Draw an inline directive, or report that nothing claimed it.
+     *
+     * `$draw` is the renderer that draws a directive's label: a label is parsed as
+     * inline Markdown, so a directive may hold several runs and only the renderer
+     * knows how to draw them. A caller with none gets the label as it stands.
+     *
+     * @param callable(iterable<Node>, AbstractContainer, InlineStyle): void|null $draw
+     */
+    public function drawInline(
+        DirectiveInline $node,
+        AbstractContainer $target,
+        InlineStyle $style,
+        ?callable $draw = null,
+    ): bool {
         $name = self::foldName($node->getName());
 
         if (isset($this->inline[$name])) {
-            ($this->inline[$name])($node, $target, $style);
+            ($this->inline[$name])($node, $target, $style, $draw);
 
             return true;
         }
@@ -296,7 +310,7 @@ final class Directives
         // A theme's text style is asked whether it can draw this before anything
         // else happens, so that a name it cannot honour comes out as the source
         // form — the same answer a name nothing claims gets.
-        if ($this->textStyle !== null && $this->textStyle->draw($node, $target, $style)) {
+        if ($this->textStyle !== null && $this->textStyle->draw($node, $target, $style, $draw)) {
             return true;
         }
 

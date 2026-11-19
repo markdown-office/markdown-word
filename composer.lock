@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "821ee431bf54fcf6880c642662896637",
+    "content-hash": "e72b4a617b9dcd4952f901fe2ae8017a",
     "packages": [
         {
             "name": "cweagans/composer-configurable-plugin",
@@ -395,16 +395,16 @@
         },
         {
             "name": "markdown-office/commonmark-generic-directives",
-            "version": "v0.3.0",
+            "version": "v0.4.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/markdown-office/commonmark-generic-directives.git",
-                "reference": "7e4c56b1e9e78d57b4684dc99f13e8899d919ec8"
+                "reference": "e9645e67c5b3346eeb47fb22ba261e297d69f113"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/markdown-office/commonmark-generic-directives/zipball/7e4c56b1e9e78d57b4684dc99f13e8899d919ec8",
-                "reference": "7e4c56b1e9e78d57b4684dc99f13e8899d919ec8",
+                "url": "https://api.github.com/repos/markdown-office/commonmark-generic-directives/zipball/e9645e67c5b3346eeb47fb22ba261e297d69f113",
+                "reference": "e9645e67c5b3346eeb47fb22ba261e297d69f113",
                 "shasum": ""
             },
             "require": {
@@ -443,9 +443,9 @@
             ],
             "support": {
                 "issues": "https://github.com/markdown-office/commonmark-generic-directives/issues",
-                "source": "https://github.com/markdown-office/commonmark-generic-directives/tree/v0.3.0"
+                "source": "https://github.com/markdown-office/commonmark-generic-directives/tree/v0.4.0"
             },
-            "time": "2026-10-26T11:30:11+00:00"
+            "time": "2026-11-18T20:21:36+00:00"
         },
         {
             "name": "nette/schema",
