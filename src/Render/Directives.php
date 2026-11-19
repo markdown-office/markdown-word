@@ -7,6 +7,7 @@ namespace MarkdownWord\Render;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration\TextStyles;
+use MarkdownWord\Exception\InvalidConfiguration;
 use MarkdownWord\Render\Directive\Caption;
 use MarkdownWord\Render\Directive\DocxOnly;
 use MarkdownWord\Render\Directive\Footnote;
@@ -173,6 +174,39 @@ final class Directives
             ...array_keys($this->inline),
             ...($this->textStyle?->names() ?? []),
         ];
+    }
+
+    /**
+     * A named style may not take the name of a directive this library draws.
+     *
+     * The directive is drawn before the style is, so a style called `footnote` is never
+     * applied to a word: `:footnote[…]` draws the footnote, and the style is left with
+     * nothing to reach it.
+     *
+     * Asked of the registry rather than in the configuration, which does not know what
+     * the renderer draws, and asked of the merged configuration rather than of a theme
+     * alone, so a style from a theme and one from a caller's code are refused the same
+     * way.
+     *
+     * @throws InvalidConfiguration when a style takes the name of a directive.
+     */
+    public static function assertStylesAreDrawable(TextStyles $styles): void
+    {
+        $drawn = array_map(self::foldName(...), self::names());
+
+        foreach ($styles->names() as $name) {
+            $folded = self::foldName($name);
+
+            if (!in_array($folded, $drawn, true)) {
+                continue;
+            }
+
+            throw new InvalidConfiguration(sprintf(
+                'The style "%s" cannot be defined: "%s" is the name of a directive this library draws. A named style has to be a name of your own, such as "brand".',
+                $name,
+                $folded,
+            ));
+        }
     }
 
     /**
