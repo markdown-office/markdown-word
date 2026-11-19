@@ -48,6 +48,12 @@ final class WordToMarkdown implements Converter
     ];
 
     /**
+     * The message a target that cannot be written is reported with; the target
+     * goes in `%s`.
+     */
+    private const UNWRITABLE_TARGET = 'Unable to write "%s".';
+
+    /**
      * @param string|null $source The document to convert: a path, or the bytes of
      *        one, read as {@see Input} reads a string. Null leaves the choice to
      *        {@see self::toMarkdown()}.
@@ -199,16 +205,16 @@ final class WordToMarkdown implements Converter
             // somewhere else, and a rename across a filesystem boundary fails;
             // either way the target is not writable, and that is the fact worth
             // reporting.
-            throw new FileNotWritable(sprintf('Unable to write "%s".', $target));
+            throw new FileNotWritable(sprintf(self::UNWRITABLE_TARGET, $target));
         }
 
         try {
             if (@file_put_contents($staged, $contents) === false) {
-                throw new FileNotWritable(sprintf('Unable to write "%s".', $target));
+                throw new FileNotWritable(sprintf(self::UNWRITABLE_TARGET, $target));
             }
 
             if (!@rename($staged, $target)) {
-                throw new FileNotWritable(sprintf('Unable to write "%s".', $target));
+                throw new FileNotWritable(sprintf(self::UNWRITABLE_TARGET, $target));
             }
         } finally {
             // The rename has already moved the file by the time this runs, so
@@ -318,15 +324,11 @@ final class WordToMarkdown implements Converter
             return false;
         }
 
-        if ($extension === 'emf') {
-            return self::isEnhancedMetafile($bytes);
-        }
-
-        if ($extension === 'wmf') {
-            return self::isMetafile($bytes);
-        }
-
-        return @getimagesizefromstring($bytes) !== false;
+        return match ($extension) {
+            'emf' => self::isEnhancedMetafile($bytes),
+            'wmf' => self::isMetafile($bytes),
+            default => @getimagesizefromstring($bytes) !== false,
+        };
     }
 
     /**

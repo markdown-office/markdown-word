@@ -71,92 +71,87 @@ final class InlineRenderer
         InlineStyle $style,
         ?callable $onParagraphBreak,
     ): AbstractContainer {
-        // Text carries the literal characters; entity references and backslash
-        // escapes have already been resolved by the parser.
-        if ($node instanceof Text) {
-            $this->addText($node->getLiteral(), $target, $style);
+        return match (true) {
+            // Text carries the literal characters; entity references and backslash
+            // escapes have already been resolved by the parser.
+            $node instanceof Text => $this->renderText($node, $target, $style),
 
-            return $target;
-        }
-
-        // One node type for both break kinds.
-        if ($node instanceof Newline) {
-            return $node->getType() === Newline::HARDBREAK
+            // One node type for both break kinds.
+            $node instanceof Newline => $node->getType() === Newline::HARDBREAK
                 ? $this->renderHardBreak($target, $style, $onParagraphBreak)
-                : $this->renderSoftBreak($target, $style, $onParagraphBreak);
-        }
+                : $this->renderSoftBreak($target, $style, $onParagraphBreak),
 
-        if ($node instanceof Document) {
-            return $this->render($node->children(), $target, $style, $onParagraphBreak);
-        }
+            $node instanceof Document => $this->render($node->children(), $target, $style, $onParagraphBreak),
 
-        if ($node instanceof DirectiveInline) {
-            if ($this->directives->drawInline($node, $target, $style)) {
-                return $target;
-            }
+            $node instanceof DirectiveInline => $this->renderDirective($node, $target, $style),
 
-            $this->renderUnclaimedDirective($node, $target, $style);
+            $node instanceof Strong => $this->render($node->children(), $target, $style->withBold(), $onParagraphBreak),
 
+            $node instanceof Emphasis => $this->render($node->children(), $target, $style->withItalic(), $onParagraphBreak),
+
+            $node instanceof Strikethrough => $this->render($node->children(), $target, $style->withStrikethrough(), $onParagraphBreak),
+
+            $node instanceof Code => $this->renderCode($node, $target, $style),
+
+            $node instanceof Link => $this->renderLink($node, $target, $style, $onParagraphBreak),
+
+            $node instanceof Image => $this->renderImage($node, $target, $style),
+
+            $node instanceof TaskListItemMarker => $this->renderTaskMarker($node, $target, $style),
+
+            $node instanceof HtmlInline => $this->renderHtml($node, $target, $style),
+
+            $node instanceof AbstractStringContainer => $this->renderText($node, $target, $style),
+
+            // Unknown inline nodes (footnote references, mentions, embeds, ...) still
+            // contribute their children, so no text is silently lost.
+            default => $node->hasChildren()
+                ? $this->render($node->children(), $target, $style, $onParagraphBreak)
+                : $target,
+        };
+    }
+
+    private function renderText(AbstractStringContainer $node, AbstractContainer $target, InlineStyle $style): AbstractContainer
+    {
+        $this->addText($node->getLiteral(), $target, $style);
+
+        return $target;
+    }
+
+    private function renderCode(Code $node, AbstractContainer $target, InlineStyle $style): AbstractContainer
+    {
+        // Already stripped of its delimiters by the parser, including the two
+        // normalisations the spec does to a code span's contents, so nothing here
+        // may collapse what is left.
+        $this->addCode($node->getLiteral(), $target, $style);
+
+        return $target;
+    }
+
+    private function renderTaskMarker(TaskListItemMarker $node, AbstractContainer $target, InlineStyle $style): AbstractContainer
+    {
+        // No trailing space: the text after the marker in the source already
+        // carries one, and a second would leave the two sitting apart.
+        $this->addText($node->isChecked() ? "\u{2612}" : "\u{2610}", $target, $style);
+
+        return $target;
+    }
+
+    private function renderHtml(HtmlInline $node, AbstractContainer $target, InlineStyle $style): AbstractContainer
+    {
+        // The block layer, which knows the configured HTML mode.
+        $this->html->renderInline($node->getLiteral(), $target, $style);
+
+        return $target;
+    }
+
+    private function renderDirective(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): AbstractContainer
+    {
+        if ($this->directives->drawInline($node, $target, $style)) {
             return $target;
         }
 
-        if ($node instanceof Strong) {
-            return $this->render($node->children(), $target, $style->withBold(), $onParagraphBreak);
-        }
-
-        if ($node instanceof Emphasis) {
-            return $this->render($node->children(), $target, $style->withItalic(), $onParagraphBreak);
-        }
-
-        if ($node instanceof Strikethrough) {
-            return $this->render($node->children(), $target, $style->withStrikethrough(), $onParagraphBreak);
-        }
-
-        if ($node instanceof Code) {
-            // Already stripped of its delimiters by the parser, including the two
-            // normalisations the spec does to a code span's contents, so nothing here
-            // may collapse what is left.
-            $this->addCode($node->getLiteral(), $target, $style);
-
-            return $target;
-        }
-
-        if ($node instanceof Link) {
-            return $this->renderLink($node, $target, $style, $onParagraphBreak);
-        }
-
-        if ($node instanceof Image) {
-            $this->renderImage($node, $target, $style);
-
-            return $target;
-        }
-
-        if ($node instanceof TaskListItemMarker) {
-            // No trailing space: the text after the marker in the source already
-            // carries one, and a second would leave the two sitting apart.
-            $this->addText($node->isChecked() ? "\u{2612}" : "\u{2610}", $target, $style);
-
-            return $target;
-        }
-
-        if ($node instanceof HtmlInline) {
-            // The block layer, which knows the configured HTML mode.
-            $this->html->renderInline($node->getLiteral(), $target, $style);
-
-            return $target;
-        }
-
-        if ($node instanceof AbstractStringContainer) {
-            $this->addText($node->getLiteral(), $target, $style);
-
-            return $target;
-        }
-
-        // Unknown inline nodes (footnote references, mentions, embeds, ...) still
-        // contribute their children, so no text is silently lost.
-        if ($node->hasChildren()) {
-            return $this->render($node->children(), $target, $style, $onParagraphBreak);
-        }
+        $this->renderUnclaimedDirective($node, $target, $style);
 
         return $target;
     }
@@ -205,6 +200,20 @@ final class InlineRenderer
             );
         }
 
+        return $this->renderLinkLabel($node, $target, $linked, $url, $title);
+    }
+
+    /**
+     * The label of a link: either text PHPWord can link itself, or runs the
+     * writer has to wrap in a hyperlink afterwards.
+     */
+    private function renderLinkLabel(
+        Link $node,
+        AbstractContainer $target,
+        InlineStyle $linked,
+        string $url,
+        ?string $title,
+    ): AbstractContainer {
         // A plain-text label is expressible with PHPWord's own Link element, which
         // produces a real w:hyperlink — unless the elements are destined for
         // another document, where the relationship it refers to would not travel
@@ -227,9 +236,11 @@ final class InlineRenderer
         return $this->links->render($node, $target, $linked);
     }
 
-    private function renderImage(Image $node, AbstractContainer $target, InlineStyle $style): void
+    private function renderImage(Image $node, AbstractContainer $target, InlineStyle $style): AbstractContainer
     {
         $this->images->render($node, $target, $this->collectText($node), $style);
+
+        return $target;
     }
 
     /**
@@ -271,25 +282,21 @@ final class InlineRenderer
         InlineStyle $style,
         ?callable $onParagraphBreak,
     ): AbstractContainer {
-        switch ($this->styles->softBreakMode()) {
-            case Options::SOFT_BREAK_LINE:
-                $target->addTextBreak(1, $this->styles->fontFor($style));
+        $mode = $this->styles->softBreakMode();
 
-                return $target;
+        if ($mode === Options::SOFT_BREAK_LINE) {
+            $target->addTextBreak(1, $this->styles->fontFor($style));
 
-            case Options::SOFT_BREAK_PARAGRAPH:
-                if ($onParagraphBreak !== null) {
-                    return $onParagraphBreak();
-                }
-                $this->addText(' ', $target, $style);
-
-                return $target;
-
-            default:
-                $this->addText(' ', $target, $style);
-
-                return $target;
+            return $target;
         }
+
+        if ($mode === Options::SOFT_BREAK_PARAGRAPH && $onParagraphBreak !== null) {
+            return $onParagraphBreak();
+        }
+
+        $this->addText(' ', $target, $style);
+
+        return $target;
     }
 
     /**
@@ -340,11 +347,8 @@ final class InlineRenderer
                 continue;
             }
 
-            if ($child instanceof Text) {
-                // Whitespace between images is not content.
-                if (trim($child->getLiteral()) !== '') {
-                    return false;
-                }
+            // Whitespace between images is not content.
+            if ($child instanceof Text && trim($child->getLiteral()) === '') {
                 continue;
             }
 

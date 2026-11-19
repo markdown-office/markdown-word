@@ -34,6 +34,7 @@ final class NumberingMerger
     private const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
     private const NUMBERING_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
     private const NUMBERING_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
+    private const NUMBERING_PART = 'word/numbering.xml';
 
     /**
      * The lowest `w:numId` this merger writes into a document.
@@ -262,8 +263,8 @@ final class NumberingMerger
             $this->appendDefinitions($numbering);
             $this->retargetDocument($zip);
 
-            $zip->deleteName('word/numbering.xml');
-            $zip->addFromString('word/numbering.xml', (string) $numbering->saveXML());
+            $zip->deleteName(self::NUMBERING_PART);
+            $zip->addFromString(self::NUMBERING_PART, (string) $numbering->saveXML());
 
             $this->declareContentType($zip);
             $this->declareRelationship($zip);
@@ -397,7 +398,7 @@ final class NumberingMerger
 
     private function numberingPart(ZipArchive $zip): DOMDocument
     {
-        $existing = $zip->getFromName('word/numbering.xml');
+        $existing = $zip->getFromName(self::NUMBERING_PART);
 
         if ($existing === false) {
             $dom = new DOMDocument();
@@ -432,7 +433,7 @@ final class NumberingMerger
      */
     private function declareContentType(ZipArchive $zip): void
     {
-        $xml = $zip->getFromName('[Content_Types].xml');
+        $xml = $zip->getFromName(WordPackage::CONTENT_TYPES);
 
         if ($xml === false) {
             return;
@@ -441,19 +442,23 @@ final class NumberingMerger
         $dom = new DOMDocument();
         $this->load($dom, $xml);
 
+        // A part is named by its path in the package with a leading slash, which
+        // is how OOXML names one; the archive holds it under the path without it.
+        $partName = '/' . self::NUMBERING_PART;
+
         foreach ($dom->getElementsByTagName('Override') as $override) {
-            if ($override instanceof DOMElement && $override->getAttribute('PartName') === '/word/numbering.xml') {
+            if ($override instanceof DOMElement && $override->getAttribute('PartName') === $partName) {
                 return;
             }
         }
 
         $override = $dom->createElement('Override');
-        $override->setAttribute('PartName', '/word/numbering.xml');
+        $override->setAttribute('PartName', $partName);
         $override->setAttribute('ContentType', self::NUMBERING_CT);
         $dom->documentElement?->appendChild($override);
 
-        $zip->deleteName('[Content_Types].xml');
-        $zip->addFromString('[Content_Types].xml', (string) $dom->saveXML());
+        $zip->deleteName(WordPackage::CONTENT_TYPES);
+        $zip->addFromString(WordPackage::CONTENT_TYPES, (string) $dom->saveXML());
     }
 
     /**
@@ -522,7 +527,7 @@ final class NumberingMerger
                 return null;
             }
 
-            $xml = $zip->getFromName('word/numbering.xml');
+            $xml = $zip->getFromName(self::NUMBERING_PART);
             $zip->close();
         } finally {
             @unlink($path);

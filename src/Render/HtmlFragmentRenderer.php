@@ -36,11 +36,7 @@ final class HtmlFragmentRenderer
     {
         $html = trim($html);
 
-        if ($html === '') {
-            return;
-        }
-
-        if ($this->options->html === Options::HTML_DROP) {
+        if ($html === '' || $this->options->html === Options::HTML_DROP) {
             return;
         }
 
@@ -123,17 +119,13 @@ final class HtmlFragmentRenderer
         InlineStyle $style,
         bool $inline = false,
     ): void {
-        if ($node instanceof \DOMText) {
-            $this->appendText($node->textContent, $target, $style, $node->parentNode);
-
-            return;
-        }
-
-        if ($node instanceof \DOMComment) {
-            return;
-        }
-
+        // Text is content; a comment is content to nobody, and so is a node that
+        // is neither text nor an element.
         if (!$node instanceof \DOMElement) {
+            if ($node instanceof \DOMText) {
+                $this->appendText($node->textContent, $target, $style, $node->parentNode);
+            }
+
             return;
         }
 
