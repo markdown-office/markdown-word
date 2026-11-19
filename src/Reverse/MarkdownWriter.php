@@ -630,7 +630,7 @@ final class MarkdownWriter
 
     /**
      * Join neighbouring runs that are formatted identically, as
-     * {@see DocumentReader::merge()} does.
+     * {@see InlineReader::merge()} does.
      *
      * @param list<Inline> $inlines
      * @return list<Inline>
