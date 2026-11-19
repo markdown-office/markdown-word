@@ -14,8 +14,6 @@ use League\CommonMark\Extension\CommonMark\Node\Block\ListItem;
 use League\CommonMark\Extension\CommonMark\Node\Block\ThematicBreak;
 use League\CommonMark\Extension\CommonMark\Node\Inline\HtmlInline;
 use League\CommonMark\Extension\Table\Table as MarkdownTable;
-use League\CommonMark\Extension\Table\TableCell;
-use League\CommonMark\Extension\Table\TableRow;
 use League\CommonMark\Extension\Table\TableSection;
 use League\CommonMark\Node\Block\AbstractBlock;
 use League\CommonMark\Node\Block\Document;
@@ -26,12 +24,9 @@ use MarkdownOffice\CommonMark\Directive\Node\DirectiveBlock;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\LookAndFeel;
-use MarkdownWord\Configuration\Options;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Render\Directive\SectionBreak;
 use PhpOffice\PhpWord\Element\AbstractContainer;
-use PhpOffice\PhpWord\Element\ListItemRun;
-use PhpOffice\PhpWord\Element\TextRun;
 use PhpOffice\PhpWord\Style\Paragraph as WordParagraph;
 
 /**
@@ -46,17 +41,7 @@ final class DocumentRenderer
     /** One level of block quote, in twips (a twentieth of a point): half an inch. */
     private const QUOTE_INDENT = 720;
 
-    /**
-     * Cells ask Word to let their text wrap, unless a cell style says otherwise.
-     *
-     * PHPWord's cell style defaults `noWrap` to true, which writes `<w:noWrap/>`
-     * — Word's "Wrap text" cell option, unchecked — into every cell of every
-     * table. Word then lays each cell out on a single line and widens the column
-     * to fit it, so a table whose cells hold a sentence runs off the page and the
-     * line cannot break anywhere. LibreOffice reads `w:noWrap` as a hint it may
-     * ignore, which is why the file looks right there and wrong in Word.
-     */
-    private const CELL_WRAPPING = ['noWrap' => false];
+    private readonly TableRenderer $tables;
 
     public function __construct(
         private readonly Configuration $config,
@@ -67,6 +52,7 @@ final class DocumentRenderer
         private readonly Directives $directives = new Directives(),
         private readonly ?SectionBreak $sections = null,
     ) {
+        $this->tables = new TableRenderer($config, $styles, $inlines);
     }
 
     public function render(Document $document, AbstractContainer $target): void
@@ -91,84 +77,28 @@ final class DocumentRenderer
 
     private function renderNode(Node $node, AbstractContainer $target, RenderContext $context): void
     {
-        if ($node instanceof Heading) {
-            $this->renderHeading($node, $target, $context);
-
-            return;
-        }
-
-        if ($node instanceof Paragraph) {
-            $this->renderParagraph($node, $target, $context);
-
-            return;
-        }
-
-        if ($node instanceof ThematicBreak) {
-            $this->renderThematicBreak($target, $context);
-
-            return;
-        }
-
-        if ($node instanceof FencedCode || $node instanceof IndentedCode) {
-            $this->renderCodeBlock($node, $target, $context);
-
-            return;
-        }
-
-        if ($node instanceof BlockQuote) {
-            $this->renderChildren($node->children(), $target, $context->enterQuote());
-
-            return;
-        }
-
-        if ($node instanceof ListBlock) {
-            $this->renderList($node, $target, $context);
-
-            return;
-        }
-
-        if ($node instanceof MarkdownTable) {
-            $this->renderTable($node, $target, $context);
-
-            return;
-        }
-
-        if ($node instanceof TableSection) {
-            $this->renderChildren($node->children(), $target, $context);
-
-            return;
-        }
-
-        // Only block-level HTML comes through here. Inline HTML is part of a
-        // paragraph and is handled by the inline renderer, which has to splice it
-        // into the run rather than start a new one.
-        if ($node instanceof HtmlBlock) {
-            $this->renderHtml($node, $target, $context);
-
-            return;
-        }
-
-        if ($node instanceof Document) {
-            $this->renderChildren($node->children(), $target, $context);
-
-            return;
-        }
-
-        // A container directive holds Markdown, so a container nothing claims
-        // falls through to the same descent every other unhandled block gets —
-        // its body is drawn and the fence is not, which is the most a container
-        // can mean without a name for what it is.
-        if ($node instanceof DirectiveBlock && $this->directives->drawBlock($node, $target, $context)) {
-            return;
-        }
-
-        if ($node->hasChildren()) {
-            $this->renderChildren($node->children(), $target, $context);
-
-            return;
-        }
-
-        $this->renderUnclaimedDirective($node, $target, $context);
+        match (true) {
+            $node instanceof Heading => $this->renderHeading($node, $target, $context),
+            $node instanceof Paragraph => $this->renderParagraph($node, $target, $context),
+            $node instanceof ThematicBreak => $this->renderThematicBreak($target, $context),
+            $node instanceof FencedCode || $node instanceof IndentedCode => $this->renderCodeBlock($node, $target, $context),
+            $node instanceof BlockQuote => $this->renderChildren($node->children(), $target, $context->enterQuote()),
+            $node instanceof ListBlock => $this->renderList($node, $target, $context),
+            $node instanceof MarkdownTable => $this->tables->render($node, $target, $context, $this->renderNode(...)),
+            $node instanceof TableSection => $this->renderChildren($node->children(), $target, $context),
+            // Only block-level HTML comes through here. Inline HTML is part of a
+            // paragraph and is handled by the inline renderer, which has to splice it
+            // into the run rather than start a new one.
+            $node instanceof HtmlBlock => $this->renderHtml($node, $target, $context),
+            $node instanceof Document => $this->renderChildren($node->children(), $target, $context),
+            // A container directive holds Markdown, so a container nothing claims
+            // falls through to the same descent every other unhandled block gets —
+            // its body is drawn and the fence is not, which is the most a container
+            // can mean without a name for what it is.
+            $node instanceof DirectiveBlock && $this->directives->drawBlock($node, $target, $context) => null,
+            $node->hasChildren() => $this->renderChildren($node->children(), $target, $context),
+            default => $this->renderUnclaimedDirective($node, $target, $context),
+        };
     }
 
     /**
@@ -330,7 +260,7 @@ final class DocumentRenderer
     {
         $style = $this->blockStyle(Styles::CODE_BLOCK, $context);
 
-        if (!$this->config->getOptions()->codeBlockShading || $this->hasShading($style)) {
+        if (!$this->config->getOptions()->codeBlockShading || ParagraphStyle::hasShading($style)) {
             return $style;
         }
 
@@ -338,14 +268,6 @@ final class DocumentRenderer
             'shading' => ['fill' => LookAndFeel::CODE_BACKGROUND],
             'space' => ['before' => 0, 'after' => 0],
         ]);
-    }
-
-    /**
-     * @param array<string, mixed>|string|null $style
-     */
-    private function hasShading(array|string|null $style): bool
-    {
-        return is_array($style) && ($style['shading']['fill'] ?? '') !== '';
     }
 
     private function renderList(ListBlock $node, AbstractContainer $target, RenderContext $context): void
@@ -450,324 +372,6 @@ final class DocumentRenderer
             + ParagraphStyle::styleNameOf($this->styles->slot(Styles::BLOCK_QUOTE));
 
         return is_string($style) ? $offset : ParagraphStyle::merge($style, $offset);
-    }
-
-    private function renderTable(MarkdownTable $node, AbstractContainer $target, RenderContext $context): void
-    {
-        $options = $this->config->getOptions();
-        $tableStyle = $this->styles->slot(Styles::TABLE);
-
-        $table = match (true) {
-            $tableStyle === null => $target->addTable($this->defaultTableStyle($options)),
-            // A named table style comes from the target document — typically a
-            // Word built-in grid — and is used exactly as the template defines it.
-            is_string($tableStyle) => $target->addTable($tableStyle),
-            // A custom definition merges over the same default the `null` case builds,
-            // so naming the one thing a theme is about — a border colour — keeps the
-            // rules, their weight and the cell margins. Handing PHPWord the definition
-            // on its own produced a table with no borders at all, because `borderColor`
-            // sets the colour of rules that have to be asked for separately.
-            default => $target->addTable(ParagraphStyle::table(
-                ParagraphStyle::merge($this->defaultTableStyle($options), $tableStyle),
-            )),
-        };
-
-        $alignments = $this->columnAlignments($node);
-        $headerRowStyle = $this->styles->slot(Styles::TABLE_HEADER_ROW);
-        $cellStyle = $this->styles->slot(Styles::TABLE_CELL);
-        $widths = $this->columnWidths($node, $target, $cellStyle);
-
-        $isHeader = true;
-
-        foreach ($this->tableRows($node) as $row) {
-            $table->addRow(null, $isHeader ? $this->rowStyle($headerRowStyle) : null);
-
-            $column = 0;
-            foreach ($this->rowCells($row) as $cell) {
-                $align = $alignments[$column] ?? null;
-
-                $tableCell = $table->addCell($widths[$column] ?? null, $this->cellStyle($cellStyle));
-                $this->renderCellContent(
-                    $cell,
-                    $tableCell,
-                    $context,
-                    $this->cellFont($cellStyle, $isHeader, $options),
-                    $this->cellAlignment($align, $cellStyle),
-                );
-                $column++;
-            }
-
-            $isHeader = false;
-        }
-    }
-
-    /**
-     * A width for every column, or none at all.
-     *
-     * A cell style that names its own unit is measuring itself: the widths here
-     * are twips, and a `w:tcW` in twips labelled as a percentage is not a narrower
-     * table but an unreadable one. Someone who has configured a unit has said what
-     * they want, so nothing is imposed on top of it.
-     *
-     * @return list<int>
-     */
-    private function columnWidths(MarkdownTable $node, AbstractContainer $target, mixed $cellStyle): array
-    {
-        if (is_array($cellStyle) && isset($cellStyle['unit'])) {
-            return [];
-        }
-
-        return (new TableLayout($target))->columnWidths($this->columnContentWidths($node));
-    }
-
-    /**
-     * The width of the widest cell in each column, in characters — the only thing
-     * a Markdown table offers in place of a width. Measured over the text nodes
-     * rather than the rendered runs, because a column of images has no characters
-     * in it and should not be laid out as if it were a column of long ones.
-     *
-     * @return list<int>
-     */
-    private function columnContentWidths(MarkdownTable $node): array
-    {
-        $widths = [];
-
-        foreach ($this->tableRows($node) as $row) {
-            foreach ($this->rowCells($row) as $index => $cell) {
-                $widths[$index] = max($widths[$index] ?? 0, $this->textLength($cell));
-            }
-        }
-
-        return $widths;
-    }
-
-    private function textLength(TableCell $cell): int
-    {
-        $length = 0;
-
-        foreach ($cell->children() as $child) {
-            $length += $child instanceof Text ? mb_strlen($child->getLiteral()) : $this->blockTextLength($child);
-        }
-
-        return $length;
-    }
-
-    private function blockTextLength(Node $node): int
-    {
-        if (!$node->hasChildren()) {
-            return 0;
-        }
-
-        $length = 0;
-
-        foreach ($node->children() as $child) {
-            $length += $child instanceof Text ? mb_strlen($child->getLiteral()) : $this->blockTextLength($child);
-        }
-
-        return $length;
-    }
-
-    /**
-     * @param  array<string, mixed>  $forcedFont
-     */
-    private function renderCellContent(
-        TableCell $cell,
-        AbstractContainer $tableCell,
-        RenderContext $context,
-        array $forcedFont = [],
-        ?string $alignment = null,
-    ): void {
-        $inlineStyle = new InlineStyle(forcedFont: $forcedFont);
-        $paragraphStyle = $alignment === null ? null : ['alignment' => $alignment];
-        $blocks = 0;
-
-        foreach ($cell->children() as $child) {
-            if ($child instanceof Paragraph) {
-                $run = $tableCell->addTextRun($paragraphStyle);
-                $this->inlines->render($child->children(), $run, $inlineStyle);
-            } elseif ($child instanceof AbstractBlock) {
-                $this->renderNode($child, $tableCell, $context);
-            } else {
-                $run = $tableCell->addTextRun($paragraphStyle);
-                $this->inlines->render([$child], $run, $inlineStyle);
-            }
-            $blocks++;
-        }
-
-        if ($blocks === 0) {
-            $tableCell->addTextRun($paragraphStyle);
-        }
-    }
-
-    /**
-     * @return list<TableRow>
-     */
-    private function tableRows(MarkdownTable $table): array
-    {
-        $rows = [];
-
-        foreach ($table->children() as $section) {
-            if ($section instanceof TableSection) {
-                foreach ($section->children() as $row) {
-                    if ($row instanceof TableRow) {
-                        $rows[] = $row;
-                    }
-                }
-            } elseif ($section instanceof TableRow) {
-                $rows[] = $section;
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
-     * @return list<TableCell>
-     */
-    private function rowCells(TableRow $row): array
-    {
-        $cells = [];
-        foreach ($row->children() as $cell) {
-            if ($cell instanceof TableCell) {
-                $cells[] = $cell;
-            }
-        }
-
-        return $cells;
-    }
-
-    /**
-     * GFM stores the column alignment in the delimiter row of the header.
-     *
-     * @return list<string|null>
-     */
-    private function columnAlignments(MarkdownTable $table): array
-    {
-        $alignments = [];
-
-        foreach ($table->children() as $section) {
-            if (!$section instanceof TableSection || $section->getType() !== TableSection::TYPE_HEAD) {
-                continue;
-            }
-
-            foreach ($section->children() as $row) {
-                if (!$row instanceof TableRow) {
-                    continue;
-                }
-                foreach ($this->rowCells($row) as $index => $cell) {
-                    $alignments[$index] = $cell->getAlign();
-                }
-            }
-        }
-
-        return $alignments;
-    }
-
-    /**
-     * PHPWord's cell style has no font or alignment properties, so those parts of
-     * the configured cell style are extracted and applied to the runs and
-     * paragraphs inside the cell instead. Only the genuinely cell-level
-     * properties (shading, margins, borders) are passed to the cell itself.
-     *
-     * @return array<string, mixed>
-     */
-    private function cellStyle(mixed $configured): array
-    {
-        if (!is_array($configured)) {
-            return self::CELL_WRAPPING;
-        }
-
-        $cellOnly = $configured;
-        unset($cellOnly['bold'], $cellOnly['italic'], $cellOnly['alignment']);
-
-        // `+` and not `array_merge`, so it fills in the default rather than
-        // overwriting a `noWrap` the cell style asked for.
-        return $cellOnly + self::CELL_WRAPPING;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function cellFont(mixed $configured, bool $isHeader, Options $options): array
-    {
-        $font = is_array($configured) ? $configured : [];
-        unset($font['alignment']);
-
-        if ($isHeader && $options->tableHeaderBold) {
-            $font['bold'] = true;
-        }
-
-        return $font;
-    }
-
-    /**
-     * The horizontal alignment of a column: the one written in the delimiter row,
-     * unless the configured cell style overrides it.
-     */
-    private function cellAlignment(?string $markdownAlign, mixed $configured): ?string
-    {
-        $configuredAlign = is_array($configured) ? ($configured['alignment'] ?? null) : null;
-
-        if (is_array($configuredAlign)) {
-            return $configuredAlign['horizontal'] ?? null;
-        }
-
-        if (is_string($configuredAlign)) {
-            return $configuredAlign;
-        }
-
-        return match ($markdownAlign) {
-            'right' => 'right',
-            'center' => 'center',
-            'left' => 'left',
-            default => null,
-        };
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function rowStyle(mixed $configured): ?array
-    {
-        return is_array($configured) ? $configured : null;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function defaultTableStyle(Options $options): array
-    {
-        $style = $this->widthStyle($options) + [
-            'alignment' => 'left',
-            'layout' => 'autofit',
-        ];
-
-        if ($options->tableBorders) {
-            $style['borderColor'] = '000000';
-            $style['borderSize'] = 6;
-            $style['cellMargin'] = 80;
-        }
-
-        return $style;
-    }
-
-    /**
-     * The table's width, the way OOXML wants it.
-     *
-     * PHPWord's default is `w:tblW w:w="0" w:type="auto"`, and a zero width makes
-     * every viewer shrink the table to its shortest content rather than filling
-     * the text column. A percentage of the column is the stable way to ask for
-     * full width: it follows the page size and the margins.
-     *
-     * @return array<string, mixed>
-     */
-    private function widthStyle(Options $options): array
-    {
-        if ($options->tableWidth <= 0) {
-            return ['width' => 0, 'unit' => 'auto'];
-        }
-
-        return ['width' => $options->tableWidth, 'unit' => 'pct'];
     }
 
     private function renderHtml(Node $node, AbstractContainer $target, RenderContext $context): void
