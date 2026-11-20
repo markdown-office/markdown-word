@@ -181,6 +181,26 @@ it('writes a word in the named style the theme brings', function () {
         ->and($muted['colour'])->toBe('6B7280');
 });
 
+it('draws the emphasis in a label rather than the asterisks around it', function () {
+    [, $path] = exampleDocument('28-inline-styles', Format::Docx);
+
+    $muted = exampleRunWith($path, 'Every plate');
+
+    // The label is Markdown now, so the asterisks are markup and not characters: the run
+    // carries the word and not the source of the directive. The `muted` style says
+    // nothing about a weight, so the italic in that run is the emphasis's own.
+    expect($muted)->not->toBeNull()
+        ->and($muted['text'])->toBe('Every plate is thrown by hand.')
+        ->and($muted['italic'])->toBeTrue()
+        ->and($muted['colour'])->toBe('6B7280');
+
+    // No run carries an asterisk: the old behaviour wrote the directive's own source
+    // text into the document.
+    foreach (exampleRuns($path) as $run) {
+        expect($run['text'])->not->toContain('*');
+    }
+});
+
 it('writes the raw form in the colour it is given and in no other style', function () {
     [, $path] = exampleDocument('28-inline-styles', Format::Docx);
 

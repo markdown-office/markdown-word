@@ -42,7 +42,11 @@ untouched.
 ## A label holding Markdown
 
 :brand[**Orrery**] — a label is parsed as inline Markdown, so the asterisks are
-markup and not characters: the word is drawn in the style and in bold.
+markup and not characters: the word is drawn in the style.
+
+:muted[*Every plate is thrown by hand.*] — and the emphasis in it is drawn as well,
+where it can be seen: the `muted` style says nothing about a weight, so the italic is
+the label's own.
 
 ## What the reader is given
 
