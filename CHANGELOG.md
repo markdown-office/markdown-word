@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The examples name the skill that carries them.** The skill is called `mdoffice` now —
+  it is the suite's, and it carries both halves — and the examples said the name it had
+  before. The bundle carries this directory as `examples/word/`, so a copy of it told a
+  reader to look for a skill that is not there.
+
 ### Fixed
 
 - **A word in a style may hold emphasis of its own.** `:brand[**Bakery**]` is drawn as the

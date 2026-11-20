@@ -10,7 +10,7 @@ php build.php
 **The build needs the library itself, so it needs a checkout of it.** The script
 is the library's own example build: it drives the library's API directly rather
 than through the command line, because what it shows is the API. A copy of this
-directory on its own — the one the `mdword` skill carries — has the sources and
+directory on its own — the one the `mdoffice` skill carries — has the sources and
 the templates but not the library that builds them, and the script says so
 rather than failing with a missing file.
 
