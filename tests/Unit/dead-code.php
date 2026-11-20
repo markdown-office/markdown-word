@@ -123,6 +123,16 @@ it('does not claim again what the code does not do', function (string $claim) {
     'shipping the lock file makes an install reproducible' => 'a reproducible install is worth',
     'one list of style keys covers every slot' => 'The keys a style slot\'s array form understands',
     'a default heading is body text in an .odt or an .rtf' => 'headings are body text',
+    // A label of a directive was plain text, and the rules that went with it: a label
+    // holding a complete Markdown construct was drawn as the directive's own source
+    // text here and refused by the slides half. The label is parsed as inline
+    // Markdown now, and the phrases are the ones the pages and the source used.
+    // `CHANGELOG.md` has to be able to name what a label used to be drawn as, so the
+    // phrases are the wording rather than the claim — the entry says the label is
+    // parsed and does not say a label is text.
+    'a label of a directive is plain text' => 'a label is plain text',
+    "the body of a note is text, never Markdown" => 'the body is text, never Markdown',
+    'a directive stores its label as a string rather than parsing it' => 'stores a label as a string rather',
     'the built-in look is a no-op because it matches the default' => 'currently re-applies what is already the default',
     'a built-in style id carries an outline level by itself' => 'only the built-in ids carry an outline level',
     "the RTF font table is filled from the section's elements" => 'only walks section-level',

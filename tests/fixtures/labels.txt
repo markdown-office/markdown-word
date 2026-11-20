@@ -1,22 +1,21 @@
-# The labels a text style may be given, and what CommonMark makes of each one.
+# The labels a text style may be given, and what the parser makes of each one.
 #
-# `markdown` — CommonMark reads a complete construct in it: emphasis, code or a link,
-# and so must both halves.
-# `text` — it does not: the label is ordinary text, and neither half may hold it.
+# `markdown` — the parser reads a complete construct in it: emphasis, code or a
+# strikethrough, and the half draws the construct rather than the characters.
+# `text` — it does not: the label is ordinary text, and it is drawn as it stands.
 #
-# Both halves of the suite hold a label that is Markdown and draw one that is text,
-# and the rules for what CommonMark calls a construct are CommonMark's own: a
-# delimiter run that opens an emphasis may not be followed by whitespace, and one
-# that closes it may not be preceded by whitespace. `tools/compare-label-patterns.php`
-# reads both halves' rules out of their own sources and runs this list through them.
+# The label is parsed as inline Markdown, so what a half draws is what the parser
+# reads, and the two halves agree with each other because they ask the same
+# parser. The verdicts are what that parser makes of the label: CommonMark with
+# GFM's strikethrough, which both halves read.
 #
-# The verdicts are what the reference parser makes of the label: `markdown` when
-# league/commonmark reads emphasis, code or a link in it, `text` when it does not.
+# What makes a construct complete is CommonMark's own question: a delimiter run
+# that opens an emphasis may not be followed by whitespace, and one that closes it
+# may not be preceded by whitespace.
 #
-# The last two markers are where the halves' rules differ from CommonMark's, and they
-# are recorded so that a change to either half's rules has to say what it does about
-# them: `markdown-only` is a label CommonMark reads as Markdown and neither half
-# holds, `text-only` is one neither half should hold and both do.
+# A label the directive grammar cannot carry — one with a bracket in it — is left
+# out of the test: the grammar says a label holds no brackets at all, so the
+# directive ends at its name and what follows is ordinary Markdown.
 
 # Strong emphasis.
 markdown **Bakery**
@@ -109,8 +108,8 @@ text [Bakery
 text Bakery]
 text Bakery](url)
 
-# GFM's strikethrough is not CommonMark's, and a label is plain text.
-text ~~Bakery~~
+# GFM's strikethrough is a construct, and the label is parsed as Markdown.
+markdown ~~Bakery~~
 
 # Ordinary text.
 text Bakery
@@ -121,11 +120,11 @@ text 2 * 3
 text a_b
 text a*b
 
-# A run of three underscores is emphasis to CommonMark and text to both halves.
-markdown-only ___Bakery___
-markdown-only _Bakery__
-markdown-only __Bakery_ __
+# A run of three underscores is emphasis to the parser.
+markdown ___Bakery___
+markdown _Bakery__
+markdown __Bakery_ __
 
-# A run of one asterisk and a run of two is text to CommonMark and Markdown to both.
-text-only a *Bakery**a
-text-only a *Bakery_*a
+# A run of one asterisk and a run of two is text to the parser.
+text a *Bakery**a
+text a *Bakery_*a
