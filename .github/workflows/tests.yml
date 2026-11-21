@@ -352,7 +352,11 @@ jobs:
 
       - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: '8.6'
+          # 8.5 rather than the newest version, because this job measures the
+          # coverage: the report it hands to the analysis and the gate the test
+          # job runs are the same measurement, and one gate that measures on two
+          # versions is two gates that can disagree.
+          php-version: '8.5'
           # pcov rather than xdebug: the suite runs once more here, and xdebug is
           # roughly an order of magnitude slower.
           coverage: pcov
