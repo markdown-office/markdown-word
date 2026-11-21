@@ -14,6 +14,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **`InlineStyle::withForcedFont()` is now `withOwnFont()`.** What it sets are the
+  properties of the run itself rather than the look of the scope the run sits in,
+  and the scope's are given to the constructor. A caller that used the method has
+  a rename to make; nothing else about the class changed.
+
 - **The examples name the skill that carries them.** The skill is called `mdoffice` now —
   it is the suite's, and it carries both halves — and the examples said the name it had
   before. The bundle carries this directory as `examples/word/`, so a copy of it told a
