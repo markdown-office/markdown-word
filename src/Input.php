@@ -6,6 +6,7 @@ namespace MarkdownWord;
 
 use MarkdownWord\Exception\UnreadableDocument;
 use MarkdownWord\Exception\UnreadableFile;
+use MarkdownWord\Filesystem\PathProbe;
 
 /**
  * Where a conversion's input came from.
@@ -29,7 +30,7 @@ final class Input
      */
     public static function markdown(string $input): string
     {
-        return is_file($input) ? self::read($input) : $input;
+        return PathProbe::isFile($input) ? self::read($input) : $input;
     }
 
     /**
@@ -46,7 +47,7 @@ final class Input
             return $input;
         }
 
-        if (is_file($input)) {
+        if (PathProbe::isFile($input)) {
             $bytes = self::read($input);
 
             if (!str_starts_with($bytes, self::DOCUMENT_MAGIC)) {

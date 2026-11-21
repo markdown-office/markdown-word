@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MarkdownWord\Writer;
 
 use MarkdownWord\Exception\FileNotWritable;
+use MarkdownWord\Filesystem\PathProbe;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 
@@ -144,13 +145,13 @@ final class Staging
         // A path that names something that is not a file is refused here rather than by the
         // writer, which would open it and report a document written rather than a sentence
         // that says what was wrong.
-        if (file_exists($to) && !is_file($to)) {
+        if (PathProbe::exists($to) && !PathProbe::isFile($to)) {
             throw FileNotWritable::notAFile($to);
         }
 
         // A path given to a converter rarely has its directory made for it, and
         // `rename()` does not create one.
-        if (!is_dir($directory) && !@mkdir($directory, 0o777, true) && !is_dir($directory)) {
+        if (!PathProbe::isDirectory($directory) && !@mkdir($directory, 0o777, true) && !PathProbe::isDirectory($directory)) {
             throw new FileNotWritable(sprintf('Unable to create the directory "%s".', $directory));
         }
 
@@ -158,7 +159,7 @@ final class Staging
             return;
         }
 
-        $existed = file_exists($to);
+        $existed = PathProbe::exists($to);
 
         if (@copy($from, $to)) {
             @unlink($from);
@@ -191,7 +192,7 @@ final class Staging
             // turns it into a failure. The check is also the cheaper one: it is a
             // property of the directory entry, where `readlink()` on a path that is
             // not there is a syscall that fails.
-            if (!is_link($path)) {
+            if (!PathProbe::isLink($path)) {
                 return $path;
             }
 

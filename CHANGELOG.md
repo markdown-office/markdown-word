@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **PHP 8.6 is supported.** The suite runs on it, and the library works on it from the
+  oldest version it ever claimed — PHP 8.2. Nothing in the library had to change for
+  that to be true, and one thing about PHP 8.6 did.
+
 ### Changed
 
 - **The examples name the skill that carries them.** The skill is called `mdoffice` now —
@@ -14,6 +20,13 @@ All notable changes to this project are documented here. The format follows
   reader to look for a skill that is not there.
 
 ### Fixed
+
+- **A name that holds a null byte is answered rather than raised.** PHP 8.6 raises a
+  `ValueError` from `is_file()` and its neighbours when a path holds a null byte, where
+  earlier versions answered false. A document that wrote such a name was therefore
+  refused on 8.6 and answered on 8.5 — the same question with two answers. Every entry
+  point that takes a name answers null, or false, for a name like that now, as it
+  already did for a name that walked out of its base or that was a URL.
 
 - **A word in a style may hold emphasis of its own.** `:brand[**Bakery**]` is drawn as the
   word `Bakery` in the brand style and in bold. It used to be drawn as the directive's own

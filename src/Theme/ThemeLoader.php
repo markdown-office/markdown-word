@@ -9,6 +9,7 @@ use MarkdownWord\Exception\MalformedTheme;
 use MarkdownWord\Exception\ThemeNotFound;
 use MarkdownWord\Exception\UnknownStyleSlot;
 use MarkdownWord\Files\FileFinder;
+use MarkdownWord\Filesystem\PathProbe;
 use MarkdownWord\Filesystem\PathScope;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
@@ -164,7 +165,7 @@ final class ThemeLoader
 
         // `is_readable()` first, so a file that cannot be read is reported as that
         // rather than as a warning the test runner turns into a failure of its own.
-        $contents = is_readable($real) ? @file_get_contents($real) : false;
+        $contents = PathProbe::isReadable($real) ? @file_get_contents($real) : false;
 
         if ($contents === false) {
             throw new Exception(sprintf('Unable to read "%s".', $real));

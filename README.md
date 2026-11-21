@@ -182,7 +182,7 @@ Tests are written with [Pest][pest] 5, against PHPUnit 13.
 
 | Workflow | What it does |
 | --- | --- |
-| `tests` | `composer validate --strict`, `composer audit`, the README examples, then the suite on PHP 8.4 and 8.5 with a coverage report |
+| `tests` | `composer validate --strict`, `composer audit`, the README examples, then the suite on PHP 8.4, 8.5 and 8.6 with a coverage report |
 | `ooxml` (a job in `tests`) | the documents this library writes, checked against the OOXML schema by Microsoft's own validator, which needs the .NET SDK |
 | `sonarcloud` (a job in `tests`) | static analysis on [SonarCloud][sonarcloud], failing the build when the quality gate is red |
 

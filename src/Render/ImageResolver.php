@@ -9,6 +9,7 @@ use MarkdownWord\Configuration\Options;
 use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\UnsupportedImageFormat;
 use MarkdownWord\Files\FileFinder;
+use MarkdownWord\Filesystem\PathProbe;
 use MarkdownWord\Format;
 use PhpOffice\PhpWord\Element\AbstractContainer;
 use PhpOffice\PhpWord\Exception\InvalidImageException;
@@ -618,7 +619,7 @@ final class ImageResolver
             ? $url
             : rtrim($this->options->imageBasePath, '/\\') . DIRECTORY_SEPARATOR . ltrim($url, '/\\');
 
-        return is_file($path) ? ['source' => $path, 'bytes' => null] : null;
+        return PathProbe::isFile($path) ? ['source' => $path, 'bytes' => null] : null;
     }
 
     /**
