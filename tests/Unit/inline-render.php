@@ -115,6 +115,24 @@ it('soft break can become a paragraph', function () {
     ))->toBe(['one', 'two', 'three']);
 });
 
+it('a label across two lines breaks the paragraph it stands in', function () {
+    // A label is parsed as inline Markdown, so a line ending in it is a line ending
+    // in the document. The second line of the label starts a paragraph of its own,
+    // and the prose after the label follows it there rather than staying behind
+    // the first line.
+    $config = Configuration::create()
+        ->withOptions(['softBreak' => Options::SOFT_BREAK_PARAGRAPH]);
+
+    $elements = renderElements("A :style[first\nsecond]{color=00B4D8} B\n", $config);
+
+    expect($elements)->toHaveCount(2)
+        ->and(renderRunText($elements[0]))->toBe('A first')
+        ->and(renderRunText($elements[1]))->toBe('second B')
+        // The label is drawn, not its source form: the word carries the colour the
+        // directive named.
+        ->and(renderRuns($elements[0])[1]['font']['color'] ?? null)->toBe('00B4D8');
+});
+
 it('inline link becomes a link element', function () {
     $children = renderElements("[text](https://example.com)\n")[0]->getElements();
 

@@ -260,6 +260,22 @@ it('is overridable through the styles a document carries', function () {
         ->and($document)->toContain('<w:sz w:val="26"/>');
 });
 
+it('lets the Markdown\'s emphasis survive a slot that says the text is not italic', function () {
+    // The slot says what the text looks like where the document says nothing: the
+    // ordinary text is not italic, and the emphasis in it is. An emphasis is about
+    // one run, and the look of the slot is about every run in it.
+    [, $path] = lookConversion(
+        Format::Docx,
+        "Plain and *emphasis*.\n",
+        Configuration::create()->withStyles([Styles::PARAGRAPH => ['italic' => false]]),
+    );
+
+    $document = lookParts($path)['word/document.xml'];
+
+    expect(runPropertyOf($document, 'Plain and ', 'i'))->toBe('0')
+        ->and(runPropertyOf($document, 'emphasis', 'i'))->toBe('1');
+});
+
 it('reports a loss for a named style and none for the built-in look', function () {
     [$plain, $plainPath] = lookConversion(Format::Rtf, "# Title\n\n> Quoted.\n");
 

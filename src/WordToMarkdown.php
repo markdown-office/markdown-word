@@ -6,6 +6,7 @@ namespace MarkdownWord;
 
 use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\NothingToConvert;
+use MarkdownWord\Filesystem\PathProbe;
 use MarkdownWord\Reverse\Block;
 use MarkdownWord\Reverse\DocumentReader;
 use MarkdownWord\Reverse\Inline;
@@ -194,7 +195,7 @@ final class WordToMarkdown implements Converter
 
         // A path given to a converter rarely has its directory made for it, and
         // a rename does not create one.
-        if (!is_dir($directory) && !@mkdir($directory, 0o777, true) && !is_dir($directory)) {
+        if (!PathProbe::isDirectory($directory) && !@mkdir($directory, 0o777, true) && !PathProbe::isDirectory($directory)) {
             throw new FileNotWritable(sprintf('Unable to create the directory "%s".', $directory));
         }
 
@@ -248,7 +249,7 @@ final class WordToMarkdown implements Converter
      */
     private function extractMedia(Package $package, array $blocks, string $directory): void
     {
-        if (!is_dir($directory) && !@mkdir($directory, 0o777, true) && !is_dir($directory)) {
+        if (!PathProbe::isDirectory($directory) && !@mkdir($directory, 0o777, true) && !PathProbe::isDirectory($directory)) {
             throw new FileNotWritable(sprintf('Unable to create the media directory "%s".', $directory));
         }
 
@@ -264,7 +265,7 @@ final class WordToMarkdown implements Converter
 
             $target = $directory . '/' . $name;
 
-            if (file_exists($target)) {
+            if (PathProbe::exists($target)) {
                 continue;
             }
 

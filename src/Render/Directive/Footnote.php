@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Render\Directive;
 
+use League\CommonMark\Node\Node;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\Format;
@@ -41,11 +42,10 @@ use PhpOffice\PhpWord\Element\AbstractContainer;
  * than its own, and `word/footnotes.xml`, its relationship and its content-type
  * entry are written by the code that already gets them right.
  *
- * **The body is text, never Markdown.** The directives package parses a leaf label
- * into a `Text` child rather than as inline Markdown
- * ({@see \MarkdownOffice\CommonMark\Directive\Parser\DirectiveInlineParser} says
- * why), so there is nothing to render: `getLabel()` is what the author wrote between
- * the brackets and it goes in as written.
+ * **The body is Markdown.** The directives package parses the label as inline
+ * Markdown, so `:footnote[*emphasis*]` is a note whose body is in italics rather
+ * than eight characters of prose — the runs are the ones the label makes, and the
+ * note carries them.
  *
  * `.odt` and `.rtf` have no footnote writer at all — there is no
  * `Element/Footnote.php` under either `Writer/ODText/` or `Writer/RTF/` — so they
@@ -96,8 +96,12 @@ final class Footnote
     ) {
     }
 
-    public function __invoke(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): void
-    {
+    public function __invoke(
+        DirectiveInline $node,
+        AbstractContainer $target,
+        InlineStyle $style,
+        ?callable $draw = null,
+    ): void {
         $body = $node->getLabel() ?? '';
 
         // A mark pointing at an empty note is a mark the reader cannot resolve, so a
@@ -129,7 +133,14 @@ final class Footnote
         }
 
         $note = $target->addFootnote(self::BODY_STYLE);
-        $note->addText($body, $this->bodyFont());
+
+        if ($draw === null) {
+            $note->addText($body, $this->bodyFont());
+
+            return;
+        }
+
+        $draw($node->children(), $note, new InlineStyle(forcedFont: $this->bodyFont() ?? []));
     }
 
     /**

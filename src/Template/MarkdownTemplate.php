@@ -14,6 +14,7 @@ use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Exception\TemplateNotFound;
 use MarkdownWord\Exception\UnreadableTemplate;
 use MarkdownWord\Files\FileFinder;
+use MarkdownWord\Filesystem\PathProbe;
 use MarkdownWord\Parser\CommonMarkParser;
 use MarkdownWord\Parser\MarkdownParserInterface;
 use MarkdownWord\Writer\DocxWriter;
@@ -132,7 +133,7 @@ final class MarkdownTemplate
         ?FileFinder $files = null,
         private readonly ?TemplateOptions $limits = null,
     ) {
-        if (!is_file($template)) {
+        if (!PathProbe::isFile($template)) {
             throw new TemplateNotFound(sprintf('The template "%s" does not exist.', $template));
         }
 
@@ -433,7 +434,7 @@ final class MarkdownTemplate
         $to = self::followLink($to);
         $directory = dirname($to);
 
-        if (!is_dir($directory) && !@mkdir($directory, 0o777, true) && !is_dir($directory)) {
+        if (!PathProbe::isDirectory($directory) && !@mkdir($directory, 0o777, true) && !PathProbe::isDirectory($directory)) {
             throw new FileNotWritable(sprintf('Unable to create the directory "%s".', $directory));
         }
 
@@ -441,7 +442,7 @@ final class MarkdownTemplate
             return;
         }
 
-        $existed = file_exists($to);
+        $existed = PathProbe::exists($to);
 
         if (@copy($from, $to)) {
             @unlink($from);
@@ -465,7 +466,7 @@ final class MarkdownTemplate
     {
         $seen = 0;
 
-        while (is_link($path) && $seen++ < 32) {
+        while (PathProbe::isLink($path) && $seen++ < 32) {
             $target = readlink($path);
 
             if ($target === false) {

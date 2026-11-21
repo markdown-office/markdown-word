@@ -7,6 +7,7 @@ namespace MarkdownWord\Theme;
 use MarkdownWord\Exception\ThemeNotFound;
 use MarkdownWord\Files\DiskFinder;
 use MarkdownWord\Files\FileFinder;
+use MarkdownWord\Filesystem\PathProbe;
 use MarkdownWord\Filesystem\PathScope;
 
 /**
@@ -137,7 +138,7 @@ final class ThemeResolver
 
             // Whether the path names a directory or a file decides what is read from it,
             // not where it is looked for: a path is found the same way either way.
-            return is_file($path)
+            return PathProbe::isFile($path)
                 ? $this->themeOfManifest($this->file($name, $path), $name)
                 : $this->themeIn($this->directory($name, $path), $name);
         }
@@ -150,7 +151,7 @@ final class ThemeResolver
         }
 
         foreach ($this->themeDirectories() as $themes) {
-            if (is_dir($directory = $themes . '/' . $name)) {
+            if (PathProbe::isDirectory($directory = $themes . '/' . $name)) {
                 return $this->themeIn($this->directory($name, $directory), $name);
             }
         }
@@ -296,7 +297,7 @@ final class ThemeResolver
      */
     private function directory(string $name, string $found): string
     {
-        if (!is_dir($found)) {
+        if (!PathProbe::isDirectory($found)) {
             throw ThemeNotFound::noDirectory($name);
         }
 

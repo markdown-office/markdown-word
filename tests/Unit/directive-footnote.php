@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use MarkdownWord\Configuration;
+use MarkdownWord\Configuration\Options;
 use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Tests\Support\Scratch;
@@ -242,18 +244,74 @@ it('draws a footnote with no body as the characters that were typed', function (
         ->toBe('A bodied note, and a bodiless one :footnote and a sentence.');
 });
 
-it('writes the note body as text, not as Markdown', function () {
-    // The directives package parses a leaf label into a `Text` child rather than as
-    // inline Markdown, so there is nothing to render: `*emphasis*` is eight characters
-    // of prose in a note, and a renderer that parsed it would be doing a second pass
-    // over a syntax that does not have one.
+it('writes the note body as Markdown, because the label is parsed as inline Markdown', function () {
+    // The directives package parses the label as inline Markdown, so the body of the
+    // note is the runs the label makes: the emphasis is emphasis and the code is
+    // code, and neither reaches the document as the characters it was written in.
     $path = footnoteDocument("A sentence,:footnote[*emphasis* and `code`.]\n");
 
     $marks = footnoteMarksOf(TemplateFactory::xmlOf($path));
 
     expect($marks)->toHaveCount(1)
         ->and(footnoteBodyTextOf(TemplateFactory::xmlOf($path, 'word/footnotes.xml'), $marks[0]))
-        ->toBe('*emphasis* and `code`.');
+        ->toBe('emphasis and code.');
+});
+
+it('keeps the emphasis in a note under a body that says its text is not italic', function () {
+    // The body's look says what the text looks like where the document says
+    // nothing: the ordinary text of the note is not italic, and the emphasis in it
+    // is, because an emphasis is about one run and the look is about every run in
+    // the body.
+    $path = Scratch::path('footnote-italic', '.docx');
+
+    saveDocument(
+        "A sentence,:footnote[plain and *emphasis*] and its mark.\n",
+        $path,
+        Configuration::create()->withStyles(['paragraph' => ['italic' => false]]),
+    );
+
+    $part = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+
+    expect(runPropertyOf($part, 'plain and ', 'i'))->toBe('0')
+        ->and(runPropertyOf($part, 'emphasis', 'i'))->toBe('1');
+});
+
+it('keeps the emphasis in a note under a body that says its text is not bold', function () {
+    // The same rule for the weight, which is the other half of what a body may say
+    // about its text.
+    $path = Scratch::path('footnote-bold', '.docx');
+
+    saveDocument(
+        "A sentence,:footnote[plain and **strong**] and its mark.\n",
+        $path,
+        Configuration::create()->withStyles(['paragraph' => ['bold' => false]]),
+    );
+
+    $part = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+
+    expect(runPropertyOf($part, 'plain and ', 'b'))->toBe('0')
+        ->and(runPropertyOf($part, 'strong', 'b'))->toBe('1');
+});
+
+it('keeps a line ending inside a note to the note', function () {
+    // A note is one paragraph, and the mark sits in the prose of the document: a
+    // line ending inside the note may not move the paragraph the mark is in. The
+    // break falls back to a space, the way it does in a note of its own.
+    $path = Scratch::path('footnote-break', '.docx');
+
+    saveDocument(
+        "A sentence,:footnote[first\nsecond] and its mark.\n",
+        $path,
+        Configuration::create()->withOptions(['softBreak' => Options::SOFT_BREAK_PARAGRAPH]),
+    );
+
+    $part = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+    $marks = footnoteMarksOf(TemplateFactory::xmlOf($path));
+
+    expect($marks)->toHaveCount(1)
+        ->and(footnoteBodyTextOf($part, $marks[0]))->toBe('first second')
+        // And the paragraph the mark sits in is the one it was written in.
+        ->and(TemplateFactory::textOf($path))->toBe('A sentence, and its mark.');
 });
 
 /**

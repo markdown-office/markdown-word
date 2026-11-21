@@ -41,9 +41,12 @@ untouched.
 
 ## A label holding Markdown
 
-:brand[**Orrery**] — a label is plain text, so the asterisks reach the document
-as they were typed, and the directive comes back as its own source form rather
-than as a word in a style.
+:brand[**Orrery**] — a label is parsed as inline Markdown, so the asterisks are
+markup and not characters: the word is drawn in the style.
+
+:muted[*Every plate is thrown by hand.*] — and the emphasis in it is drawn as well,
+where it can be seen: the `muted` style says nothing about a weight, so the italic is
+the label's own.
 
 ## What the reader is given
 

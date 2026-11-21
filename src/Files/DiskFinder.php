@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Files;
 
+use MarkdownWord\Filesystem\PathProbe;
 use MarkdownWord\Theme\ThemeLoader;
 
 /**
@@ -77,7 +78,7 @@ final class DiskFinder implements FileFinder
         $names = [];
 
         foreach ($this->theme as $base) {
-            if (!is_dir($base)) {
+            if (!PathProbe::isDirectory($base)) {
                 continue;
             }
 
@@ -86,7 +87,7 @@ final class DiskFinder implements FileFinder
                     continue;
                 }
 
-                if (is_file($this->join($this->join($base, $entry), ThemeLoader::THEME_FILE))) {
+                if (PathProbe::isFile($this->join($this->join($base, $entry), ThemeLoader::THEME_FILE))) {
                     $names[$entry] = true;
                 }
             }
@@ -122,7 +123,7 @@ final class DiskFinder implements FileFinder
                 continue;
             }
 
-            if (is_file($this->join($directory, $entry))) {
+            if (PathProbe::isFile($this->join($directory, $entry))) {
                 $names[] = $entry;
             }
         }
@@ -140,7 +141,7 @@ final class DiskFinder implements FileFinder
         if (str_starts_with($name, '/')) {
             // A name that is already a path is taken as it stands, whatever the role:
             // resolving it against a base would name a file nobody meant.
-            return is_file($name) ? $name : null;
+            return PathProbe::isFile($name) ? $name : null;
         }
 
         if ($role === 'theme') {
@@ -158,7 +159,7 @@ final class DiskFinder implements FileFinder
         foreach ($this->worlds($role) as $base) {
             $path = $this->join($base, $name);
 
-            if (is_file($path)) {
+            if (PathProbe::isFile($path)) {
                 return $path;
             }
         }
@@ -196,7 +197,7 @@ final class DiskFinder implements FileFinder
 
         $path = $this->join($directory, substr($name, $slash + 1));
 
-        return is_file($path) ? $path : null;
+        return PathProbe::isFile($path) ? $path : null;
     }
 
     /**
@@ -211,7 +212,7 @@ final class DiskFinder implements FileFinder
         foreach ($this->theme as $base) {
             $directory = $this->join($base, $theme);
 
-            if (is_dir($directory)) {
+            if (PathProbe::isDirectory($directory)) {
                 return $directory;
             }
         }
