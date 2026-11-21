@@ -33,12 +33,24 @@ final class InlineStyle
          * @var array<string, mixed>
          */
         public readonly array $forcedFont = [],
+        /**
+         * The properties the run carries in its own right, from a directive that
+         * names them.
+         *
+         * They are about the run and not about the scope the run sits in, which is
+         * what makes them win over the default of a construct: the typeface of a
+         * code span is the code font's, and the colour a directive named on the
+         * code span is the directive's.
+         *
+         * @var array<string, mixed>
+         */
+        public readonly array $ownFont = [],
     ) {
     }
 
-    public function withForcedFont(array $font): self
+    public function withOwnFont(array $font): self
     {
-        return $this->derive(forcedFont: $font + $this->forcedFont);
+        return $this->derive(ownFont: $font + $this->ownFont);
     }
 
     public function withBold(): self
@@ -74,6 +86,7 @@ final class InlineStyle
         ?string $url = null,
         ?string $linkTitle = null,
         ?array $forcedFont = null,
+        ?array $ownFont = null,
     ): self {
         return new self(
             $bold ?? $this->bold,
@@ -83,6 +96,7 @@ final class InlineStyle
             $url ?? $this->url,
             $linkTitle ?? $this->linkTitle,
             $forcedFont ?? $this->forcedFont,
+            $ownFont ?? $this->ownFont,
         );
     }
 

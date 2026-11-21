@@ -171,6 +171,23 @@ it('draws a label holding Markdown, because the label is parsed as inline Markdo
         ->and(styleRuns("A :brand[**Bakery**] here.\n", $config)[1]['font']['bold'] ?? null)->toBeTrue();
 });
 
+it('keeps the attributes a directive names on a code span in its label', function () {
+    // The code font is the default of a code span: it supplies the typeface, and
+    // the colour and the size where the directive named neither. The colour and
+    // the size the directive did name are the directive's.
+    $runs = styleRuns("A :style[`code`]{color=00B4D8 size=20} B\n");
+
+    expect($runs[1]['font']['name'] ?? null)->toBe('Consolas')
+        ->and($runs[1]['font']['color'] ?? null)->toBe('00B4D8')
+        ->and($runs[1]['font']['size'] ?? null)->toBe(20.0);
+
+    // And where the directive named only the size, the colour is the code font's.
+    $partial = styleRuns("A :style[`code`]{size=20} B\n");
+
+    expect($partial[1]['font']['color'] ?? null)->toBe('A31515')
+        ->and($partial[1]['font']['size'] ?? null)->toBe(20.0);
+});
+
 it('honours a label holding a bare asterisk or an underscore', function () {
     // A bare marker is a character and not an intent: `2 * 3` and `snake_case` are
     // ordinary text, and a rule that refused every label holding one of them would

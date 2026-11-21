@@ -89,6 +89,15 @@ All notable changes to this project are documented here. The format follows
   in a body paragraph, in a cell of a table and in the body of a note. A bold
   table header is unaffected: it is bold whatever the Markdown says around it.
 
+- **A directive keeps the attributes it names on a code span in its label.**
+  `:style[`code`]{color=00B4D8 size=20}` came out in the code font's own colour
+  and size, because the code font was applied after the attributes and the
+  defaults of a construct were the last word on the properties they name.
+
+  The attributes are named on the run they are drawn on, so they win over the
+  default of the construct: the colour and the size are the directive's, and the
+  typeface is still the code font's.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

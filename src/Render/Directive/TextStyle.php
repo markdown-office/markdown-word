@@ -92,7 +92,7 @@ final class TextStyle
             return false;
         }
 
-        $style = $style->withForcedFont($font);
+        $style = $style->withOwnFont($font);
 
         if ($draw === null) {
             $target->addText($node->getLabel() ?? '', $this->resolver->fontFor($style));

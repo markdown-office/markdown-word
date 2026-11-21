@@ -44,12 +44,14 @@ final class StyleResolver
      *    slot the block, the cell or the note came from;
      * 2. the default of the construct the run is — the `codeFont` or `linkFont`
      *    slot;
-     * 3. the Markdown's own emphasis.
+     * 3. the Markdown's own emphasis;
+     * 4. the properties a directive names on the run itself.
      *
      * A statement about one run beats a statement about a whole scope, and an
      * explicit statement beats a default. So a bold table header stays bold
-     * around italic text, a code span is in the code font, and an emphasis
-     * survives a block that says its text is not italic.
+     * around italic text, a code span is in the code font, an emphasis survives a
+     * block that says its text is not italic, and a directive that names a colour
+     * on a code span has that colour rather than the code font's.
      *
      * @return array<string, mixed>|string|null
      */
@@ -99,6 +101,13 @@ final class StyleResolver
 
         if ($style->strikethrough) {
             $font['strikethrough'] = true;
+        }
+
+        // And the properties a directive names come last of all, because they are
+        // named on the run they are drawn on: a word in a style is a word in that
+        // style, whatever the default of the construct it stands in would say.
+        if ($style->ownFont !== []) {
+            $font = array_merge($font, $this->normalizeFontArray($style->ownFont));
         }
 
         if ($font !== []) {
