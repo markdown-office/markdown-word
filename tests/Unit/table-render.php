@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Tests\Support\Scratch;
+use MarkdownWord\Tests\Support\TemplateFactory;
 use PhpOffice\PhpWord\Element\Table;
 
 const SIMPLE = "| Name | Age |\n"
@@ -59,6 +61,27 @@ it('a header cell keeps its bold and honours the emphasis in it', function () {
 
     expect($runs[0]['font']['bold'] ?? false)->toBeTrue()
         ->and($runs[0]['font']['italic'] ?? false)->toBeTrue();
+});
+
+it('lets the code font have the last word in a header cell', function () {
+    // The code font is the default of the construct the run is, and a code span is
+    // more particular than the header it stands in: where the two name the same
+    // property, the code font's answer wins. The header's own text keeps its bold.
+    //
+    // Read from the written document rather than from the element tree, because
+    // "not bold" and "never asked about bold" look the same there and are not the
+    // same here: the code font said `false`, and the run says so.
+    $config = Configuration::create()
+        ->withOptions(['tableHeaderBold' => true])
+        ->withStyles([Styles::CODE_FONT => ['bold' => false]]);
+
+    $path = Scratch::path('code-font-header');
+    saveDocument("| Heading `code` |\n| --- |\n| a cell |\n", $path, $config);
+
+    $document = TemplateFactory::xmlOf($path);
+
+    expect(runPropertyOf($document, 'Heading ', 'b'))->toBe('1')
+        ->and(runPropertyOf($document, 'code', 'b'))->toBe('0');
 });
 
 it('column alignment comes from the delimiter row', function () {
