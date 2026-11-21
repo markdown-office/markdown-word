@@ -828,9 +828,10 @@ Trading closed ahead of plan :footnote[The western figure excludes two hires.] i
 every region.
 ```
 
-The body is **text, never Markdown** — the directive's label goes in as written.
-The mark is a real superscript reference and the body is numbered by Word, so the
-notes renumber themselves when one is inserted or deleted above.
+The body is **Markdown** — the directive's label is parsed as inline Markdown, so
+`:footnote[*emphasis*]` is a note whose body is in italics. The mark is a real
+superscript reference and the body is numbered by Word, so the notes renumber
+themselves when one is inserted or deleted above.
 
 Two things about the syntax, both from the directive grammar rather than from this
 library:

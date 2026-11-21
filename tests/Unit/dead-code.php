@@ -132,6 +132,10 @@ it('does not claim again what the code does not do', function (string $claim) {
     // parsed and does not say a label is text.
     'a label of a directive is plain text' => 'a label is plain text',
     "the body of a note is text, never Markdown" => 'the body is text, never Markdown',
+    // The same claim in the wording the README used it in: the sentence opens a
+    // paragraph, so it starts with a capital and the words are marked up. The
+    // phrase above is the source's wording and does not catch that one.
+    'the body of a note is text, never Markdown, in the README\'s wording' => 'The body is **text, never Markdown**',
     'a directive stores its label as a string rather than parsing it' => 'stores a label as a string rather',
     'the built-in look is a no-op because it matches the default' => 'currently re-applies what is already the default',
     'a built-in style id carries an outline level by itself' => 'only the built-in ids carry an outline level',

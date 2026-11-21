@@ -98,6 +98,11 @@ All notable changes to this project are documented here. The format follows
   default of the construct: the colour and the size are the directive's, and the
   typeface is still the code font's.
 
+- **The README says what the body of a footnote is.** It said the body was text
+  and never Markdown, which was true before the label of a directive was parsed
+  as inline Markdown and is not true now: the body of a note is Markdown, as the
+  entry above says.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added
