@@ -278,6 +278,22 @@ it('turns a link in a header into a real link', function () {
         ->toContain('https://example.com');
 });
 
+it('turns a link with emphasis in a header into a real link', function () {
+    // The link above has a label PHPWord can write itself. A label with emphasis in
+    // it cannot — PHPWord's Link element takes one plain string — so it is written
+    // as a placeholder and put back by a pass. That pass has to reach the header's
+    // part, because that is where the label is: the header is a part of the package
+    // like any other, and the relationship the link needs is the header's.
+    $markdown = "---\nheader:\n  body: 'Acme — [*the site*](https://example.com)'\n---\n\nBody.\n";
+
+    $path = furnitureDocx($markdown);
+
+    expect(TemplateFactory::xmlOf($path, 'word/header1.xml'))->toContain('<w:hyperlink')
+        ->and(TemplateFactory::xmlOf($path, 'word/header1.xml'))->not->toContain('MDWL')
+        ->and(TemplateFactory::targetsOf($path, 'word/_rels/header1.xml.rels'))
+        ->toContain('https://example.com');
+});
+
 // Fields
 
 it('writes a page number into a header as a field', function () {

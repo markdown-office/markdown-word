@@ -108,6 +108,23 @@ All notable changes to this project are documented here. The format follows
   as inline Markdown and is not true now: the body of a note is Markdown, as the
   entry above says.
 
+- **A link in a note is a link.** The body of a note is a label, and a label is
+  parsed as inline Markdown, so a note can hold a link for the first time — and
+  the link came out as the placeholder the writer leaves behind for it,
+  `MDWL0MDWL`, with no relationship behind it at all.
+
+  The pass that puts the links back went over the body of the document and not
+  over the notes, and a note is a part of the package like any other: it has
+  relationships of its own, and `rId1` in the notes' relationship part is a
+  different relationship from `rId1` in the body's.
+
+  The links are resolved in every part that can hold one now — the body, the
+  notes, a running head and a running foot — and a part with no relationship
+  part of its own gets one when the first link in it needs it.
+
+  A link with emphasis in a running head had the same fault, and is fixed with
+  it: the header is a part of the package too.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

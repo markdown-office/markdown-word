@@ -257,6 +257,51 @@ it('writes the note body as Markdown, because the label is parsed as inline Mark
         ->toBe('emphasis and code.');
 });
 
+it('writes a link in a note as a link', function () {
+    // The body of a note is a label, and a label is parsed as inline Markdown, so a
+    // note can hold a link. The link is written as a placeholder and resolved
+    // afterwards — and the part that is resolved is the notes' part and not the
+    // body's, because the relationship the link needs belongs to the notes.
+    //
+    // The id is `rId1` in the notes and not in the body, and that is the whole of
+    // the difference: relationship ids are counted per part, so the note's link is
+    // the notes' first relationship rather than the eighth of the body's.
+    $path = Scratch::path('footnote-link', '.docx');
+
+    saveDocument(
+        "A sentence,:footnote[see <https://example.test> here] and its mark.\n",
+        $path,
+        Configuration::create()->withOptions(['deferredHyperlinks' => true]),
+    );
+
+    $notes = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+
+    expect($notes)->toContain('<w:hyperlink r:id="rId1">')
+        ->and($notes)->not->toContain('MDWL')
+        ->and(TemplateFactory::targetsOf($path, 'word/_rels/footnotes.xml.rels'))
+        ->toContain('https://example.test');
+});
+
+it('leaves a note with no link in it as it was', function () {
+    // The pass goes over the parts of a package, so a note with no link in it must
+    // come out the way it went in — even when the document has a link elsewhere and
+    // the pass has the notes' part in hand.
+    $path = Scratch::path('footnote-plain', '.docx');
+
+    saveDocument(
+        "A [*link*](https://example.test) and a note,:footnote[the note with no link in it.]\n",
+        $path,
+        Configuration::create()->withOptions(['deferredHyperlinks' => true]),
+    );
+
+    $notes = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+
+    expect($notes)->toContain('the note with no link in it.')
+        ->and($notes)->not->toContain('<w:hyperlink')
+        ->and($notes)->not->toContain('MDWL')
+        ->and(TemplateFactory::hasPart($path, 'word/_rels/footnotes.xml.rels'))->toBeFalse();
+});
+
 it('keeps the emphasis in a note under a body that says its text is not italic', function () {
     // The body's look says what the text looks like where the document says
     // nothing: the ordinary text of the note is not italic, and the emphasis in it

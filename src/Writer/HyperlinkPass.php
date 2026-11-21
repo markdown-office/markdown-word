@@ -13,15 +13,22 @@ use MarkdownWord\Render\LinkPlaceholder;
 use ZipArchive;
 
 /**
- * Rewrites the body part of a `.docx`, replacing the placeholder runs emitted for
- * links whose label contains emphasis with genuine `w:hyperlink` elements, and
- * adding the matching relationships.
+ * Rewrites the parts of a `.docx` that hold a link, replacing the placeholder runs
+ * emitted for links whose label contains emphasis with genuine `w:hyperlink`
+ * elements, and adding the matching relationships.
+ *
+ * The body is not the only part a link can be in. A note, a running head and a
+ * running foot are parts of their own, and each of them has relationships of its own:
+ * `rId1` in the notes' relationship part is a different relationship from `rId1` in
+ * the body's, so a link in a note is resolved against the notes and not against the
+ * body.
  *
  * The part is the one {@see WordPackage::bodyPart()} names rather than
  * `word/document.xml`, because that name is conventional and not guaranteed: a
  * package whose body is `word/document22.xml` would otherwise have its links
  * rewritten into a part no reader opens, and the placeholders left where the links
- * were.
+ * were. The other parts are found through the declarations for the same reason, and
+ * a package that has none of them is not given any.
  *
  * The rewrite goes through `DOMDocument` rather than string replacement, so
  * document content that happens to look like a placeholder cannot confuse it.
@@ -53,47 +60,79 @@ final class HyperlinkPass
         }
 
         try {
-            $body = WordPackage::bodyPart($zip);
-            $relsPath = WordPackage::relationshipsFor($body);
+            $this->rewrite($zip, WordPackage::bodyPart($zip));
 
-            $document = $zip->getFromName($body);
-            $rels = $zip->getFromName($relsPath);
-
-            if ($document === false || $rels === false) {
-                throw new MalformedDocument(sprintf(
-                    'The document is missing %s or its relationship part.',
-                    $body,
-                ));
+            // A link is written into whichever part holds the text it is in, and a
+            // relationship belongs to the part it is in — so each part is resolved
+            // against its own.
+            foreach (WordPackage::linkParts($zip) as $part) {
+                $this->rewrite($zip, $part);
             }
-
-            $nextId = $this->nextRelationshipId($rels);
-            $updated = $this->transform($document, $rels, $nextId, $body);
-
-            $zip->deleteName($body);
-            $zip->addFromString($body, $updated['document']);
-            $zip->deleteName($relsPath);
-            $zip->addFromString($relsPath, $updated['rels']);
         } finally {
             $zip->close();
         }
     }
 
     /**
-     * @return array{document: string, rels: string}
+     * Rewrite one part of the package: the placeholder runs in it become genuine
+     * `w:hyperlink` elements, and the relationships they need go into that part's own
+     * relationship part.
+     *
+     * A part with no placeholder in it is left alone. It was not this pass's
+     * business, and rewriting it would change bytes nobody asked to change.
      */
-    private function transform(string $documentXml, string $relsXml, int $nextId, string $body): array
+    private function rewrite(ZipArchive $zip, string $part): void
+    {
+        $document = $zip->getFromName($part);
+
+        if ($document === false) {
+            throw new MalformedDocument(sprintf('The document is missing %s.', $part));
+        }
+
+        if (!str_contains($document, LinkPlaceholder::MARKER)) {
+            return;
+        }
+
+        $relsPath = WordPackage::relationshipsFor($part);
+        $existing = $zip->getFromName($relsPath);
+
+        $updated = $this->transform(
+            $document,
+            $existing === false ? self::emptyRelationships() : $existing,
+            $part,
+        );
+
+        if ($updated['links'] === 0) {
+            return;
+        }
+
+        $zip->deleteName($part);
+        $zip->addFromString($part, $updated['document']);
+
+        if ($existing !== false) {
+            $zip->deleteName($relsPath);
+        }
+
+        $zip->addFromString($relsPath, $updated['rels']);
+    }
+
+    /**
+     * @return array{document: string, rels: string, links: int}
+     */
+    private function transform(string $documentXml, string $relsXml, string $part): array
     {
         $index = [];
         foreach ($this->payloads as $payload) {
             $index[$payload['placeholder']] = $payload;
         }
 
-        $dom = $this->loadDom($documentXml, $body);
+        $dom = $this->loadDom($documentXml, $part);
         $xpath = new \DOMXPath($dom);
         $xpath->registerNamespace('w', self::W_NS);
 
-        $counter = $nextId;
-        $rels = $this->loadRels($relsXml, WordPackage::relationshipsFor($body));
+        $counter = $this->nextRelationshipId($relsXml);
+        $rels = $this->loadRels($relsXml, WordPackage::relationshipsFor($part));
+        $links = 0;
 
         foreach ($xpath->query('//w:t') ?: [] as $textNode) {
             /** @var \DOMElement $textNode */
@@ -119,12 +158,28 @@ final class HyperlinkPass
 
             $hyperlink = $this->buildHyperlink($dom, $id, $payload);
             $paragraph->replaceChild($hyperlink, $run);
+            $links++;
         }
 
         return [
             'document' => $this->saveXml($dom),
             'rels' => $this->saveRels($rels),
+            'links' => $links,
         ];
+    }
+
+    /**
+     * A relationship part with nothing in it, in the shape the writer writes one.
+     *
+     * A part with no relationships of its own has no relationship part at all:
+     * PHPWord writes `word/_rels/footnotes.xml.rels` only when a link or a picture
+     * in the notes needs one. The part is written when the first relationship for it
+     * is added.
+     */
+    private static function emptyRelationships(): string
+    {
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Relationships xmlns="' . self::REL_NS . '"/>';
     }
 
     /**
