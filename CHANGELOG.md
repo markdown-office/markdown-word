@@ -63,6 +63,18 @@ All notable changes to this project are documented here. The format follows
   The reader of a table takes the backslash of a `\|` for the escape it is and
   keeps the pipe, so the escape is not part of the text the reader sees.
 
+- **A line ending inside a label breaks the paragraph it stands in.** With
+  `softBreak: paragraph` a label written across two lines came out as one line:
+  the renderer that draws a label was given no way to break a paragraph, so the
+  line ending fell back to a space.
+
+  A label is drawn where it stands now, and the prose after it follows it into
+  the paragraph the label broke into.
+
+  A note is one paragraph, and the mark sits in the prose of the document, so a
+  line ending inside a note stays in the note and falls back to a space, the way
+  it does in a note of its own.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

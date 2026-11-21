@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use MarkdownWord\Configuration;
+use MarkdownWord\Configuration\Options;
 use MarkdownWord\Format;
 use MarkdownWord\MarkdownToWord;
 use MarkdownWord\Tests\Support\Scratch;
@@ -253,6 +255,27 @@ it('writes the note body as Markdown, because the label is parsed as inline Mark
     expect($marks)->toHaveCount(1)
         ->and(footnoteBodyTextOf(TemplateFactory::xmlOf($path, 'word/footnotes.xml'), $marks[0]))
         ->toBe('emphasis and code.');
+});
+
+it('keeps a line ending inside a note to the note', function () {
+    // A note is one paragraph, and the mark sits in the prose of the document: a
+    // line ending inside the note may not move the paragraph the mark is in. The
+    // break falls back to a space, the way it does in a note of its own.
+    $path = Scratch::path('footnote-break', '.docx');
+
+    saveDocument(
+        "A sentence,:footnote[first\nsecond] and its mark.\n",
+        $path,
+        Configuration::create()->withOptions(['softBreak' => Options::SOFT_BREAK_PARAGRAPH]),
+    );
+
+    $part = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+    $marks = footnoteMarksOf(TemplateFactory::xmlOf($path));
+
+    expect($marks)->toHaveCount(1)
+        ->and(footnoteBodyTextOf($part, $marks[0]))->toBe('first second')
+        // And the paragraph the mark sits in is the one it was written in.
+        ->and(TemplateFactory::textOf($path))->toBe('A sentence, and its mark.');
 });
 
 /**

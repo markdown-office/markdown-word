@@ -83,7 +83,7 @@ final class InlineRenderer
 
             $node instanceof Document => $this->render($node->children(), $target, $style, $onParagraphBreak),
 
-            $node instanceof DirectiveInline => $this->renderDirective($node, $target, $style),
+            $node instanceof DirectiveInline => $this->renderDirective($node, $target, $style, $onParagraphBreak),
 
             $node instanceof Strong => $this->render($node->children(), $target, $style->withBold(), $onParagraphBreak),
 
@@ -145,29 +145,42 @@ final class InlineRenderer
         return $target;
     }
 
-    private function renderDirective(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): AbstractContainer
-    {
-        if ($this->directives->drawInline($node, $target, $style, $this->drawLabel(...))) {
-            return $target;
+    /**
+     * @param  callable():AbstractContainer|null  $onParagraphBreak
+     */
+    private function renderDirective(
+        DirectiveInline $node,
+        AbstractContainer $target,
+        InlineStyle $style,
+        ?callable $onParagraphBreak,
+    ): AbstractContainer {
+        // The container the directive's label ends in. A label that breaks out of
+        // the paragraph it stands in leaves the paragraph broken, so the run after
+        // the directive belongs in the one the label broke into.
+        $current = $target;
+
+        $draw = function (iterable $nodes, AbstractContainer $into, InlineStyle $style) use (&$current, $target, $onParagraphBreak): void {
+            if ($into !== $target) {
+                // A label drawn into a container of its own — the body of a footnote —
+                // keeps the break to itself: a note is one paragraph, and a break
+                // inside it may not move the paragraph the mark sits in.
+                $this->render($nodes, $into, $style);
+
+                return;
+            }
+
+            // A label drawn in place breaks the paragraph it stands in, the way the
+            // prose around it does.
+            $current = $this->render($nodes, $into, $style, $onParagraphBreak);
+        };
+
+        if ($this->directives->drawInline($node, $target, $style, $draw)) {
+            return $current;
         }
 
         $this->renderUnclaimedDirective($node, $target, $style);
 
         return $target;
-    }
-
-    /**
-     * Draw the runs of a directive's label, for a handler that draws the label rather
-     * than its source text.
-     *
-     * A label is parsed as inline Markdown, so a directive may hold several runs and
-     * only the renderer knows how to draw them.
-     *
-     * @param callable(iterable<Node>, AbstractContainer, InlineStyle): void
-     */
-    private function drawLabel(iterable $nodes, AbstractContainer $target, InlineStyle $style): void
-    {
-        $this->render($nodes, $target, $style);
     }
 
     /**
