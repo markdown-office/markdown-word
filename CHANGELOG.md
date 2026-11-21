@@ -75,6 +75,20 @@ All notable changes to this project are documented here. The format follows
   line ending inside a note stays in the note and falls back to a space, the way
   it does in a note of its own.
 
+- **An emphasis survives a block that says its text is not italic.** A note whose
+  body was written as `:footnote[*emphasis*]` came out as ordinary text with
+  `paragraph: {italic: false}` configured: the delimiters were gone and the text
+  was not in italics either.
+
+  The look of a block says what the text looks like where the document says
+  nothing, and an emphasis is about one run — so where the two name the same
+  property, the emphasis wins. The text the document did not emphasise is still
+  not in italics.
+
+  The rule is the same wherever the character half of a slot reaches the runs:
+  in a body paragraph, in a cell of a table and in the body of a note. A bold
+  table header is unaffected: it is bold whatever the Markdown says around it.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

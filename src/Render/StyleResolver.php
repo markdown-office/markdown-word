@@ -38,23 +38,24 @@ final class StyleResolver
      * The font style — an inline array, or the name of a registered style — for
      * a run with the given inline formatting.
      *
+     * The layers that go into it, from the least particular to the most:
+     *
+     * 1. the look of the scope the run sits in — the character half of the style
+     *    slot the block, the cell or the note came from;
+     * 2. the default of the construct the run is — the `codeFont` or `linkFont`
+     *    slot;
+     * 3. the Markdown's own emphasis.
+     *
+     * A statement about one run beats a statement about a whole scope, and an
+     * explicit statement beats a default. So a bold table header stays bold
+     * around italic text, a code span is in the code font, and an emphasis
+     * survives a block that says its text is not italic.
+     *
      * @return array<string, mixed>|string|null
      */
     public function fontFor(InlineStyle $style): array|string|null
     {
-        $font = [];
-
-        if ($style->bold) {
-            $font['bold'] = true;
-        }
-
-        if ($style->italic) {
-            $font['italic'] = true;
-        }
-
-        if ($style->strikethrough) {
-            $font['strikethrough'] = true;
-        }
+        $font = $this->normalizeFontArray($style->forcedFont);
 
         $slots = [];
 
@@ -64,12 +65,6 @@ final class StyleResolver
 
         if ($style->isLink()) {
             $slots[] = Styles::LINK_FONT;
-        }
-
-        // Properties forced by the surrounding block win over the Markdown's own
-        // emphasis, so a bold table header stays bold even around italic text.
-        if ($style->forcedFont !== []) {
-            $font = array_merge($font, $this->normalizeFontArray($style->forcedFont));
         }
 
         // A slot configured as a plain string names a style from the target
@@ -86,6 +81,24 @@ final class StyleResolver
             if (is_array($value)) {
                 $font = array_merge($font, $this->normalizeFontArray($value));
             }
+        }
+
+        // The emphasis comes after the look of the scope, and not before it: an
+        // emphasis is about one run and a block's look is about every run in it,
+        // so where the two name the same property the emphasis is the more
+        // particular statement and wins. A block that says its text is not italic
+        // does not cancel an `*emphasis*` in it — it says what the text looks like
+        // where the document says nothing.
+        if ($style->bold) {
+            $font['bold'] = true;
+        }
+
+        if ($style->italic) {
+            $font['italic'] = true;
+        }
+
+        if ($style->strikethrough) {
+            $font['strikethrough'] = true;
         }
 
         if ($font !== []) {

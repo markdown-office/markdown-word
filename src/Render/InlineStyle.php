@@ -21,10 +21,14 @@ final class InlineStyle
         public readonly ?string $url = null,
         public readonly ?string $linkTitle = null,
         /**
-         * Font properties forced onto every run in this scope, whatever the
-         * Markdown's own emphasis says. This is how a table header is made bold
-         * and a cell's alignment applied, since PHPWord's cell style carries
-         * neither.
+         * Font properties forced onto every run in this scope. This is how a table
+         * header is made bold and a cell's alignment applied, since PHPWord's cell
+         * style carries neither.
+         *
+         * A property the Markdown's own emphasis names is the more particular
+         * statement and wins: a block that says its text is not italic does not
+         * cancel an `*emphasis*` in it. {@see StyleResolver::fontFor()} says where
+         * the layers go.
          *
          * @var array<string, mixed>
          */

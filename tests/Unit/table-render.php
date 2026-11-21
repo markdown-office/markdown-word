@@ -48,6 +48,19 @@ it('header boldness can be turned off', function () {
     expect(headerRuns(0, $config)[0]['font'] ?? null)->toBeNull();
 });
 
+it('a header cell keeps its bold and honours the emphasis in it', function () {
+    // The bold of the header is the look of the scope and the emphasis is about the
+    // run: both stand, and neither cancels the other. The cell's own `false` says
+    // what the text looks like where the document says nothing.
+    $config = Configuration::create()->withStyles([Styles::TABLE_CELL => ['italic' => false]]);
+
+    $table = renderElements("| *italic* |\n| --- |\n| x |\n", $config)[0];
+    $runs = renderRuns($table->getRows()[0]->getCells()[0]->getElements()[0]);
+
+    expect($runs[0]['font']['bold'] ?? false)->toBeTrue()
+        ->and($runs[0]['font']['italic'] ?? false)->toBeTrue();
+});
+
 it('column alignment comes from the delimiter row', function () {
     expect(cellAlignment(1, 0))->toBe('left');
     expect(cellAlignment(1, 1))->toBe('right');

@@ -304,11 +304,11 @@ it('records the emphasis of a link label', function () {
 
     expect($payloads)->toHaveCount(1);
     expect(array_column($payloads[0]['runs'], 'style'))->toBe([
-        ['bold' => true, 'color' => '0563C1', 'underline' => 'single'],
+        ['color' => '0563C1', 'underline' => 'single', 'bold' => true],
         ['color' => '0563C1', 'underline' => 'single'],
-        ['italic' => true, 'color' => '0563C1', 'underline' => 'single'],
+        ['color' => '0563C1', 'underline' => 'single', 'italic' => true],
         ['color' => '0563C1', 'underline' => 'single'],
-        ['strikethrough' => true, 'color' => '0563C1', 'underline' => 'single'],
+        ['color' => '0563C1', 'underline' => 'single', 'strikethrough' => true],
     ]);
 });
 
@@ -322,6 +322,6 @@ it('records the link font and the font forced by the surrounding block', functio
 
     expect($payloads)->toHaveCount(1);
     expect($payloads[0]['runs'])->toBe([
-        ['text' => 'italic', 'style' => ['italic' => true, 'bold' => true, 'color' => '0563C1', 'underline' => 'single']],
+        ['text' => 'italic', 'style' => ['bold' => true, 'color' => '0563C1', 'underline' => 'single', 'italic' => true]],
     ]);
 });

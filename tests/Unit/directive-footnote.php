@@ -257,6 +257,42 @@ it('writes the note body as Markdown, because the label is parsed as inline Mark
         ->toBe('emphasis and code.');
 });
 
+it('keeps the emphasis in a note under a body that says its text is not italic', function () {
+    // The body's look says what the text looks like where the document says
+    // nothing: the ordinary text of the note is not italic, and the emphasis in it
+    // is, because an emphasis is about one run and the look is about every run in
+    // the body.
+    $path = Scratch::path('footnote-italic', '.docx');
+
+    saveDocument(
+        "A sentence,:footnote[plain and *emphasis*] and its mark.\n",
+        $path,
+        Configuration::create()->withStyles(['paragraph' => ['italic' => false]]),
+    );
+
+    $part = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+
+    expect(runPropertyOf($part, 'plain and ', 'i'))->toBe('0')
+        ->and(runPropertyOf($part, 'emphasis', 'i'))->toBe('1');
+});
+
+it('keeps the emphasis in a note under a body that says its text is not bold', function () {
+    // The same rule for the weight, which is the other half of what a body may say
+    // about its text.
+    $path = Scratch::path('footnote-bold', '.docx');
+
+    saveDocument(
+        "A sentence,:footnote[plain and **strong**] and its mark.\n",
+        $path,
+        Configuration::create()->withStyles(['paragraph' => ['bold' => false]]),
+    );
+
+    $part = TemplateFactory::xmlOf($path, 'word/footnotes.xml');
+
+    expect(runPropertyOf($part, 'plain and ', 'b'))->toBe('0')
+        ->and(runPropertyOf($part, 'strong', 'b'))->toBe('1');
+});
+
 it('keeps a line ending inside a note to the note', function () {
     // A note is one paragraph, and the mark sits in the prose of the document: a
     // line ending inside the note may not move the paragraph the mark is in. The
