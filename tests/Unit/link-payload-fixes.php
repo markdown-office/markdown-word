@@ -5,8 +5,10 @@ declare(strict_types=1);
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
 use MarkdownWord\MarkdownToWord;
+use MarkdownWord\Render\LinkPlaceholder;
 use MarkdownWord\Tests\Support\Scratch;
 use MarkdownWord\Tests\Support\TemplateFactory;
+use MarkdownWord\Writer\HyperlinkPass;
 
 /*
  * The two paths a link label can take through the writer.
@@ -324,4 +326,44 @@ it('records the link font and the font forced by the surrounding block', functio
     expect($payloads[0]['runs'])->toBe([
         ['text' => 'italic', 'style' => ['bold' => true, 'color' => '0563C1', 'underline' => 'single', 'italic' => true]],
     ]);
+});
+
+/*
+ * The relationship the link is given.
+ *
+ * A link in a part of the package is a relationship in that part's own relationship
+ * part, and the id of that relationship has to be one the part has not used. The
+ * count is taken from the relationships themselves, because an id is an attribute
+ * and an attribute may be written in more than one spelling.
+ */
+
+it('gives the link an id the part has not used', function () {
+    $placeholder = LinkPlaceholder::forIndex(0);
+
+    $path = TemplateFactory::rawPackage('quoted-relationships', [
+        'word/document.xml' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+            . ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            . '<w:body><w:p><w:r><w:t>' . $placeholder . '</w:t></w:r></w:p></w:body>'
+            . '</w:document>',
+        'word/_rels/document.xml.rels' => '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            . "<Relationship Id='rId1' Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>"
+            . '</Relationships>',
+    ]);
+
+    (new HyperlinkPass([[
+        'placeholder' => $placeholder,
+        'url' => 'https://example.test',
+        'title' => null,
+        'runs' => [['text' => 'the link', 'style' => []]],
+    ]]))->applyTo($path);
+
+    // `Id='rId1'` is the same relationship as `Id="rId1"`, so the id the link is
+    // given is the second one and not the first one a second time: two
+    // relationships with the same id in one part make the link behind them
+    // ambiguous.
+    expect(TemplateFactory::xmlOf($path, 'word/_rels/document.xml.rels'))
+        ->toContain('Id="rId2"')
+        ->and(TemplateFactory::xmlOf($path))->toContain('r:id="rId2"');
 });

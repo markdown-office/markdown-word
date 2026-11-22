@@ -130,8 +130,8 @@ final class HyperlinkPass
         $xpath = new \DOMXPath($dom);
         $xpath->registerNamespace('w', self::W_NS);
 
-        $counter = $this->nextRelationshipId($relsXml);
         $rels = $this->loadRels($relsXml, WordPackage::relationshipsFor($part));
+        $counter = $this->nextRelationshipId($rels);
         $links = 0;
 
         foreach ($xpath->query('//w:t') ?: [] as $textNode) {
@@ -319,14 +319,30 @@ final class HyperlinkPass
         $rels->documentElement?->appendChild($relationship);
     }
 
-    private function nextRelationshipId(string $relsXml): int
+    /**
+     * The next free relationship id in a part.
+     *
+     * Read from the relationships themselves rather than from the text of the file,
+     * because a relationship id is an attribute and an attribute may be written in
+     * more than one spelling: `Id='rId1'` is the same relationship as `Id="rId1"`,
+     * and a count that reads only the second would hand out an id that is already
+     * taken. Two relationships with the same id in one part make the link behind it
+     * ambiguous, and a reader that finds them says the document needs repairing.
+     */
+    private function nextRelationshipId(\DOMDocument $rels): int
     {
-        preg_match_all('/Id="rId(\d+)"/', $relsXml, $matches);
+        $highest = 0;
 
-        if ($matches[1] === []) {
-            return 1;
+        foreach ($rels->getElementsByTagName('*') as $element) {
+            if (!$element instanceof \DOMElement) {
+                continue;
+            }
+
+            if (preg_match('/^rId(\d+)$/', $element->getAttribute('Id'), $match) === 1) {
+                $highest = max($highest, (int) $match[1]);
+            }
         }
 
-        return max(array_map('intval', $matches[1])) + 1;
+        return $highest + 1;
     }
 }

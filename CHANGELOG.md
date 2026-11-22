@@ -125,6 +125,15 @@ All notable changes to this project are documented here. The format follows
   A link with emphasis in a running head had the same fault, and is fixed with
   it: the header is a part of the package too.
 
+- **The id of a relationship is counted from the relationships themselves.** The
+  count was read out of the text of the file, and it read one spelling of an
+  attribute and not another: a relationship part written `Id='rId1'` was a part
+  with no relationships in it, and the link that went into it was given `rId1` as
+  well.
+
+  Two relationships with the same id in one part make the link behind them
+  ambiguous, and a reader that finds them says the document needs repairing.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added
