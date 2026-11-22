@@ -275,6 +275,37 @@ function renderRunText(AbstractElement $element): string
 }
 
 /**
+ * The value a run property carries, in the run that holds this text.
+ *
+ * `null` when no run holds that text, and `null` as well when the run does not
+ * carry the property at all — which is not the same as a property set to off:
+ * `<w:i w:val="0"/>` says the text is not italic, and no `<w:i>` says the
+ * question was never asked.
+ *
+ * Read from the written document rather than from the element tree, because a
+ * `Font` that was told not to be italic and one that was told nothing about it
+ * look the same there.
+ */
+function runPropertyOf(string $xml, string $text, string $property): ?string
+{
+    preg_match_all('~<w:r>(?:(?!</w:r>).)*</w:r>~s', $xml, $runs);
+
+    foreach ($runs[0] as $run) {
+        preg_match_all('~<w:t[^>]*>(.*?)</w:t>~s', $run, $texts);
+
+        if (!in_array($text, $texts[1], true)) {
+            continue;
+        }
+
+        preg_match('~<w:' . preg_quote($property, '~') . ' w:val="([^"]*)"/>~', $run, $found);
+
+        return $found[1] ?? null;
+    }
+
+    return null;
+}
+
+/**
  * The visible text of a document, in the shape a text comparison needs; the
  * rules are {@see MarkdownText::normalise()}'s.
  */

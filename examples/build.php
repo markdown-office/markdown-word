@@ -34,7 +34,7 @@ use PhpOffice\PhpWord\Style\Paragraph;
 $autoload = __DIR__ . '/../vendor/autoload.php';
 
 // The build drives the library's own API, so it needs the library. A copy of this
-// directory on its own — the one the `mdword` skill carries — has the sources and the
+// directory on its own — the one the `mdoffice` skill carries — has the sources and the
 // templates but not the library that builds them, and a missing `require` would say
 // nothing about that.
 if (!is_file($autoload)) {

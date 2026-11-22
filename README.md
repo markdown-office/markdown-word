@@ -182,7 +182,7 @@ Tests are written with [Pest][pest] 5, against PHPUnit 13.
 
 | Workflow | What it does |
 | --- | --- |
-| `tests` | `composer validate --strict`, `composer audit`, the README examples, then the suite on PHP 8.4 and 8.5 with a coverage report |
+| `tests` | `composer validate --strict`, `composer audit`, the README examples, then the suite on PHP 8.4, 8.5 and 8.6 with a coverage report |
 | `ooxml` (a job in `tests`) | the documents this library writes, checked against the OOXML schema by Microsoft's own validator, which needs the .NET SDK |
 | `sonarcloud` (a job in `tests`) | static analysis on [SonarCloud][sonarcloud], failing the build when the quality gate is red |
 
@@ -622,17 +622,19 @@ style does not set and that does not name itself is not set either: the run
 inherits whatever the paragraph around it gave it, and nothing is reset to a
 default.
 
-**A label is plain text.** The directives package stores a label as a string
-rather than parsing it as inline Markdown, because CommonMark's inline engine
-offers no way for a parser to say "the rest of this run is mine". So
-`:brand[**Bakery**]` cannot have its emphasis honoured — and a *complete* Markdown
-construct in a label is not honoured either: `**text**`, `__text__`, `*text*`,
-`_text_`, `` `code` `` and `[text](url)` all leave the label alone. A bare `*` or
-`_` is not Markdown: `2 * 3` and `snake_case` are ordinary text, and the word is
-written in the style as it stands. So is a construct CommonMark does not call
-emphasis: `__ Bakery__` and `** text**` are text, because a delimiter that opens an
-emphasis may not be followed by a space and one that closes it may not be preceded
-by one.
+**A label is parsed as inline Markdown.** The directives package parses it, so
+`:brand[**Bakery**]` is the word `Bakery` in the style and in bold, and the
+asterisks are markup rather than characters. A bare `*` or `_` is not Markdown:
+`2 * 3` and `snake_case` are ordinary text, and the word is written in the style
+as it stands. So is a construct CommonMark does not call emphasis: `__ Bakery__`
+and `** text**` are text, because a delimiter that opens an emphasis may not be
+followed by a space and one that closes it may not be preceded by one.
+
+**A label holds no brackets.** It ends at the first `]`, so a link cannot be in
+one — a link is written in brackets. `:brand[[Bakery](https://example.com)]` is
+not a link with a styled word in it: the directive ends at `:brand` and the rest
+is ordinary Markdown. A link *around* the directive is the way to write one:
+`[:brand[Bakery]](https://example.com)`.
 
 **What this library cannot draw is drawn as its own source text.** That is the
 policy of this half, and the inline styles keep it:
@@ -642,12 +644,11 @@ policy of this half, and the inline styles keep it:
 | `:brand[Bakery]` where the theme has no `brand` | `:brand[Bakery]` |
 | `:style[Bakery]` with no attributes | `:style[Bakery]` |
 | `:brand[Bakery]{weight=900}` | `:brand[Bakery]{weight="900"}` |
-| `:brand[**Bakery**]` | `:brand[**Bakery**]` |
 
-The presentation half refuses all four and names the alternative. This half draws
-them, because *a sentence and a parser nobody asked to change should not change
-the syntax of every document converted after it* — and the author gets back the
-characters they typed.
+The presentation half refuses the first two and names the alternative. This half
+draws them, because *a sentence and a parser nobody asked to change should not
+change the syntax of every document converted after it* — and the author gets back
+the characters they typed.
 
 ### Objects in a document
 
@@ -827,9 +828,10 @@ Trading closed ahead of plan :footnote[The western figure excludes two hires.] i
 every region.
 ```
 
-The body is **text, never Markdown** — the directive's label goes in as written.
-The mark is a real superscript reference and the body is numbered by Word, so the
-notes renumber themselves when one is inserted or deleted above.
+The body is **Markdown** — the directive's label is parsed as inline Markdown, so
+`:footnote[*emphasis*]` is a note whose body is in italics. The mark is a real
+superscript reference and the body is numbered by Word, so the notes renumber
+themselves when one is inserted or deleted above.
 
 Two things about the syntax, both from the directive grammar rather than from this
 library:

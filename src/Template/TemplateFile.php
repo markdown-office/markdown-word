@@ -7,6 +7,7 @@ namespace MarkdownWord\Template;
 use MarkdownWord\Exception\FileNotWritable;
 use MarkdownWord\Exception\TemplateNotFound;
 use MarkdownWord\Files\FileFinder;
+use MarkdownWord\Filesystem\PathProbe;
 use MarkdownWord\Filesystem\PathScope;
 
 /**
@@ -149,7 +150,7 @@ final class TemplateFile
     {
         $canonical = PathScope::canonical($path);
 
-        if ($canonical === null || !is_file($canonical)) {
+        if ($canonical === null || !PathProbe::isFile($canonical)) {
             throw TemplateNotFound::aMissingFile($written, $this->searchedIn());
         }
 

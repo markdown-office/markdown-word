@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Styles;
+use MarkdownWord\Tests\Support\Scratch;
+use MarkdownWord\Tests\Support\TemplateFactory;
 use PhpOffice\PhpWord\Element\Table;
 
 const SIMPLE = "| Name | Age |\n"
@@ -46,6 +48,40 @@ it('header boldness can be turned off', function () {
     $config = Configuration::create()->withOptions(['tableHeaderBold' => false]);
 
     expect(headerRuns(0, $config)[0]['font'] ?? null)->toBeNull();
+});
+
+it('a header cell keeps its bold and honours the emphasis in it', function () {
+    // The bold of the header is the look of the scope and the emphasis is about the
+    // run: both stand, and neither cancels the other. The cell's own `false` says
+    // what the text looks like where the document says nothing.
+    $config = Configuration::create()->withStyles([Styles::TABLE_CELL => ['italic' => false]]);
+
+    $table = renderElements("| *italic* |\n| --- |\n| x |\n", $config)[0];
+    $runs = renderRuns($table->getRows()[0]->getCells()[0]->getElements()[0]);
+
+    expect($runs[0]['font']['bold'] ?? false)->toBeTrue()
+        ->and($runs[0]['font']['italic'] ?? false)->toBeTrue();
+});
+
+it('lets the code font have the last word in a header cell', function () {
+    // The code font is the default of the construct the run is, and a code span is
+    // more particular than the header it stands in: where the two name the same
+    // property, the code font's answer wins. The header's own text keeps its bold.
+    //
+    // Read from the written document rather than from the element tree, because
+    // "not bold" and "never asked about bold" look the same there and are not the
+    // same here: the code font said `false`, and the run says so.
+    $config = Configuration::create()
+        ->withOptions(['tableHeaderBold' => true])
+        ->withStyles([Styles::CODE_FONT => ['bold' => false]]);
+
+    $path = Scratch::path('code-font-header');
+    saveDocument("| Heading `code` |\n| --- |\n| a cell |\n", $path, $config);
+
+    $document = TemplateFactory::xmlOf($path);
+
+    expect(runPropertyOf($document, 'Heading ', 'b'))->toBe('1')
+        ->and(runPropertyOf($document, 'code', 'b'))->toBe('0');
 });
 
 it('column alignment comes from the delimiter row', function () {

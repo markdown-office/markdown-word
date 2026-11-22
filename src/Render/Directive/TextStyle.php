@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MarkdownWord\Render\Directive;
 
+use League\CommonMark\Node\Node;
 use MarkdownOffice\CommonMark\Directive\Node\DirectiveInline;
 use MarkdownWord\Configuration\TextStyles;
 use MarkdownWord\Render\InlineStyle;
@@ -19,49 +20,20 @@ use PhpOffice\PhpWord\Element\AbstractContainer;
  *
  * The properties are forced onto the run rather than merged into the paragraph
  * style, so they reach the text whatever the Markdown around it says — a word in a
- * style is a word in that style, and `**` inside a label is not Markdown at all.
+ * style is a word in that style.
  *
- * **A label is plain text.** The directives package stores it as a string rather
- * than parsing it as inline Markdown, because CommonMark's inline engine offers no
- * way for a parser to say "the rest of this run is mine". A label that holds a
- * *complete* Markdown construct is therefore drawn as the directive's own source
- * text rather than as the word it names: the asterisks the author wrote reach the
- * document, which is the same answer an unknown name gets, and the one this half
- * gives to everything it cannot draw.
+ * **A label is parsed as inline Markdown.** The directives package parses it, so
+ * `:brand[**Bakery**]` is the word `Bakery` in the style and in bold, and the
+ * asterisks are markup rather than characters. The runs are the ones the label
+ * makes, so a word in a style may hold emphasis of its own.
  *
  * A bare `*` or `_` is not Markdown. `2 * 3` and `snake_case` are ordinary text,
- * and a rule that refused every label holding one of them would refuse correct
- * documents all day; what is refused is a construct that is complete, and complete
- * is CommonMark's own question — `__ Bakery__` and `** text**` are not emphasis,
- * so a label holding one is drawn as the word it holds.
+ * and the parser reads them as text for the same reason: a delimiter run that
+ * opens an emphasis may not be followed by whitespace, and one that closes it may
+ * not be preceded by whitespace.
  */
 final class TextStyle
 {
-    /**
-     * The complete Markdown constructs a label may not hold.
-     *
-     * What makes a construct complete is CommonMark's own rule: a delimiter run that
-     * opens an emphasis may not be followed by whitespace, and one that closes it may
-     * not be preceded by whitespace. So `__ Bakery__` and `** text**` are text rather
-     * than emphasis, and a label holding one is drawn as it was written.
-     *
-     * The `_` is the only one with a rule of its own: CommonMark does not open
-     * emphasis inside a word, so `snake_case_name` is not emphasis and a label
-     * holding it is text.
-     *
-     * The link cannot be one — a label holds no brackets at all, since the first
-     * `]` ends it — and is here because it is one of the constructs the vocabulary
-     * names.
-     */
-    private const MARKDOWN = [
-        '/\*\*[^*\s](?:[^*]*[^*\s])?\*\*/',
-        '/(?<![\w])__[^_\s](?:[^_]*[^_\s])?__(?![\w])/',
-        '/\*[^*\s](?:[^*]*[^*\s])?\*/',
-        '/(?<![\w])_[^_\s](?:[^_]*[^_\s])?_(?![\w])/',
-        '/`[^`]+`/',
-        '/\[[^\]]*\]\([^)]*\)/',
-    ];
-
     /**
      * @param TextStyles $styles The styles a theme brings, and the reserved name
      *        behind them.
@@ -101,18 +73,34 @@ final class TextStyle
      * Draws the text in the style, or reports that it cannot be drawn.
      *
      * The report is what the caller draws the directive's own source text from, so
-     * a name this library does not draw and a label it cannot honour come out the
+     * a name this library does not draw and a label with no text in it come out the
      * same way — as the characters the author typed.
+     *
+     * @param callable(iterable<Node>, AbstractContainer, InlineStyle): void|null $draw The
+     *        renderer that draws the label's runs. A caller with none gets the label
+     *        as one run of text.
      */
-    public function draw(DirectiveInline $node, AbstractContainer $target, InlineStyle $style): bool
-    {
+    public function draw(
+        DirectiveInline $node,
+        AbstractContainer $target,
+        InlineStyle $style,
+        ?callable $draw = null,
+    ): bool {
         $font = $this->drawableFont($node);
 
         if ($font === null) {
             return false;
         }
 
-        $target->addText($node->getLabel() ?? '', $this->resolver->fontFor($style->withForcedFont($font)));
+        $style = $style->withOwnFont($font);
+
+        if ($draw === null) {
+            $target->addText($node->getLabel() ?? '', $this->resolver->fontFor($style));
+
+            return true;
+        }
+
+        $draw($node->children(), $target, $style);
 
         return true;
     }
@@ -127,7 +115,7 @@ final class TextStyle
     {
         $label = $node->getLabel() ?? '';
 
-        if ($label === '' || self::holdsMarkdown($label)) {
+        if ($label === '') {
             return null;
         }
 
@@ -165,19 +153,5 @@ final class TextStyle
         }
 
         return array_merge($style, $attributes);
-    }
-
-    /**
-     * Whether a label holds a complete Markdown construct.
-     */
-    private static function holdsMarkdown(string $label): bool
-    {
-        foreach (self::MARKDOWN as $pattern) {
-            if (preg_match($pattern, $label) === 1) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

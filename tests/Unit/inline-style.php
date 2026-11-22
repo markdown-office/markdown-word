@@ -2,6 +2,13 @@
 
 declare(strict_types=1);
 
+use League\CommonMark\Environment\Environment;
+use League\CommonMark\Extension\CommonMark\CommonMarkCoreExtension;
+use League\CommonMark\Extension\CommonMark\Node\Inline\Code;
+use League\CommonMark\Extension\Strikethrough\StrikethroughExtension;
+use League\CommonMark\Node\Inline\Text;
+use League\CommonMark\Node\Node;
+use League\CommonMark\Parser\MarkdownParser;
 use MarkdownWord\Configuration;
 use MarkdownWord\Configuration\Options;
 use MarkdownWord\Configuration\Styles;
@@ -150,17 +157,35 @@ it('draws the names a theme defines and leaves the rest alone', function () {
     expect(styleText($converter, $markdown))->toBe('A Bakery and a :green[go] here.');
 });
 
-it('leaves a label holding a complete Markdown construct as its source text', function () {
-    // The label is plain text, so `**Bakery**` would reach the document with its
-    // asterisks — and a word that comes out as something the author did not write
-    // is the one failure this suite refuses to commit.
+it('draws a label holding Markdown, because the label is parsed as inline Markdown', function () {
+    // The label is parsed as inline Markdown, so the asterisks are markup rather than
+    // characters: the word is drawn in the style and in bold, and the asterisks are
+    // not in the document at all.
     $config = styledConfig(['brand' => ['color' => '0B5CAB']]);
 
-    expect(renderText("A :brand[**Bakery**] here.\n", $config))->toBe('A :brand[**Bakery**] here.')
-        ->and(renderText("A :brand[*Bakery*] here.\n", $config))->toBe('A :brand[*Bakery*] here.')
-        ->and(renderText("A :brand[_Bakery_] here.\n", $config))->toBe('A :brand[_Bakery_] here.')
-        ->and(renderText("A :brand[__Bakery__] here.\n", $config))->toBe('A :brand[__Bakery__] here.')
-        ->and(renderText("A :brand[`Bakery`] here.\n", $config))->toBe('A :brand[`Bakery`] here.');
+    expect(renderText("A :brand[**Bakery**] here.\n", $config))->toBe('A Bakery here.')
+        ->and(renderText("A :brand[*Bakery*] here.\n", $config))->toBe('A Bakery here.')
+        ->and(renderText("A :brand[_Bakery_] here.\n", $config))->toBe('A Bakery here.')
+        ->and(renderText("A :brand[__Bakery__] here.\n", $config))->toBe('A Bakery here.')
+        ->and(renderText("A :brand[`Bakery`] here.\n", $config))->toBe('A Bakery here.')
+        ->and(styleRuns("A :brand[**Bakery**] here.\n", $config)[1]['font']['bold'] ?? null)->toBeTrue();
+});
+
+it('keeps the attributes a directive names on a code span in its label', function () {
+    // The code font is the default of a code span: it supplies the typeface, and
+    // the colour and the size where the directive named neither. The colour and
+    // the size the directive did name are the directive's.
+    $runs = styleRuns("A :style[`code`]{color=00B4D8 size=20} B\n");
+
+    expect($runs[1]['font']['name'] ?? null)->toBe('Consolas')
+        ->and($runs[1]['font']['color'] ?? null)->toBe('00B4D8')
+        ->and($runs[1]['font']['size'] ?? null)->toBe(20.0);
+
+    // And where the directive named only the size, the colour is the code font's.
+    $partial = styleRuns("A :style[`code`]{size=20} B\n");
+
+    expect($partial[1]['font']['color'] ?? null)->toBe('A31515')
+        ->and($partial[1]['font']['size'] ?? null)->toBe(20.0);
 });
 
 it('honours a label holding a bare asterisk or an underscore', function () {
@@ -186,13 +211,51 @@ it('honours a label holding a construct CommonMark does not call emphasis', func
         ->and(styleRuns("A :brand[** text**] here.\n", $config)[1]['font']['color'] ?? null)->toBe('0B5CAB');
 });
 
-it('holds a label that is Markdown and draws one that is not', function () {
-    // The corpus is the list of labels a text style may be given and what CommonMark
-    // makes of each one. A label the directive grammar cannot carry — one with a
-    // bracket in it — is left out: the grammar says a label holds no brackets at all.
+/**
+ * The text the parser reads in a label, with the markup taken out of it.
+ *
+ * CommonMark with GFM's strikethrough, which is what both halves read, and read
+ * here rather than through the half under test: the claim is that the half draws
+ * what the parser reads, and a parser asked by the half cannot say so.
+ */
+function labelText(string $label): string
+{
+    $environment = new Environment();
+    $environment->addExtension(new CommonMarkCoreExtension());
+    $environment->addExtension(new StrikethroughExtension());
+
+    $document = (new MarkdownParser($environment))->parse($label);
+
+    $text = '';
+
+    $walk = static function (Node $node) use (&$walk, &$text): void {
+        if ($node instanceof Text || $node instanceof Code) {
+            $text .= $node->getLiteral();
+
+            return;
+        }
+
+        foreach ($node->children() as $child) {
+            $walk($child);
+        }
+    };
+
+    $walk($document);
+
+    return $text;
+}
+
+it('draws every label the way the parser reads it', function () {
+    // The corpus is the list of labels a text style may be given and what the parser
+    // makes of each one. The label is parsed as inline Markdown, so what the half
+    // draws is what the parser reads: the markup is gone from a label the parser
+    // reads as Markdown, and it is kept in one it does not.
+    //
+    // A label the directive grammar cannot carry — one with a bracket in it — is left
+    // out: the grammar says a label holds no brackets at all.
     $config = styledConfig(['brand' => ['color' => '0B5CAB']]);
     $labels = file(dirname(__DIR__) . '/fixtures/labels.txt', FILE_IGNORE_NEW_LINES) ?: [];
-    $held = 0;
+    $wrong = [];
     $drawn = 0;
 
     foreach ($labels as $line) {
@@ -207,22 +270,16 @@ it('holds a label that is Markdown and draws one that is not', function () {
         }
 
         $text = renderText(sprintf("A :brand[%s] here.\n", $label), $config);
+        $want = $marker === 'text' ? $label : labelText($label);
 
-        // A label the halves hold is drawn as its own source text; one they do not is
-        // drawn as the word. The corpus says what CommonMark makes of the label, and
-        // the two markers that differ from it say which way the halves went.
-        if ($marker === 'text' || $marker === 'markdown-only') {
-            expect($text)->toBe(sprintf('A %s here.', $label));
-            $drawn++;
-
-            continue;
+        if ($text !== sprintf('A %s here.', $want)) {
+            $wrong[] = sprintf('%s: the half drew "%s", the parser reads "%s"', $label, $text, $want);
         }
 
-        expect($text)->toBe(sprintf('A :brand[%s] here.', $label));
-        $held++;
+        $drawn++;
     }
 
-    expect($held)->toBeGreaterThan(0)
+    expect($wrong)->toBe([])
         ->and($drawn)->toBeGreaterThan(0);
 });
 

@@ -6,7 +6,54 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **PHP 8.6 is supported.** The suite runs on it, and the library works on it from the
+  oldest version it ever claimed — PHP 8.2. Nothing in the library had to change for
+  that to be true, and one thing about PHP 8.6 did.
+
+### Changed
+
+- **`InlineStyle::withForcedFont()` is now `withOwnFont()`.** What it sets are the
+  properties of the run itself rather than the look of the scope the run sits in,
+  and the scope's are given to the constructor. A caller that used the method has
+  a rename to make; nothing else about the class changed.
+
+- **The examples name the skill that carries them.** The skill is called `mdoffice` now —
+  it is the suite's, and it carries both halves — and the examples said the name it had
+  before. The bundle carries this directory as `examples/word/`, so a copy of it told a
+  reader to look for a skill that is not there.
+
 ### Fixed
+
+- **A name that holds a null byte is answered rather than raised.** PHP 8.6 raises a
+  `ValueError` from `is_file()` and its neighbours when a path holds a null byte, where
+  earlier versions answered false. A document that wrote such a name was therefore
+  refused on 8.6 and answered on 8.5 — the same question with two answers. Every entry
+  point that takes a name answers null, or false, for a name like that now, as it
+  already did for a name that walked out of its base or that was a URL.
+
+- **A word in a style may hold emphasis of its own.** `:brand[**Bakery**]` is drawn as the
+  word `Bakery` in the brand style and in bold. It used to be drawn as the directive's own
+  source text, with its asterisks, because the label of a directive was a string rather
+  than Markdown and a complete construct in one could not have it honoured.
+
+  The label is parsed as inline Markdown now, so what the parser reads is what the
+  document draws: `2 * 3` and `snake_case` are drawn as they are, and `__ Bakery__` is
+  text, because a delimiter that opens an emphasis may not be followed by a space and one
+  that closes it may not be preceded by one.
+
+  The body of a footnote is Markdown for the same reason: `:footnote[*emphasis*]` is a
+  note whose body is in italics.
+
+  The two halves agree with each other because they ask the same parser, so the list of
+  patterns this half kept — the rules that said what a label may not hold — and the tool
+  that compared them with the slides half's are gone. The corpus of the labels is still
+  here, and the test reads every label in it and checks that the document draws what the
+  parser reads.
+
+- **This half needs the directives package in version 0.4.0 or newer.** The label is parsed
+  by that package, and the version before it did not parse it.
 
 - **A pipe inside a table cell stays in the cell.** A pipe ends a cell in GFM,
   whatever surrounds it, so a cell holding one was written with the cell split
@@ -20,6 +67,72 @@ All notable changes to this project are documented here. The format follows
 
   The reader of a table takes the backslash of a `\|` for the escape it is and
   keeps the pipe, so the escape is not part of the text the reader sees.
+
+- **A line ending inside a label breaks the paragraph it stands in.** With
+  `softBreak: paragraph` a label written across two lines came out as one line:
+  the renderer that draws a label was given no way to break a paragraph, so the
+  line ending fell back to a space.
+
+  A label is drawn where it stands now, and the prose after it follows it into
+  the paragraph the label broke into.
+
+  A note is one paragraph, and the mark sits in the prose of the document, so a
+  line ending inside a note stays in the note and falls back to a space, the way
+  it does in a note of its own.
+
+- **An emphasis survives a block that says its text is not italic.** A note whose
+  body was written as `:footnote[*emphasis*]` came out as ordinary text with
+  `paragraph: {italic: false}` configured: the delimiters were gone and the text
+  was not in italics either.
+
+  The look of a block says what the text looks like where the document says
+  nothing, and an emphasis is about one run — so where the two name the same
+  property, the emphasis wins. The text the document did not emphasise is still
+  not in italics.
+
+  The rule is the same wherever the character half of a slot reaches the runs:
+  in a body paragraph, in a cell of a table and in the body of a note. A bold
+  table header is unaffected: it is bold whatever the Markdown says around it.
+
+- **A directive keeps the attributes it names on a code span in its label.**
+  `:style[`code`]{color=00B4D8 size=20}` came out in the code font's own colour
+  and size, because the code font was applied after the attributes and the
+  defaults of a construct were the last word on the properties they name.
+
+  The attributes are named on the run they are drawn on, so they win over the
+  default of the construct: the colour and the size are the directive's, and the
+  typeface is still the code font's.
+
+- **The README says what the body of a footnote is.** It said the body was text
+  and never Markdown, which was true before the label of a directive was parsed
+  as inline Markdown and is not true now: the body of a note is Markdown, as the
+  entry above says.
+
+- **A link in a note is a link.** The body of a note is a label, and a label is
+  parsed as inline Markdown, so a note can hold a link for the first time — and
+  the link came out as the placeholder the writer leaves behind for it,
+  `MDWL0MDWL`, with no relationship behind it at all.
+
+  The pass that puts the links back went over the body of the document and not
+  over the notes, and a note is a part of the package like any other: it has
+  relationships of its own, and `rId1` in the notes' relationship part is a
+  different relationship from `rId1` in the body's.
+
+  The links are resolved in every part that can hold one now — the body, the
+  notes, a running head and a running foot — and a part with no relationship
+  part of its own gets one when the first link in it needs it.
+
+  A link with emphasis in a running head had the same fault, and is fixed with
+  it: the header is a part of the package too.
+
+- **The id of a relationship is counted from the relationships themselves.** The
+  count was read out of the text of the file, and it read one spelling of an
+  attribute and not another: a relationship part written `Id='rId1'` was a part
+  with no relationships in it, and the link that went into it was given `rId1` as
+  well.
+
+  Two relationships with the same id in one part make the link behind them
+  ambiguous, and a reader that finds them says the document needs repairing.
 
 ## [0.4.0] - 2026-11-04
 

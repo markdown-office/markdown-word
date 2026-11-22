@@ -31,6 +31,18 @@ final class WordPackage
 
     public const TEMPLATE_MAIN = 'application/vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml';
 
+    /** The content type of the part holding the notes. */
+    public const FOOTNOTES = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml';
+
+    /** The content type of the part holding the endnotes. */
+    public const ENDNOTES = 'application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml';
+
+    /** The content type of the part holding a running head. */
+    public const HEADER = 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
+
+    /** The content type of the part holding a running foot. */
+    public const FOOTER = 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml';
+
     /** The declarations every other answer here is read out of. */
     public const CONTENT_TYPES = '[Content_Types].xml';
 
@@ -49,42 +61,45 @@ final class WordPackage
      */
     public static function bodyPart(ZipArchive $zip): string
     {
-        $declared = self::contentTypesOf($zip);
-
-        // An archive with no declarations is not one this library wrote, and an
-        // empty string is not XML that fails to parse — `DOMDocument::loadXML()`
-        // rejects it outright — so both are answered here rather than caught.
-        $dom = $declared === '' ? null : Xml::parse($declared);
-
-        if ($dom === null) {
-            return self::FALLBACK_MAIN;
-        }
-
-        $xpath = new DOMXPath($dom);
-        $xpath->registerNamespace('ct', 'http://schemas.openxmlformats.org/package/2006/content-types');
-
-        foreach ($xpath->query('//ct:Override') ?: [] as $override) {
-            if (!$override instanceof DOMElement) {
-                continue;
-            }
-
-            $type = $override->getAttribute('ContentType');
-
-            if ($type !== self::DOCUMENT_MAIN && $type !== self::TEMPLATE_MAIN) {
-                continue;
-            }
-
-            $name = ltrim($override->getAttribute('PartName'), '/');
-
-            // The main part is a document, and this is a path a package writes: a
-            // name that walks out of the archive is refused rather than handed back
-            // for a caller to open, in a package that is not this library's.
+        foreach (self::partsDeclaredAs($zip, [self::DOCUMENT_MAIN, self::TEMPLATE_MAIN]) as $name) {
+            // The main part is the document, and its name says so: `document.xml` or
+            // `document22.xml`, and not another part that carries the content type.
             if (preg_match('~^word/document[A-Za-z0-9._-]*\.xml$~', $name) === 1) {
                 return $name;
             }
         }
 
         return self::FALLBACK_MAIN;
+    }
+
+    /**
+     * The parts of a package a link may be found in, other than the body.
+     *
+     * A link is written into whichever part holds the text it is in: a note, a
+     * running head, a running foot. Each of them has relationships of its own, so a
+     * link in a note is not the link in the body — `rId1` in the notes' relationship
+     * part is a different relationship from `rId1` in the body's, and one cannot stand
+     * in for the other.
+     *
+     * Found through the declarations rather than by name, because the declarations are
+     * what a reader follows, and a part the archive does not hold is not one a reader
+     * finds either.
+     *
+     * @return list<string>
+     */
+    public static function linkParts(ZipArchive $zip): array
+    {
+        $parts = self::partsDeclaredAs($zip, [
+            self::FOOTNOTES,
+            self::ENDNOTES,
+            self::HEADER,
+            self::FOOTER,
+        ]);
+
+        return array_values(array_filter(
+            $parts,
+            static fn (string $part): bool => $zip->locateName($part) !== false,
+        ));
     }
 
     /**
@@ -144,5 +159,55 @@ final class WordPackage
         $declared = $zip->getFromName(self::CONTENT_TYPES);
 
         return is_string($declared) ? $declared : '';
+    }
+
+    /**
+     * The parts a package declares with one of the given content types.
+     *
+     * Read through the XML rather than by pattern, because the attributes of an
+     * `Override` may be written in either order and a lookup that assumes one of
+     * them cannot tell a part it failed to find from a package that declares none.
+     *
+     * @param list<string> $types
+     * @return list<string>
+     */
+    private static function partsDeclaredAs(ZipArchive $zip, array $types): array
+    {
+        $declared = self::contentTypesOf($zip);
+
+        // An archive with no declarations is not one this library wrote, and an
+        // empty string is not XML that fails to parse — `DOMDocument::loadXML()`
+        // rejects it outright — so both are answered here rather than caught.
+        $dom = $declared === '' ? null : Xml::parse($declared);
+
+        if ($dom === null) {
+            return [];
+        }
+
+        $xpath = new DOMXPath($dom);
+        $xpath->registerNamespace('ct', 'http://schemas.openxmlformats.org/package/2006/content-types');
+
+        $parts = [];
+
+        foreach ($xpath->query('//ct:Override') ?: [] as $override) {
+            if (!$override instanceof DOMElement) {
+                continue;
+            }
+
+            if (!in_array($override->getAttribute('ContentType'), $types, true)) {
+                continue;
+            }
+
+            $name = ltrim($override->getAttribute('PartName'), '/');
+
+            // A part is a path this package writes: a name that walks out of the
+            // archive is refused rather than handed back for a caller to open, in a
+            // package that is not this library's.
+            if (preg_match('~^word/[A-Za-z0-9._-]+\.xml$~', $name) === 1) {
+                $parts[] = $name;
+            }
+        }
+
+        return $parts;
     }
 }
