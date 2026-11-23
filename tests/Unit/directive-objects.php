@@ -287,9 +287,9 @@ it('draws a directive with no renderer as the label stands', function () {
 
     $target = new TextRun();
 
-    expect($registry->drawInline(new DirectiveInline('brand', null, 'Bakery'), $target, new InlineStyle()))
+    expect($registry->drawInline(new DirectiveInline('brand', null, 'Corp'), $target, new InlineStyle()))
         ->toBeTrue()
-        ->and(renderRuns($target)[0]['text'] ?? null)->toBe('Bakery');
+        ->and(renderRuns($target)[0]['text'] ?? null)->toBe('Corp');
 
     // And a footnote's body is the text it stands as, in the note.
     $section = new Section(1);

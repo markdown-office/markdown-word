@@ -108,13 +108,13 @@ function styleText(MarkdownToWord $converter, string $markdown): string
 }
 
 it('colours a word in a named style, in the middle of a sentence', function () {
-    $runs = styleRuns("Resilience :brand[Bakery] is open.\n", styledConfig([
+    $runs = styleRuns("Acme :brand[Corp] is open.\n", styledConfig([
         'brand' => ['color' => '0B5CAB'],
     ]));
 
     expect($runs)->toHaveCount(3)
-        ->and($runs[0]['text'])->toBe('Resilience ')
-        ->and($runs[1]['text'])->toBe('Bakery')
+        ->and($runs[0]['text'])->toBe('Acme ')
+        ->and($runs[1]['text'])->toBe('Corp')
         ->and($runs[1]['font']['color'] ?? null)->toBe('0B5CAB')
         // The rest of the sentence is untouched.
         ->and($runs[2]['text'])->toBe(' is open.')
@@ -122,17 +122,17 @@ it('colours a word in a named style, in the middle of a sentence', function () {
 });
 
 it('draws the raw form with no theme style behind it', function () {
-    $runs = styleRuns("The word :style[teal]{color=00B4D8} here.\n");
+    $runs = styleRuns("The word :style[violet]{color=6D4BD1} here.\n");
 
-    expect($runs[1]['text'])->toBe('teal')
-        ->and($runs[1]['font']['color'] ?? null)->toBe('00B4D8')
+    expect($runs[1]['text'])->toBe('violet')
+        ->and($runs[1]['font']['color'] ?? null)->toBe('6D4BD1')
         // A raw form with no attributes says nothing — there is no named style and
         // no property — so it is its own source text.
-        ->and(renderText("The word :style[teal] here.\n"))->toBe('The word :style[teal] here.');
+        ->and(renderText("The word :style[violet] here.\n"))->toBe('The word :style[violet] here.');
 });
 
 it('lets an attribute override the named style for that property alone', function () {
-    $runs = styleRuns(":brand[Bakery]{color=FF0000}\n", styledConfig([
+    $runs = styleRuns(":brand[Corp]{color=FF0000}\n", styledConfig([
         'brand' => ['color' => '0B5CAB', 'bold' => true],
     ]));
 
@@ -151,10 +151,10 @@ it('draws the names a theme defines and leaves the rest alone', function () {
     [$root, $themes] = styleThemes();
     writeStyleTheme($themes, 'house', textStyles: "brand:\n  color: \"0B5CAB\"\n");
 
-    $markdown = "A :brand[Bakery] and a :green[go] here.\n";
+    $markdown = "A :brand[Corp] and a :green[go] here.\n";
     $converter = (new MarkdownToWord($markdown, directory: $root))->withTheme('house');
 
-    expect(styleText($converter, $markdown))->toBe('A Bakery and a :green[go] here.');
+    expect(styleText($converter, $markdown))->toBe('A Corp and a :green[go] here.');
 });
 
 it('draws a label holding Markdown, because the label is parsed as inline Markdown', function () {
@@ -163,22 +163,22 @@ it('draws a label holding Markdown, because the label is parsed as inline Markdo
     // not in the document at all.
     $config = styledConfig(['brand' => ['color' => '0B5CAB']]);
 
-    expect(renderText("A :brand[**Bakery**] here.\n", $config))->toBe('A Bakery here.')
-        ->and(renderText("A :brand[*Bakery*] here.\n", $config))->toBe('A Bakery here.')
-        ->and(renderText("A :brand[_Bakery_] here.\n", $config))->toBe('A Bakery here.')
-        ->and(renderText("A :brand[__Bakery__] here.\n", $config))->toBe('A Bakery here.')
-        ->and(renderText("A :brand[`Bakery`] here.\n", $config))->toBe('A Bakery here.')
-        ->and(styleRuns("A :brand[**Bakery**] here.\n", $config)[1]['font']['bold'] ?? null)->toBeTrue();
+    expect(renderText("A :brand[**Corp**] here.\n", $config))->toBe('A Corp here.')
+        ->and(renderText("A :brand[*Corp*] here.\n", $config))->toBe('A Corp here.')
+        ->and(renderText("A :brand[_Corp_] here.\n", $config))->toBe('A Corp here.')
+        ->and(renderText("A :brand[__Corp__] here.\n", $config))->toBe('A Corp here.')
+        ->and(renderText("A :brand[`Corp`] here.\n", $config))->toBe('A Corp here.')
+        ->and(styleRuns("A :brand[**Corp**] here.\n", $config)[1]['font']['bold'] ?? null)->toBeTrue();
 });
 
 it('keeps the attributes a directive names on a code span in its label', function () {
     // The code font is the default of a code span: it supplies the typeface, and
     // the colour and the size where the directive named neither. The colour and
     // the size the directive did name are the directive's.
-    $runs = styleRuns("A :style[`code`]{color=00B4D8 size=20} B\n");
+    $runs = styleRuns("A :style[`code`]{color=6D4BD1 size=20} B\n");
 
     expect($runs[1]['font']['name'] ?? null)->toBe('Consolas')
-        ->and($runs[1]['font']['color'] ?? null)->toBe('00B4D8')
+        ->and($runs[1]['font']['color'] ?? null)->toBe('6D4BD1')
         ->and($runs[1]['font']['size'] ?? null)->toBe(20.0);
 
     // And where the directive named only the size, the colour is the code font's.
@@ -201,13 +201,13 @@ it('honours a label holding a bare asterisk or an underscore', function () {
 
 it('honours a label holding a construct CommonMark does not call emphasis', function () {
     // A delimiter run that opens an emphasis may not be followed by whitespace, and one
-    // that closes it may not be preceded by whitespace: `__ Bakery__` and `** text**`
+    // that closes it may not be preceded by whitespace: `__ Corp__` and `** text**`
     // are text, and a label holding one is drawn as it was written.
     $config = styledConfig(['brand' => ['color' => '0B5CAB']]);
 
-    expect(renderText("A :brand[__ Bakery__] here.\n", $config))->toBe('A __ Bakery__ here.')
+    expect(renderText("A :brand[__ Corp__] here.\n", $config))->toBe('A __ Corp__ here.')
         ->and(renderText("A :brand[** text**] here.\n", $config))->toBe('A ** text** here.')
-        ->and(renderText("A :brand[**Bakery **] here.\n", $config))->toBe('A **Bakery ** here.')
+        ->and(renderText("A :brand[**Corp **] here.\n", $config))->toBe('A **Corp ** here.')
         ->and(styleRuns("A :brand[** text**] here.\n", $config)[1]['font']['color'] ?? null)->toBe('0B5CAB');
 });
 
@@ -284,7 +284,7 @@ it('draws every label the way the parser reads it', function () {
 });
 
 it('finds a style under the name it is folded to', function () {
-    // A style's name is a word to a reader, and `:Brand[Bakery]` and `:brand[Bakery]`
+    // A style's name is a word to a reader, and `:Brand[Corp]` and `:brand[Corp]`
     // are the same word written twice. The folding is one answer to one question: the
     // names are folded, the lookup is folded, and the space around a name is part of
     // it rather than a second question.
@@ -313,9 +313,9 @@ it('draws a style the theme spells with a capital letter, whichever case the doc
     writeStyleTheme($themes, 'house', textStyles: "Brand:\n  color: \"0B5CAB\"\n");
 
     $converter = (new MarkdownToWord('# T', directory: $root))->withTheme('house');
-    $markdown = "A :brand[Bakery] and a :Brand[Bakery] here.\n";
+    $markdown = "A :brand[Corp] and a :Brand[Corp] here.\n";
 
-    expect(styleText($converter, $markdown))->toBe('A Bakery and a Bakery here.');
+    expect(styleText($converter, $markdown))->toBe('A Corp and a Corp here.');
 });
 
 it('names a style the way the theme spelled it', function () {
@@ -394,27 +394,27 @@ it('renders a theme with no text styles, and draws a named style against it as s
     [$root, $themes] = styleThemes();
     writeStyleTheme($themes, 'plain', styles: "heading.1:\n  color: 112233\n");
 
-    $markdown = "A :brand[Bakery] here.\n";
+    $markdown = "A :brand[Corp] here.\n";
     $converter = (new MarkdownToWord($markdown, directory: $root))->withTheme('plain');
 
-    expect(styleText($converter, $markdown))->toBe('A :brand[Bakery] here.')
+    expect(styleText($converter, $markdown))->toBe('A :brand[Corp] here.')
         // The raw form needs no theme, so it still works against one that has no
         // named styles.
-        ->and(styleText($converter, "A :style[Bakery]{color=0B5CAB} here.\n"))->toBe('A Bakery here.');
+        ->and(styleText($converter, "A :style[Corp]{color=0B5CAB} here.\n"))->toBe('A Corp here.');
 });
 
 it('draws a style whose attribute it does not know as its source text', function () {
     $config = styledConfig(['brand' => ['color' => '0B5CAB']]);
 
-    expect(renderText("A :brand[Bakery]{weight=900} here.\n", $config))
-        ->toBe('A :brand[Bakery]{weight="900"} here.');
+    expect(renderText("A :brand[Corp]{weight=900} here.\n", $config))
+        ->toBe('A :brand[Corp]{weight="900"} here.');
 });
 
 it('draws a style whose attribute holds a value it cannot use as its source text', function () {
     $config = styledConfig(['brand' => ['color' => '0B5CAB']]);
 
-    expect(renderText("A :style[Bakery]{color=red} here.\n", $config))
-        ->toBe('A :style[Bakery]{color="red"} here.');
+    expect(renderText("A :style[Corp]{color=red} here.\n", $config))
+        ->toBe('A :style[Corp]{color="red"} here.');
 });
 
 it('draws a style with no text at all as its source text', function () {
@@ -509,7 +509,7 @@ it('draws the names it says it draws', function () {
 });
 
 it('writes a size in points as the half-points Word keeps', function () {
-    $markdown = "A :brand[Bakery] here.\n";
+    $markdown = "A :brand[Corp] here.\n";
     $document = documentParts(toDocx($markdown, styledConfig([
         'brand' => ['size' => 14],
     ])))['word/document.xml'];
@@ -520,7 +520,7 @@ it('writes a size in points as the half-points Word keeps', function () {
 it('writes the colour behind a word as a shading rather than a highlight', function () {
     // `w:highlight` takes one of Word's sixteen names and not a colour, so a hex
     // written there is a value the format cannot hold. `w:shd` takes the colour.
-    $markdown = "A :brand[Bakery] here.\n";
+    $markdown = "A :brand[Corp] here.\n";
     $document = documentParts(toDocx($markdown, styledConfig([
         'brand' => ['highlight' => 'FFFF00'],
     ])))['word/document.xml'];
@@ -532,7 +532,7 @@ it('writes the colour behind a word as a shading rather than a highlight', funct
 it('does not keep a text style in the other direction', function () {
     // The round trip reads bold, italic and strike and no colour, so a word in a
     // style comes back as the word.
-    $markdown = "A :brand[Bakery] here.\n";
+    $markdown = "A :brand[Corp] here.\n";
     $converter = new MarkdownToWord(null, styledConfig([
         'brand' => ['color' => '0B5CAB'],
     ]));
@@ -541,7 +541,7 @@ it('does not keep a text style in the other direction', function () {
         static fn (): string => (new WordToMarkdown($converter->toDocx($markdown)))->convert(),
     );
 
-    expect($back)->toContain('Bakery')
+    expect($back)->toContain('Corp')
         ->and($back)->not->toContain('0B5CAB');
 });
 

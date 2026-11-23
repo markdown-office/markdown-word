@@ -23,7 +23,7 @@ use PhpOffice\PhpWord\Element\AbstractContainer;
  * style is a word in that style.
  *
  * **A label is parsed as inline Markdown.** The directives package parses it, so
- * `:brand[**Bakery**]` is the word `Bakery` in the style and in bold, and the
+ * `:brand[**Corp**]` is the word `Corp` in the style and in bold, and the
  * asterisks are markup rather than characters. The runs are the ones the label
  * makes, so a word in a style may hold emphasis of its own.
  *
