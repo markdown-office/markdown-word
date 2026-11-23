@@ -14,6 +14,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **The examples name a company that does not exist.** The wordmark in them was read
+  out of a real deck, and so were the colour it is drawn in and the sentence around it.
+  `Acme :brand[Corp]` and a colour of the suite's own stand there now.
+
 - **`InlineStyle::withForcedFont()` is now `withOwnFont()`.** What it sets are the
   properties of the run itself rather than the look of the scope the run sits in,
   and the scope's are given to the constructor. A caller that used the method has
@@ -33,13 +37,13 @@ All notable changes to this project are documented here. The format follows
   point that takes a name answers null, or false, for a name like that now, as it
   already did for a name that walked out of its base or that was a URL.
 
-- **A word in a style may hold emphasis of its own.** `:brand[**Bakery**]` is drawn as the
-  word `Bakery` in the brand style and in bold. It used to be drawn as the directive's own
+- **A word in a style may hold emphasis of its own.** `:brand[**Corp**]` is drawn as the
+  word `Corp` in the brand style and in bold. It used to be drawn as the directive's own
   source text, with its asterisks, because the label of a directive was a string rather
   than Markdown and a complete construct in one could not have it honoured.
 
   The label is parsed as inline Markdown now, so what the parser reads is what the
-  document draws: `2 * 3` and `snake_case` are drawn as they are, and `__ Bakery__` is
+  document draws: `2 * 3` and `snake_case` are drawn as they are, and `__ Corp__` is
   text, because a delimiter that opens an emphasis may not be followed by a space and one
   that closes it may not be preceded by one.
 
@@ -95,7 +99,7 @@ All notable changes to this project are documented here. The format follows
   table header is unaffected: it is bold whatever the Markdown says around it.
 
 - **A directive keeps the attributes it names on a code span in its label.**
-  `:style[`code`]{color=00B4D8 size=20}` came out in the code font's own colour
+  `:style[`code`]{color=6D4BD1 size=20}` came out in the code font's own colour
   and size, because the code font was applied after the attributes and the
   defaults of a construct were the last word on the properties they name.
 
@@ -394,8 +398,8 @@ All notable changes to this project are documented here. The format follows
   Word is, and a backend that says "word" where there is no Word fails later, inside Word,
   with a message about the document rather than about Word.
 
-- **A word can be written in a style, in the middle of a sentence.** `:brand[Bakery]`
-  is the word "Bakery" in the style the theme calls `brand`, and the theme's
+- **A word can be written in a style, in the middle of a sentence.** `:brand[Corp]`
+  is the word "Corp" in the style the theme calls `brand`, and the theme's
   `styles.yml` gains a `textStyles` key for it:
 
   ```yaml
@@ -406,8 +410,8 @@ All notable changes to this project are documented here. The format follows
   ```
 
   Three forms, one grammar: a name a theme defines, that name with attributes over
-  it property by property (`:brand[Bakery]{color=FF0000}`), and the reserved name
-  `style` with attributes and no theme style behind it (`:style[teal]{color=00B4D8}`).
+  it property by property (`:brand[Corp]{color=FF0000}`), and the reserved name
+  `style` with attributes and no theme style behind it (`:style[violet]{color=6D4BD1}`).
   The attributes are eight — `color`, `size`, `font`, `bold`, `italic`, `underline`,
   `strike` and `highlight` — and they are the same in a theme's style and in the
   directive itself. A size is in points, as it is everywhere else.
@@ -545,7 +549,7 @@ All notable changes to this project are documented here. The format follows
   text was taken away — contributes nothing rather than raising.
 
 - **A label holds no Markdown that CommonMark does not call emphasis.** The rule refused
-  `** text**` and `**Bakery **`, which are not emphasis: a delimiter run that opens an
+  `** text**` and `**Corp **`, which are not emphasis: a delimiter run that opens an
   emphasis may not be followed by whitespace, and one that closes it may not be preceded
   by whitespace. A label holding one is drawn as the word it holds.
 
@@ -555,7 +559,7 @@ All notable changes to this project are documented here. The format follows
   label in it.
 
 - **A style's name is a word, and a word does not care about case.** A theme that spelled
-  a style `Brand` had it under `:Brand[…]` alone, so a document writing `:brand[Bakery]`
+  a style `Brand` had it under `:Brand[…]` alone, so a document writing `:brand[Corp]`
   found nothing, and the names this library published were the folded ones rather than
   the spelling the theme wrote — which is the spelling the author has to change. The
   names are folded now, the way the directives package folds the names of the directives

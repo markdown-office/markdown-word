@@ -88,7 +88,7 @@ final class TextStyles
      * A style's name as the suite folds it.
      *
      * Without regard to case and without the space around it: a style's name is a word
-     * to a reader, and `:Brand[Bakery]` and `:brand[Bakery]` are the same word written
+     * to a reader, and `:Brand[Corp]` and `:brand[Corp]` are the same word written
      * twice. The slides half folds its names the same way, and the directives package
      * folds the names of the directives themselves.
      */

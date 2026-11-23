@@ -274,7 +274,7 @@ Markdown --> Word --> Markdown --> Word
 Word does not record these, so there is nothing for the reader to find. All of
 them are what the round trip actually produces:
 
-- **A word in a text style comes back as the word.** `:brand[Bakery]` is written as
+- **A word in a text style comes back as the word.** `:brand[Corp]` is written as
   direct formatting — a colour, a weight, a size — and the reader reads bold, italic
   and strike and no colour. The word is there; the style is not, and neither is the
   name it was written under.
@@ -592,7 +592,7 @@ not reachable through the factory.
 A word in a style, in the middle of a sentence:
 
 ```markdown
-Resilience :brand[Bakery] is open.
+Acme :brand[Corp] is open.
 ```
 
 Three forms, one grammar:
@@ -601,7 +601,7 @@ Three forms, one grammar:
 | --- | --- |
 | `:accent[brand]` | the word "brand", in the style the theme calls `accent` |
 | `:accent[brand]{color=FF0000}` | the same word in red: the attribute wins over the style |
-| `:style[brand]{color=00B4D8}` | the word "brand" in teal, with no theme style involved |
+| `:style[brand]{color=6D4BD1}` | the word "brand" in violet, with no theme style involved |
 
 The named styles come from the [theme](#themes), and the eight attributes are the
 same wherever a style is written:
@@ -623,27 +623,27 @@ inherits whatever the paragraph around it gave it, and nothing is reset to a
 default.
 
 **A label is parsed as inline Markdown.** The directives package parses it, so
-`:brand[**Bakery**]` is the word `Bakery` in the style and in bold, and the
+`:brand[**Corp**]` is the word `Corp` in the style and in bold, and the
 asterisks are markup rather than characters. A bare `*` or `_` is not Markdown:
 `2 * 3` and `snake_case` are ordinary text, and the word is written in the style
-as it stands. So is a construct CommonMark does not call emphasis: `__ Bakery__`
+as it stands. So is a construct CommonMark does not call emphasis: `__ Corp__`
 and `** text**` are text, because a delimiter that opens an emphasis may not be
 followed by a space and one that closes it may not be preceded by one.
 
 **A label holds no brackets.** It ends at the first `]`, so a link cannot be in
-one — a link is written in brackets. `:brand[[Bakery](https://example.com)]` is
+one — a link is written in brackets. `:brand[[Corp](https://example.com)]` is
 not a link with a styled word in it: the directive ends at `:brand` and the rest
 is ordinary Markdown. A link *around* the directive is the way to write one:
-`[:brand[Bakery]](https://example.com)`.
+`[:brand[Corp]](https://example.com)`.
 
 **What this library cannot draw is drawn as its own source text.** That is the
 policy of this half, and the inline styles keep it:
 
 | Written | In the document |
 | --- | --- |
-| `:brand[Bakery]` where the theme has no `brand` | `:brand[Bakery]` |
-| `:style[Bakery]` with no attributes | `:style[Bakery]` |
-| `:brand[Bakery]{weight=900}` | `:brand[Bakery]{weight="900"}` |
+| `:brand[Corp]` where the theme has no `brand` | `:brand[Corp]` |
+| `:style[Corp]` with no attributes | `:style[Corp]` |
+| `:brand[Corp]{weight=900}` | `:brand[Corp]{weight="900"}` |
 
 The presentation half refuses the first two and names the alternative. This half
 draws them, because *a sentence and a parser nobody asked to change should not
